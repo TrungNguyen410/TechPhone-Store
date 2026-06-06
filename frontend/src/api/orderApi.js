@@ -1,0 +1,21 @@
+import { USE_MOCK } from '../utils/constants';
+import { mockDb } from '../mock/mockDb';
+import axiosClient from './axiosClient';
+
+export const orderApi = {
+  create: (payload) => (USE_MOCK ? mockDb.createOrder(payload) : axiosClient.post('/orders', payload)),
+  getMyOrders: (userId) =>
+    USE_MOCK ? mockDb.ordersForUser(userId) : axiosClient.get('/orders/my-orders'),
+  getById: (id) => (USE_MOCK ? mockDb.get('orders', id) : axiosClient.get(`/orders/${id}`)),
+  cancel: (id) =>
+    USE_MOCK ? mockDb.updateOrderStatus(id, 'cancelled') : axiosClient.put(`/orders/${id}/cancel`),
+  lookup: (orderNumber, phone) =>
+    USE_MOCK
+      ? mockDb.findOrder(orderNumber, phone)
+      : axiosClient.get('/orders/lookup', { params: { orderNumber, phone } }),
+  getAllAdmin: () => (USE_MOCK ? mockDb.list('orders') : axiosClient.get('/admin/orders')),
+  updateStatus: (id, status) =>
+    USE_MOCK
+      ? mockDb.updateOrderStatus(id, status)
+      : axiosClient.put(`/admin/orders/${id}/status`, { status }),
+};

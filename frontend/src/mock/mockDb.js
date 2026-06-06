@@ -1,0 +1,212 @@
+import { STORAGE_KEYS } from '../utils/constants';
+import { storage } from '../utils/storage';
+import { mockAccessories } from './mockAccessories';
+import { mockBanners } from './mockBanners';
+import { mockOrders } from './mockOrders';
+import { mockProducts } from './mockProducts';
+import { mockReviews } from './mockReviews';
+import { mockUsers } from './mockUsers';
+import { mockVouchers } from './mockVouchers';
+
+const wait = (value, delay = 180) => new Promise((resolve) => setTimeout(() => resolve(value), delay));
+const fail = (message, status = 400) => {
+  const error = new Error(message);
+  error.response = { status, data: { message } };
+  throw error;
+};
+const clone = (value) => JSON.parse(JSON.stringify(value));
+
+const collections = {
+  users: [STORAGE_KEYS.mockUsers, mockUsers],
+  products: [STORAGE_KEYS.mockProducts, mockProducts],
+  accessories: [STORAGE_KEYS.mockAccessories, mockAccessories],
+  orders: [STORAGE_KEYS.mockOrders, mockOrders],
+  reviews: [STORAGE_KEYS.mockReviews, mockReviews],
+  vouchers: [STORAGE_KEYS.mockVouchers, mockVouchers],
+  banners: [STORAGE_KEYS.mockBanners, mockBanners],
+  categories: [
+    STORAGE_KEYS.mockCategories,
+    ['Điện thoại', 'Tai nghe', 'Sạc', 'Đồng hồ', 'Ốp lưng'].map((name, index) => ({
+      id: `category-${index + 1}`,
+      name,
+      active: true,
+    })),
+  ],
+  brands: [
+    STORAGE_KEYS.mockBrands,
+    ['Apple', 'Samsung', 'Xiaomi', 'OPPO', 'Vivo', 'Honor', 'Realme'].map((name, index) => ({
+      id: `brand-${index + 1}`,
+      name,
+      active: true,
+    })),
+  ],
+};
+
+const read = (name) => {
+  const [key, initial] = collections[name];
+  const value = storage.get(key);
+  if (value) return value;
+  storage.set(key, initial);
+  return clone(initial);
+};
+
+const write = (name, value) => {
+  storage.set(collections[name][0], value);
+  return clone(value);
+};
+
+const publicUser = ({ password: _password, ...user }) => user;
+const tokenFor = (user) => `mock-jwt-${user.id}-${Date.now()}`;
+const createId = (prefix) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+export const mockDb = {
+  async login(identifier, password) {
+    const user = read('users').find(
+      (item) => item.email.toLowerCase() === identifier.toLowerCase() || item.phone === identifier,
+    );
+    if (!user || user.password !== password) fail('Email/số điện thoại hoặc mật khẩu không đúng', 401);
+    if (user.status === 'locked') fail('Tài khoản đã bị khóa', 403);
+    return wait({ token: tokenFor(user), user: publicUser(user) });
+  },
+
+  async register(payload) {
+    const users = read('users');
+    if (users.some((user) => user.email.toLowerCase() === payload.email.toLowerCase())) {
+      fail('Email đã được sử dụng');
+    }
+    if (users.some((user) => user.phone === payload.phone)) fail('Số điện thoại đã được sử dụng');
+    const user = {
+      id: createId('user'),
+      role: 'customer',
+      status: 'active',
+      address: '',
+      createdAt: new Date().toISOString(),
+      ...payload,
+    };
+    write('users', [...users, user]);
+    return wait({ token: tokenFor(user), user: publicUser(user) });
+  },
+
+  async updateUser(userId, updates) {
+    const users = read('users');
+    const updated = users.map((user) => (user.id === userId ? { ...user, ...updates } : user));
+    const user = updated.find((item) => item.id === userId);
+    if (!user) fail('Không tìm thấy người dùng', 404);
+    write('users', updated);
+    return wait(publicUser(user));
+  },
+
+  async changePassword(userId, currentPassword, newPassword) {
+    const users = read('users');
+    const user = users.find((item) => item.id === userId);
+    if (!user || user.password !== currentPassword) fail('Mật khẩu hiện tại không đúng');
+    user.password = newPassword;
+    write('users', users);
+    return wait({ message: 'Đổi mật khẩu thành công' });
+  },
+
+  async list(name) {
+    return wait(clone(read(name)));
+  },
+
+  async get(name, id) {
+    const item = read(name).find((entry) => entry.id === id);
+    if (!item) fail('Không tìm thấy dữ liệu', 404);
+    return wait(clone(item));
+  },
+
+  async save(name, payload) {
+    const items = read(name);
+    const now = new Date().toISOString();
+    if (payload.id) {
+      const updated = items.map((item) =>
+        item.id === payload.id ? { ...item, ...payload, updatedAt: now } : item,
+      );
+      write(name, updated);
+      return wait(clone(updated.find((item) => item.id === payload.id)));
+    }
+    const item = { ...payload, id: createId(name.slice(0, -1)), createdAt: now, updatedAt: now };
+    write(name, [item, ...items]);
+    return wait(clone(item));
+  },
+
+  async remove(name, id) {
+    const items = read(name);
+    write(name, items.filter((item) => item.id !== id));
+    return wait({ success: true });
+  },
+
+  async createOrder(payload) {
+    const orders = read('orders');
+    const now = new Date();
+    const order = {
+      ...payload,
+      id: createId('order'),
+      orderNumber: `TP${now.toISOString().slice(2, 10).replaceAll('-', '')}${String(orders.length + 1).padStart(2, '0')}`,
+      status: 'pending',
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+    };
+    write('orders', [order, ...orders]);
+    return wait(clone(order));
+  },
+
+  async ordersForUser(userId) {
+    return wait(clone(read('orders').filter((order) => order.userId === userId)));
+  },
+
+  async findOrder(orderNumber, phone) {
+    const order = read('orders').find(
+      (item) =>
+        item.orderNumber.toLowerCase() === orderNumber.toLowerCase() && item.customer.phone === phone,
+    );
+    if (!order) fail('Không tìm thấy đơn hàng phù hợp', 404);
+    return wait(clone(order));
+  },
+
+  async updateOrderStatus(id, status) {
+    const orders = read('orders');
+    const order = orders.find((item) => item.id === id);
+    if (!order) fail('Không tìm thấy đơn hàng', 404);
+    order.status = status;
+    order.updatedAt = new Date().toISOString();
+    write('orders', orders);
+    return wait(clone(order));
+  },
+
+  async checkVoucher(code, subtotal) {
+    const voucher = read('vouchers').find(
+      (item) => item.code.toLowerCase() === code.trim().toLowerCase() && item.active,
+    );
+    if (!voucher) fail('Mã giảm giá không hợp lệ');
+    if (subtotal < voucher.minOrder) fail(`Đơn hàng chưa đạt giá trị tối thiểu ${voucher.minOrder}`);
+    const today = new Date();
+    if (today < new Date(voucher.startDate) || today > new Date(`${voucher.endDate}T23:59:59`)) {
+      fail('Mã giảm giá đã hết hạn');
+    }
+    return wait(clone(voucher));
+  },
+
+  async dashboard() {
+    const products = read('products');
+    const orders = read('orders');
+    const users = read('users').filter((user) => user.role === 'customer');
+    const revenue = orders
+      .filter((order) => order.status === 'completed')
+      .reduce((sum, order) => sum + order.total, 0);
+    return wait({
+      stats: { products: products.length, orders: orders.length, customers: users.length, revenue },
+      recentOrders: orders.slice(0, 5),
+      topProducts: [...products].sort((a, b) => b.sold - a.sold).slice(0, 5),
+      monthlyRevenue: [320, 415, 380, 520, 610, 740, 680, 820, 910, 1020, 1160, 1280],
+      orderStatus: ['pending', 'confirmed', 'shipping', 'completed', 'cancelled'].map((status) => ({
+        status,
+        count: orders.filter((order) => order.status === status).length,
+      })),
+    });
+  },
+
+  reset() {
+    Object.values(collections).forEach(([key]) => storage.remove(key));
+  },
+};
