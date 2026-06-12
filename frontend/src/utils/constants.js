@@ -7,6 +7,7 @@ export const STORAGE_KEYS = {
   currentUser: 'currentUser',
   cart: 'cart_items',
   voucher: 'cart_voucher',
+  wishlist: 'wishlist_items',
   mockUsers: 'mock_users',
   mockProducts: 'mock_products',
   mockAccessories: 'mock_accessories',

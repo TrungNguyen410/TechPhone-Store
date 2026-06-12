@@ -1,26 +1,27 @@
 import { useState } from 'react';
 import { FiGlobe, FiMail, FiMapPin, FiPhone, FiSave, FiSettings } from 'react-icons/fi';
 import { toast } from 'react-toastify';
-import { STORAGE_KEYS } from '../../utils/constants';
-import { storage } from '../../utils/storage';
-
-const defaults = {
-  storeName: 'TechPhone',
-  hotline: '1900 6868',
-  email: 'support@techphone.vn',
-  address: '123 Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh',
-  logo: '',
-  facebook: 'https://facebook.com/techphone',
-  instagram: 'https://instagram.com/techphone',
-  youtube: 'https://youtube.com/@techphone',
-};
+import { getStoreSettings, saveStoreSettings } from '../../utils/storeSettings';
+import { isValidEmail, validateRequired } from '../../utils/validators';
 
 export default function SettingManagement() {
-  const [form, setForm] = useState(() => storage.get(STORAGE_KEYS.mockSettings, defaults));
+  const [form, setForm] = useState(getStoreSettings);
   const update = (key, value) => setForm({ ...form, [key]: value });
   const save = (event) => {
     event.preventDefault();
-    storage.set(STORAGE_KEYS.mockSettings, form);
+    const errors = validateRequired({
+      storeName: form.storeName,
+      hotline: form.hotline,
+      email: form.email,
+      address: form.address,
+    });
+    if (form.email && !isValidEmail(form.email)) errors.email = 'Email không đúng định dạng';
+    if (Object.keys(errors).length) return toast.error(Object.values(errors)[0]);
+    const nextSettings = Object.fromEntries(
+      Object.entries(form).map(([key, value]) => [key, typeof value === 'string' ? value.trim() : value]),
+    );
+    setForm(nextSettings);
+    saveStoreSettings(nextSettings);
     toast.success('Đã lưu cài đặt hệ thống');
   };
   return (

@@ -11,6 +11,8 @@ import {
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useCart } from '../../hooks/useCart';
+import { useStoreSettings } from '../../hooks/useStoreSettings';
+import StoreBrand from './StoreBrand';
 
 export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -18,6 +20,7 @@ export default function Header() {
   const navigate = useNavigate();
   const { user, isAuthenticated, logout } = useAuth();
   const { cartCount } = useCart();
+  const settings = useStoreSettings();
 
   const submitSearch = (event) => {
     event.preventDefault();
@@ -30,7 +33,7 @@ export default function Header() {
       <div className="topbar">
         <div className="container topbar-inner">
           <span>Miễn phí vận chuyển đơn từ 10 triệu</span>
-          <div><FiPhoneCall /> Hotline: <strong>1900 6868</strong></div>
+          <div><FiPhoneCall /> Hotline: <strong>{settings.hotline}</strong></div>
         </div>
       </div>
       <header className="site-header">
@@ -38,10 +41,7 @@ export default function Header() {
           <button className="mobile-menu-button" onClick={() => setMobileOpen(true)} aria-label="Mở menu">
             <FiMenu />
           </button>
-          <Link className="brand" to="/">
-            <span className="brand-mark">T</span>
-            <span>Tech<span>Phone</span></span>
-          </Link>
+          <StoreBrand />
           <form className="header-search" onSubmit={submitSearch}>
             <FiSearch />
             <input
@@ -56,7 +56,7 @@ export default function Header() {
               <FiUser />
               <span>
                 <small>{isAuthenticated ? 'Xin chào' : 'Tài khoản'}</small>
-                <strong>{isAuthenticated ? user.fullName.split(' ').slice(-2).join(' ') : 'Đăng nhập'}</strong>
+                <strong>{isAuthenticated ? (user.fullName || user.email).split(' ').slice(-2).join(' ') : 'Đăng nhập'}</strong>
               </span>
               <FiChevronDown className="chevron" />
             </Link>
@@ -82,9 +82,7 @@ export default function Header() {
       </header>
       <div className={`mobile-drawer ${mobileOpen ? 'open' : ''}`}>
         <div className="mobile-drawer-header">
-          <Link className="brand" to="/" onClick={() => setMobileOpen(false)}>
-            <span className="brand-mark">T</span><span>Tech<span>Phone</span></span>
-          </Link>
+          <StoreBrand onClick={() => setMobileOpen(false)} />
           <button onClick={() => setMobileOpen(false)}><FiX /></button>
         </div>
         <form className="mobile-search" onSubmit={submitSearch}>

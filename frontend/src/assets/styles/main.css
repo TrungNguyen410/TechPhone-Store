@@ -246,6 +246,13 @@ p {
   font-weight: 900;
 }
 
+.brand-logo {
+  width: auto;
+  max-width: 160px;
+  height: 42px;
+  object-fit: contain;
+}
+
 .header-search {
   display: flex;
   height: 46px;
@@ -934,6 +941,15 @@ p {
   border: 1px solid rgba(226, 232, 240, 0.8);
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.9);
+}
+
+.wishlist-button.active {
+  color: #dc2626;
+  background: #fee2e2;
+}
+
+.wishlist-button.active svg {
+  fill: currentColor;
 }
 
 .product-card-body {

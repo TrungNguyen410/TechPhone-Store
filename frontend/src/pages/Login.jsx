@@ -11,8 +11,12 @@ export default function Login() {
   const [form, setForm] = useState({ identifier: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const from = location.state?.from;
+  const requestedPath = from ? `${from.pathname}${from.search || ''}${from.hash || ''}` : '/';
+  const customerDestination = requestedPath.startsWith('/admin') ? '/' : requestedPath;
+  const adminDestination = requestedPath.startsWith('/admin') ? requestedPath : '/admin/dashboard';
 
-  if (isAuthenticated) return <Navigate to={isAdmin ? '/admin/dashboard' : '/'} replace />;
+  if (isAuthenticated) return <Navigate to={isAdmin ? adminDestination : customerDestination} replace />;
 
   const submit = async (event) => {
     event.preventDefault();
@@ -21,8 +25,7 @@ export default function Login() {
     try {
       const session = await login(form);
       toast.success(`Chào mừng ${session.user.fullName}`);
-      if (session.user.role === 'admin') navigate('/admin/dashboard', { replace: true });
-      else navigate(location.state?.from?.pathname || '/', { replace: true });
+      navigate(session.user.role === 'admin' ? adminDestination : customerDestination, { replace: true });
     } catch (error) {
       toast.error(error.friendlyMessage || error.message);
     } finally {

@@ -558,6 +558,7 @@
 
   .admin-content {
     padding: 20px 16px 40px;
+    overflow-x: hidden;
   }
 
   .admin-profile span {
@@ -771,6 +772,10 @@
   }
 
   .admin-header-actions > button {
+    display: none;
+  }
+
+  .admin-header-popover {
     display: none;
   }
 

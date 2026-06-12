@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FiChevronDown, FiClock, FiMail, FiMapPin, FiPhone, FiSend } from 'react-icons/fi';
 import { toast } from 'react-toastify';
+import { useStoreSettings } from '../hooks/useStoreSettings';
 import { isValidEmail, isValidVietnamesePhone, validateRequired } from '../utils/validators';
 
 const faqs = [
@@ -11,6 +12,7 @@ const faqs = [
 ];
 
 export default function Contact() {
+  const settings = useStoreSettings();
   const [form, setForm] = useState({ fullName: '', email: '', phone: '', subject: '', message: '' });
   const [errors, setErrors] = useState({});
   const [openFaq, setOpenFaq] = useState(0);
@@ -23,17 +25,17 @@ export default function Contact() {
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return toast.error('Vui lòng hoàn thiện biểu mẫu');
     setForm({ fullName: '', email: '', phone: '', subject: '', message: '' });
-    toast.success('Đã gửi liên hệ. TechPhone sẽ phản hồi sớm nhất!');
+    toast.success(`Đã gửi liên hệ. ${settings.storeName} sẽ phản hồi sớm nhất!`);
   };
 
   return (
     <main className="page-shell contact-page">
       <div className="container">
-        <div className="page-hero"><div><span>Chúng tôi luôn lắng nghe</span><h1>Liên hệ TechPhone</h1><p>Cần tư vấn sản phẩm, bảo hành hay đơn hàng? Đội ngũ hỗ trợ luôn sẵn sàng.</p></div><FiSend /></div>
+        <div className="page-hero"><div><span>Chúng tôi luôn lắng nghe</span><h1>Liên hệ {settings.storeName}</h1><p>Cần tư vấn sản phẩm, bảo hành hay đơn hàng? Đội ngũ hỗ trợ luôn sẵn sàng.</p></div><FiSend /></div>
         <div className="contact-cards">
-          <div><FiPhone /><span><small>Hotline</small><strong>1900 6868</strong><p>8:00 - 22:00 mỗi ngày</p></span></div>
-          <div><FiMail /><span><small>Email</small><strong>support@techphone.vn</strong><p>Phản hồi trong 24 giờ</p></span></div>
-          <div><FiMapPin /><span><small>Cửa hàng</small><strong>123 Nguyễn Huệ, Quận 1</strong><p>TP. Hồ Chí Minh</p></span></div>
+          <div><FiPhone /><span><small>Hotline</small><strong>{settings.hotline}</strong><p>8:00 - 22:00 mỗi ngày</p></span></div>
+          <div><FiMail /><span><small>Email</small><strong>{settings.email}</strong><p>Phản hồi trong 24 giờ</p></span></div>
+          <div><FiMapPin /><span><small>Cửa hàng</small><strong>{settings.address}</strong><p>Đón tiếp trực tiếp tại cửa hàng</p></span></div>
           <div><FiClock /><span><small>Giờ mở cửa</small><strong>8:00 - 21:30</strong><p>Thứ Hai đến Chủ Nhật</p></span></div>
         </div>
         <div className="contact-layout">
@@ -48,7 +50,7 @@ export default function Contact() {
             </div>
             <button className="btn btn-primary"><FiSend /> Gửi liên hệ</button>
           </form>
-          <div className="map-placeholder"><FiMapPin /><strong>TechPhone Flagship Store</strong><span>123 Nguyễn Huệ, Quận 1, TP.HCM</span><a href="https://maps.google.com" target="_blank" rel="noreferrer">Mở Google Maps</a></div>
+          <div className="map-placeholder"><FiMapPin /><strong>{settings.storeName} Flagship Store</strong><span>{settings.address}</span><a href={`https://maps.google.com/?q=${encodeURIComponent(settings.address)}`} target="_blank" rel="noreferrer">Mở Google Maps</a></div>
         </div>
         <section className="faq-section">
           <div className="section-heading"><div><span>Hỗ trợ nhanh</span><h2>Câu hỏi thường gặp</h2></div></div>

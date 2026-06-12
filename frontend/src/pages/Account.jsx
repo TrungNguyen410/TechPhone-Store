@@ -10,7 +10,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useCart } from '../hooks/useCart';
 import { formatCurrency, formatDate } from '../utils/formatCurrency';
 import { getOrderStatus } from '../utils/orderStatus';
-import { isStrongEnoughPassword } from '../utils/validators';
+import { isStrongEnoughPassword, isValidEmail, isValidVietnamesePhone, validateRequired } from '../utils/validators';
 
 export default function Account() {
   const [searchParams] = useSearchParams();
@@ -18,6 +18,7 @@ export default function Account() {
   const { addToCart } = useCart();
   const [tab, setTab] = useState(searchParams.get('tab') || 'profile');
   const [profile, setProfile] = useState({ fullName: user.fullName, email: user.email, phone: user.phone, address: user.address || '' });
+  const [profileErrors, setProfileErrors] = useState({});
   const [passwords, setPasswords] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [orders, setOrders] = useState([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
@@ -32,8 +33,31 @@ export default function Account() {
 
   const saveProfile = async (event) => {
     event.preventDefault();
-    await updateProfile(profile);
-    toast.success('Đã cập nhật thông tin cá nhân');
+    const nextErrors = validateRequired({
+      fullName: profile.fullName,
+      email: profile.email,
+      phone: profile.phone,
+    });
+    if (profile.email && !isValidEmail(profile.email)) nextErrors.email = 'Email không đúng định dạng';
+    if (profile.phone && !isValidVietnamesePhone(profile.phone)) nextErrors.phone = 'Số điện thoại Việt Nam phải có 10 số';
+    setProfileErrors(nextErrors);
+    if (Object.keys(nextErrors).length) return toast.error('Vui lòng kiểm tra lại thông tin cá nhân');
+    try {
+      await updateProfile({
+        ...profile,
+        fullName: profile.fullName.trim(),
+        email: profile.email.trim(),
+        phone: profile.phone.trim(),
+        address: profile.address.trim(),
+      });
+      toast.success('Đã cập nhật thông tin cá nhân');
+    } catch (error) {
+      toast.error(error.friendlyMessage || error.message);
+    }
+  };
+  const updateProfileField = (key, value) => {
+    setProfile((current) => ({ ...current, [key]: value }));
+    setProfileErrors((current) => ({ ...current, [key]: '' }));
   };
   const savePassword = async (event) => {
     event.preventDefault();
@@ -64,7 +88,7 @@ export default function Account() {
         <div className="page-title-row"><div><span className="eyebrow">Khu vực thành viên</span><h1>Tài khoản của tôi</h1></div></div>
         <div className="account-layout">
           <aside className="account-sidebar panel">
-            <div className="account-user"><div>{user.fullName.charAt(0)}</div><span><strong>{user.fullName}</strong><small>{user.email}</small></span></div>
+            <div className="account-user"><div>{(user.fullName || user.email || '?').charAt(0)}</div><span><strong>{user.fullName}</strong><small>{user.email}</small></span></div>
             <button className={tab === 'profile' ? 'active' : ''} onClick={() => setTab('profile')}><FiUser /> Thông tin cá nhân</button>
             <button className={tab === 'orders' ? 'active' : ''} onClick={() => setTab('orders')}><FiPackage /> Đơn hàng của tôi</button>
             <button className={tab === 'password' ? 'active' : ''} onClick={() => setTab('password')}><FiLock /> Đổi mật khẩu</button>
@@ -75,10 +99,10 @@ export default function Account() {
               <form onSubmit={saveProfile}>
                 <div className="content-heading"><h2>Thông tin cá nhân</h2><p>Cập nhật thông tin dùng cho đơn hàng và liên hệ.</p></div>
                 <div className="form-grid">
-                  <label className="form-field"><span>Họ và tên</span><input value={profile.fullName} onChange={(event) => setProfile({ ...profile, fullName: event.target.value })} /></label>
-                  <label className="form-field"><span>Số điện thoại</span><input value={profile.phone} onChange={(event) => setProfile({ ...profile, phone: event.target.value })} /></label>
-                  <label className="form-field full"><span>Email</span><input type="email" value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} /></label>
-                  <label className="form-field full"><span>Địa chỉ</span><textarea rows="3" value={profile.address} onChange={(event) => setProfile({ ...profile, address: event.target.value })} /></label>
+                  <label className="form-field"><span>Họ và tên *</span><input value={profile.fullName} onChange={(event) => updateProfileField('fullName', event.target.value)} />{profileErrors.fullName && <small>{profileErrors.fullName}</small>}</label>
+                  <label className="form-field"><span>Số điện thoại *</span><input value={profile.phone} onChange={(event) => updateProfileField('phone', event.target.value)} />{profileErrors.phone && <small>{profileErrors.phone}</small>}</label>
+                  <label className="form-field full"><span>Email *</span><input type="email" value={profile.email} onChange={(event) => updateProfileField('email', event.target.value)} />{profileErrors.email && <small>{profileErrors.email}</small>}</label>
+                  <label className="form-field full"><span>Địa chỉ</span><textarea rows="3" value={profile.address} onChange={(event) => updateProfileField('address', event.target.value)} /></label>
                 </div>
                 <button className="btn btn-primary">Lưu thay đổi</button>
               </form>

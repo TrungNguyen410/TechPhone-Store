@@ -1,5 +1,5 @@
 export const isValidEmail = (value = '') => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-export const isValidVietnamesePhone = (value = '') => /^(0[3|5|7|8|9])\d{8}$/.test(value.trim());
+export const isValidVietnamesePhone = (value = '') => /^(03|05|07|08|09)\d{8}$/.test(value.trim());
 export const isStrongEnoughPassword = (value = '') => value.length >= 6;
 
 export const validateRequired = (fields) =>
