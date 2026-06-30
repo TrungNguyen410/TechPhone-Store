@@ -24,6 +24,7 @@ export default function ReviewManagement() {
     { key: 'userName', label: 'Khách hàng', render: (review) => <strong>{review.userName}</strong> },
     { key: 'rating', label: 'Đánh giá', render: (review) => <span className="table-rating">{review.rating} <FiStar /></span> },
     { key: 'comment', label: 'Nội dung', render: (review) => <p className="review-comment-cell">{review.comment}</p> },
+    { key: 'images', label: 'Ảnh', render: (review) => <div className="review-admin-images">{review.images?.slice(0, 3).map((image) => <img key={image} src={image} alt="" />)}</div> },
     { key: 'createdAt', label: 'Ngày gửi', render: (review) => formatDate(review.createdAt) },
     { key: 'status', label: 'Trạng thái', render: (review) => <span className={`review-status ${review.status}`}>{review.status === 'approved' ? 'Đã duyệt' : review.status === 'rejected' ? 'Từ chối' : 'Chờ duyệt'}</span> },
     { key: 'actions', label: 'Thao tác', render: (review) => <div className="review-admin-actions">{review.status !== 'approved' && <button className="approve" onClick={() => update(review.id, 'approve')}><FiCheck /></button>}{review.status !== 'rejected' && <button className="reject" onClick={() => update(review.id, 'reject')}><FiX /></button>}<button className="delete" onClick={() => setDeleteId(review.id)}><FiTrash2 /></button></div> },

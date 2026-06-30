@@ -9,6 +9,11 @@ export const reviewApi = {
     const reviews = await mockDb.list('reviews');
     return reviews.filter((review) => review.productId === productId && review.status === 'approved');
   },
+  getByAccessory: async (accessoryId) => {
+    if (!USE_MOCK) return axiosClient.get(`/reviews/accessory/${accessoryId}`);
+    const reviews = await mockDb.list('reviews');
+    return reviews.filter((review) => review.accessoryId === accessoryId && review.status === 'approved');
+  },
   create: (payload) => (USE_MOCK ? mockDb.save('reviews', payload) : axiosClient.post('/reviews', payload)),
   getAllAdmin: () => (USE_MOCK ? mockDb.list('reviews') : axiosClient.get('/admin/reviews')),
   approve: (id) =>

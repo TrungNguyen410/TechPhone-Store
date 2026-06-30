@@ -71,7 +71,7 @@ export default function Header() {
           <div className="container nav-inner">
             <NavLink to="/" end>Trang chủ</NavLink>
             <NavLink to="/products">Điện thoại</NavLink>
-            <Link to="/#accessories">Phụ kiện</Link>
+            <NavLink to="/accessories">Phụ kiện</NavLink>
             <NavLink to="/reviews">Đánh giá</NavLink>
             <NavLink to="/order-lookup">Tra cứu đơn hàng</NavLink>
             <NavLink to="/contact">Liên hệ</NavLink>
@@ -92,6 +92,7 @@ export default function Header() {
         <nav>
           <NavLink to="/" onClick={() => setMobileOpen(false)}>Trang chủ</NavLink>
           <NavLink to="/products" onClick={() => setMobileOpen(false)}>Điện thoại</NavLink>
+          <NavLink to="/accessories" onClick={() => setMobileOpen(false)}>Phụ kiện</NavLink>
           <NavLink to="/reviews" onClick={() => setMobileOpen(false)}>Đánh giá</NavLink>
           <NavLink to="/order-lookup" onClick={() => setMobileOpen(false)}>Tra cứu đơn hàng</NavLink>
           <NavLink to="/contact" onClick={() => setMobileOpen(false)}>Liên hệ</NavLink>

@@ -17,11 +17,14 @@ export function CartProvider({ children }) {
 
   const addToCart = useCallback((product, quantity = 1, type = 'product') => {
     setCartItems((current) => {
+      const maxStock = Number(product.stock) || 0;
+      if (maxStock <= 0) return current;
+      const safeQuantity = Math.min(quantity, maxStock);
       const existing = current.find((item) => item.id === product.id);
       if (existing) {
         return current.map((item) =>
           item.id === product.id
-            ? { ...item, quantity: Math.min(item.quantity + quantity, product.stock || 99) }
+            ? { ...item, quantity: Math.min(item.quantity + safeQuantity, maxStock) }
             : item,
         );
       }
@@ -35,7 +38,7 @@ export function CartProvider({ children }) {
           price: product.price,
           oldPrice: product.oldPrice,
           stock: product.stock,
-          quantity,
+          quantity: safeQuantity,
           type,
         },
       ];

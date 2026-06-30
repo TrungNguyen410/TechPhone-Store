@@ -3,6 +3,7 @@ import AdminRoute from '../components/auth/AdminRoute';
 import ProtectedRoute from '../components/auth/ProtectedRoute';
 import Footer from '../components/common/Footer';
 import Header from '../components/common/Header';
+import Accessories from '../pages/Accessories';
 import AccessoryDetail from '../pages/AccessoryDetail';
 import Account from '../pages/Account';
 import Cart from '../pages/Cart';
@@ -47,6 +48,7 @@ export default function AppRoutes() {
         <Route path="/" element={<Home />} />
         <Route path="/products" element={<Products />} />
         <Route path="/products/:id" element={<ProductDetail />} />
+        <Route path="/accessories" element={<Accessories />} />
         <Route path="/accessories/:id" element={<AccessoryDetail />} />
         <Route path="/cart" element={<Cart />} />
         <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />

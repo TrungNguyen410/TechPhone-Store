@@ -21,8 +21,8 @@ const categories = [
   { name: 'iPhone', icon: FiSmartphone, query: 'Apple', color: 'blue' },
   { name: 'Samsung', icon: FiSmartphone, query: 'Samsung', color: 'violet' },
   { name: 'Xiaomi', icon: FiZap, query: 'Xiaomi', color: 'orange' },
-  { name: 'Tai nghe', icon: FiHeadphones, hash: '#accessories', color: 'cyan' },
-  { name: 'Đồng hồ', icon: FiWatch, hash: '#accessories', color: 'green' },
+  { name: 'Tai nghe', icon: FiHeadphones, path: '/accessories?category=Tai%20nghe', color: 'cyan' },
+  { name: 'Đồng hồ', icon: FiWatch, path: '/accessories?category=Dong%20ho', color: 'green' },
   { name: 'Thu cũ đổi mới', icon: FiRefreshCcw, path: '/contact', color: 'pink' },
 ];
 
@@ -87,10 +87,10 @@ export default function Home() {
           <div><span>Mua sắm dễ dàng</span><h2>Danh mục nổi bật</h2></div>
         </div>
         <div className="category-grid">
-          {categories.map(({ name, icon: Icon, query, hash, path, color }) => (
+          {categories.map(({ name, icon: Icon, query, path, color }) => (
             <Link
               key={name}
-              to={path || (query ? `/products?brand=${query}` : `/${hash}`)}
+              to={path || `/products?brand=${query}`}
               className="category-card"
             >
               <div className={`category-icon ${color}`}><Icon /></div>
@@ -122,7 +122,7 @@ export default function Home() {
       <section className="container product-section" id="accessories">
         <div className="section-heading">
           <div><span>Hoàn thiện trải nghiệm</span><h2>Phụ kiện nổi bật</h2></div>
-          <Link to="/contact">Cần tư vấn? <FiArrowRight /></Link>
+          <Link to="/accessories">Xem tất cả <FiArrowRight /></Link>
         </div>
         <ProductGrid products={accessories.slice(0, 8)} type="accessory" />
       </section>

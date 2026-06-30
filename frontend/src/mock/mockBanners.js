@@ -22,7 +22,7 @@ export const mockBanners = [
     title: 'Phụ kiện thông minh',
     description: 'Sạc nhanh, tai nghe, đồng hồ chính hãng',
     image: makeBannerImage('Phụ kiện thông minh', 'Combo tiện ích, giá cực tốt', '#0f766e', '#14b8a6'),
-    link: '/#accessories',
+    link: '/accessories',
     active: true,
   },
 ];

@@ -15,7 +15,13 @@ axiosClient.interceptors.request.use((config) => {
 });
 
 axiosClient.interceptors.response.use(
-  (response) => response.data,
+  (response) => {
+    const payload = response.data;
+    if (payload && typeof payload === 'object' && 'success' in payload && 'data' in payload) {
+      return payload.data;
+    }
+    return payload;
+  },
   (error) => {
     if (error.response?.status === 401) {
       storage.remove(STORAGE_KEYS.token);
@@ -26,6 +32,7 @@ axiosClient.interceptors.response.use(
     }
     const message =
       error.response?.data?.message || error.message || 'Có lỗi xảy ra. Vui lòng thử lại sau.';
+    error.message = message;
     return Promise.reject(Object.assign(error, { friendlyMessage: message }));
   },
 );

@@ -39,6 +39,7 @@ export default function ProductDetail() {
       .then(([detail, products]) => {
         setProduct(detail);
         setSelectedImage(detail.image);
+        setQuantity(detail.stock > 0 ? 1 : 0);
         setRelated(products.filter((item) => item.brand === detail.brand && item.id !== detail.id).slice(0, 4));
       })
       .catch(() => setProduct(null))
@@ -49,11 +50,14 @@ export default function ProductDetail() {
   if (!product) return <EmptyState title="Không tìm thấy sản phẩm" description="Sản phẩm có thể đã ngừng kinh doanh." actionLabel="Xem sản phẩm khác" actionTo="/products" />;
 
   const requireLogin = () => navigate('/login', { state: { from: location } });
+  const isOutOfStock = product.status !== 'active' || product.stock <= 0;
   const add = () => {
+    if (isOutOfStock) return toast.error('Sản phẩm đã hết hàng');
     addToCart(product, quantity);
     toast.success(`Đã thêm ${quantity} sản phẩm vào giỏ hàng`);
   };
   const buyNow = () => {
+    if (isOutOfStock) return toast.error('Sản phẩm đã hết hàng');
     if (!isAuthenticated) return requireLogin();
     addToCart(product, quantity);
     navigate('/checkout');
@@ -97,15 +101,17 @@ export default function ProductDetail() {
             </div>
             <div className="purchase-row">
               <div className="quantity-control large">
-                <button onClick={() => setQuantity(Math.max(1, quantity - 1))}><FiMinus /></button>
+                <button disabled={isOutOfStock || quantity <= 1} onClick={() => setQuantity(Math.max(1, quantity - 1))}><FiMinus /></button>
                 <span>{quantity}</span>
-                <button onClick={() => setQuantity(Math.min(product.stock, quantity + 1))}><FiPlus /></button>
+                <button disabled={isOutOfStock || quantity >= product.stock} onClick={() => setQuantity(Math.min(product.stock, quantity + 1))}><FiPlus /></button>
               </div>
-              <span className="in-stock"><FiCheck /> Còn {product.stock} sản phẩm</span>
+              <span className={`in-stock ${isOutOfStock ? 'out-of-stock' : ''}`}>
+                <FiCheck /> {isOutOfStock ? 'Hết hàng' : `Còn ${product.stock} sản phẩm`}
+              </span>
             </div>
             <div className="detail-actions">
-              <button className="btn btn-outline-primary" onClick={add}><FiShoppingBag /> Thêm vào giỏ</button>
-              <button className="btn btn-primary" onClick={buyNow}>Mua ngay</button>
+              <button className="btn btn-outline-primary" disabled={isOutOfStock} onClick={add}><FiShoppingBag /> Thêm vào giỏ</button>
+              <button className="btn btn-primary" disabled={isOutOfStock} onClick={buyNow}>{isOutOfStock ? 'Hết hàng' : 'Mua ngay'}</button>
             </div>
             <div className="detail-assurances">
               <span><FiShield /> Bảo hành 12 tháng</span>

@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react';
 import { FiCheck, FiChevronRight, FiMinus, FiPlus, FiShoppingBag, FiStar } from 'react-icons/fi';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { accessoryApi } from '../api/accessoryApi';
 import EmptyState from '../components/common/EmptyState';
 import Loading from '../components/common/Loading';
 import ProductGrid from '../components/product/ProductGrid';
+import ProductReview from '../components/product/ProductReview';
 import { useCart } from '../hooks/useCart';
 import { formatCurrency } from '../utils/formatCurrency';
 
 export default function AccessoryDetail() {
   const { id } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const { addToCart } = useCart();
   const [accessory, setAccessory] = useState(null);
@@ -22,6 +24,7 @@ export default function AccessoryDetail() {
     Promise.all([accessoryApi.getById(id), accessoryApi.getAll()])
       .then(([detail, items]) => {
         setAccessory(detail);
+        setQuantity(detail.stock > 0 ? 1 : 0);
         setRelated(items.filter((item) => item.id !== id).slice(0, 4));
       })
       .catch(() => setAccessory(null))
@@ -31,7 +34,10 @@ export default function AccessoryDetail() {
   if (loading) return <Loading />;
   if (!accessory) return <EmptyState title="Không tìm thấy phụ kiện" actionLabel="Về trang chủ" />;
 
+  const isOutOfStock = accessory.status !== 'active' || accessory.stock <= 0;
+  const requireLogin = () => navigate('/login', { state: { from: location } });
   const add = () => {
+    if (isOutOfStock) return toast.error('Phụ kiện đã hết hàng');
     addToCart(accessory, quantity, 'accessory');
     toast.success('Đã thêm phụ kiện vào giỏ hàng');
   };
@@ -56,14 +62,18 @@ export default function AccessoryDetail() {
             </div>
             <div className="purchase-row">
               <div className="quantity-control large">
-                <button onClick={() => setQuantity(Math.max(1, quantity - 1))}><FiMinus /></button><span>{quantity}</span>
-                <button onClick={() => setQuantity(Math.min(accessory.stock, quantity + 1))}><FiPlus /></button>
+                <button disabled={isOutOfStock || quantity <= 1} onClick={() => setQuantity(Math.max(1, quantity - 1))}><FiMinus /></button><span>{quantity}</span>
+                <button disabled={isOutOfStock || quantity >= accessory.stock} onClick={() => setQuantity(Math.min(accessory.stock, quantity + 1))}><FiPlus /></button>
               </div>
-              <span className="in-stock"><FiCheck /> Còn {accessory.stock} sản phẩm</span>
+              <span className={`in-stock ${isOutOfStock ? 'out-of-stock' : ''}`}>
+                <FiCheck /> {isOutOfStock ? 'Hết hàng' : `Còn ${accessory.stock} sản phẩm`}
+              </span>
             </div>
             <div className="detail-actions">
-              <button className="btn btn-outline-primary" onClick={add}><FiShoppingBag /> Thêm vào giỏ</button>
-              <button className="btn btn-primary" onClick={() => { add(); navigate('/cart'); }}>Xem giỏ hàng</button>
+              <button className="btn btn-outline-primary" disabled={isOutOfStock} onClick={add}><FiShoppingBag /> Thêm vào giỏ</button>
+              <button className="btn btn-primary" disabled={isOutOfStock} onClick={() => { add(); navigate('/cart'); }}>
+                {isOutOfStock ? 'Hết hàng' : 'Xem giỏ hàng'}
+              </button>
             </div>
           </div>
         </section>
@@ -71,6 +81,7 @@ export default function AccessoryDetail() {
           <article className="panel description-panel"><h2>Thông tin phụ kiện</h2><p>{accessory.description}</p></article>
           <aside className="panel specs-panel"><h2>Thông số</h2>{Object.entries(accessory.specifications).map(([key, value]) => <div key={key}><span>{key}</span><strong>{value}</strong></div>)}</aside>
         </section>
+        <ProductReview accessoryId={accessory.id} onRequireLogin={requireLogin} />
         <section className="product-section related-section">
           <div className="section-heading"><div><span>Gợi ý thêm</span><h2>Phụ kiện khác</h2></div></div>
           <ProductGrid products={related} type="accessory" />

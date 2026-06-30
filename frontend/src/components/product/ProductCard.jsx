@@ -11,6 +11,7 @@ export default function ProductCard({ product, type = 'product' }) {
   const { addToCart } = useCart();
   const detailPath = type === 'accessory' ? `/accessories/${product.id}` : `/products/${product.id}`;
   const [favorite, setFavorite] = useState(() => storage.get(STORAGE_KEYS.wishlist, []).includes(product.id));
+  const isOutOfStock = product.status !== 'active' || product.stock <= 0;
 
   useEffect(() => {
     const sync = () => setFavorite(storage.get(STORAGE_KEYS.wishlist, []).includes(product.id));
@@ -21,6 +22,7 @@ export default function ProductCard({ product, type = 'product' }) {
   const add = (event) => {
     event.preventDefault();
     event.stopPropagation();
+    if (isOutOfStock) return toast.error('Sản phẩm đã hết hàng');
     addToCart(product, 1, type);
     toast.success(`Đã thêm ${product.name} vào giỏ hàng`);
   };
@@ -43,6 +45,7 @@ export default function ProductCard({ product, type = 'product' }) {
         <div className="product-image-wrap">
           <img src={product.image} alt={product.name} loading="lazy" />
           {product.discountPercent > 0 && <span className="discount-badge">-{product.discountPercent}%</span>}
+          {isOutOfStock && <span className="stock-badge">Hết hàng</span>}
           <button
             type="button"
             className={`wishlist-button ${favorite ? 'active' : ''}`}
@@ -70,7 +73,9 @@ export default function ProductCard({ product, type = 'product' }) {
             <span><FiStar /> {product.rating}</span>
             <span>Đã bán {product.sold}</span>
           </div>
-          <button className="add-cart-button" onClick={add}><FiShoppingCart /> Thêm vào giỏ</button>
+          <button className="add-cart-button" disabled={isOutOfStock} onClick={add}>
+            <FiShoppingCart /> {isOutOfStock ? 'Hết hàng' : 'Thêm vào giỏ'}
+          </button>
         </div>
       </Link>
     </article>
