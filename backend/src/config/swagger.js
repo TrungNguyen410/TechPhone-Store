@@ -55,6 +55,13 @@ module.exports = {
           password: { type: 'string' },
         },
       },
+      RefreshTokenRequest: {
+        type: 'object',
+        required: ['refreshToken'],
+        properties: {
+          refreshToken: { type: 'string' },
+        },
+      },
       CatalogItem: {
         type: 'object',
         required: ['name', 'brand', 'category', 'price'],
@@ -142,6 +149,14 @@ module.exports = {
         responses: { 200: { description: 'Authenticated' } },
       },
     },
+    '/auth/refresh': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Refresh access token',
+        requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/RefreshTokenRequest' } } } },
+        responses: { 200: { description: 'Session refreshed' }, 401: { description: 'Invalid refresh token' } },
+      },
+    },
     '/auth/logout': { post: { tags: ['Auth'], summary: 'Logout refresh token' } },
     '/auth/me': { get: { tags: ['Auth'], security: [{ bearerAuth: [] }], summary: 'Get current user' } },
     '/auth/profile': { put: { tags: ['Auth'], security: [{ bearerAuth: [] }], summary: 'Update profile' } },
@@ -192,6 +207,15 @@ module.exports = {
       get: { tags: ['Orders'], security: [{ bearerAuth: [] }], summary: 'Get order by id' },
       put: { tags: ['Orders'], security: [{ bearerAuth: [] }], summary: 'Update order' },
       delete: { tags: ['Orders'], security: [{ bearerAuth: [] }], summary: 'Soft delete order' },
+    },
+    '/orders/{id}/cancel': {
+      put: {
+        tags: ['Orders'],
+        security: [{ bearerAuth: [] }],
+        summary: 'Cancel an order before shipping',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Order cancelled' }, 400: { description: 'Order cannot be cancelled' } },
+      },
     },
     '/reviews': {
       get: { tags: ['Reviews'], summary: 'List approved reviews' },
