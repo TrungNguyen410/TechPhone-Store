@@ -1,4 +1,4 @@
-module.exports = {
+const swaggerDocument = {
   openapi: '3.0.3',
   info: {
     title: 'TechPhone Store REST API',
@@ -281,3 +281,24 @@ module.exports = {
     },
   },
 };
+
+const httpMethods = new Set(['get', 'post', 'put', 'patch', 'delete', 'head', 'options']);
+
+for (const [path, pathItem] of Object.entries(swaggerDocument.paths)) {
+  const pathParameters = [...path.matchAll(/\{([^}]+)\}/g)].map((match) => match[1]);
+
+  for (const [method, operation] of Object.entries(pathItem)) {
+    if (!httpMethods.has(method)) continue;
+
+    operation.responses ??= { default: { description: 'Successful response' } };
+    operation.parameters ??= [];
+
+    for (const name of pathParameters) {
+      if (!operation.parameters.some((parameter) => parameter.in === 'path' && parameter.name === name)) {
+        operation.parameters.push({ name, in: 'path', required: true, schema: { type: 'string' } });
+      }
+    }
+  }
+}
+
+module.exports = swaggerDocument;
