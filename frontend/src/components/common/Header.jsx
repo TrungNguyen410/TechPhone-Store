@@ -83,13 +83,13 @@ export default function Header() {
       <div className={`mobile-drawer ${mobileOpen ? 'open' : ''}`}>
         <div className="mobile-drawer-header">
           <StoreBrand onClick={() => setMobileOpen(false)} />
-          <button onClick={() => setMobileOpen(false)}><FiX /></button>
+          <button onClick={() => setMobileOpen(false)} aria-label="Đóng menu"><FiX /></button>
         </div>
         <form className="mobile-search" onSubmit={submitSearch}>
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm sản phẩm..." />
           <button><FiSearch /></button>
         </form>
-        <nav>
+        <nav aria-label="Điều hướng di động">
           <NavLink to="/" onClick={() => setMobileOpen(false)}>Trang chủ</NavLink>
           <NavLink to="/products" onClick={() => setMobileOpen(false)}>Điện thoại</NavLink>
           <NavLink to="/accessories" onClick={() => setMobileOpen(false)}>Phụ kiện</NavLink>
