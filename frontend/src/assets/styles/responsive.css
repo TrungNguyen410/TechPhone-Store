@@ -12,10 +12,6 @@
     display: none;
   }
 
-  .category-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-
   .product-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -442,10 +438,6 @@
     padding-top: 48px;
   }
 
-  .category-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
   .product-grid,
   .catalog-results .product-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -609,11 +601,13 @@
     min-height: 170px;
   }
 
-  .category-grid {
+  .category-marquee-track {
     gap: 10px;
+    animation-duration: 16s;
   }
 
   .category-card {
+    width: 150px;
     padding: 18px 8px 15px;
   }
 

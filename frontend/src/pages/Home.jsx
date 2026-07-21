@@ -23,7 +23,6 @@ const categories = [
   { name: 'Xiaomi', icon: FiZap, query: 'Xiaomi', color: 'orange' },
   { name: 'Tai nghe', icon: FiHeadphones, path: '/accessories?category=Tai%20nghe', color: 'cyan' },
   { name: 'Đồng hồ', icon: FiWatch, path: '/accessories?category=Dong%20ho', color: 'green' },
-  { name: 'Thu cũ đổi mới', icon: FiRefreshCcw, path: '/contact', color: 'pink' },
 ];
 
 export default function Home() {
@@ -86,18 +85,22 @@ export default function Home() {
         <div className="section-heading compact">
           <div><span>Mua sắm dễ dàng</span><h2>Danh mục nổi bật</h2></div>
         </div>
-        <div className="category-grid">
-          {categories.map(({ name, icon: Icon, query, path, color }) => (
-            <Link
-              key={name}
-              to={path || `/products?brand=${query}`}
-              className="category-card"
-            >
-              <div className={`category-icon ${color}`}><Icon /></div>
-              <strong>{name}</strong>
-              <span>Khám phá <FiArrowRight /></span>
-            </Link>
-          ))}
+        <div className="category-marquee">
+          <div className="category-marquee-track">
+            {[...categories, ...categories].map(({ name, icon: Icon, query, path, color }, index) => (
+              <Link
+                key={`${name}-${index}`}
+                to={path || `/products?brand=${query}`}
+                className="category-card"
+                tabIndex={index < categories.length ? 0 : -1}
+                aria-hidden={index >= categories.length}
+              >
+                <div className={`category-icon ${color}`}><Icon /></div>
+                <strong>{name}</strong>
+                <span>Khám phá <FiArrowRight /></span>
+              </Link>
+            ))}
+          </div>
         </div>
       </section>
 
