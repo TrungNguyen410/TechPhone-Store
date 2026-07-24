@@ -10,66 +10,64 @@ const sortMap = {
 };
 
 class CatalogService {
-  constructor(repository) {
+  constructor(repository, { brandRepository, categoryRepository } = {}) {
     this.repository = repository;
+    this.brandRepository = brandRepository;
+    this.categoryRepository = categoryRepository;
   }
 
-  buildFilter(query = {}) {
+  async taxonomyId(repository, name) {
+    if (!repository || !name) return undefined;
+    return (await repository.findAll({ name }))[0]?.id;
+  }
+
+  async buildFilter(query = {}) {
     const filter = {};
     const keyword = query.q || query.search || query.keyword;
-    if (keyword) {
-      const regex = buildRegex(keyword);
-      filter.$or = [{ name: regex }, { brand: regex }, { category: regex }];
-    }
-    if (query.category) filter.category = query.category;
-    if (query.brand) filter.brand = query.brand;
+    if (keyword) filter.name = buildRegex(keyword);
+    if (query.brand) filter.brandId = (await this.taxonomyId(this.brandRepository, query.brand)) || '__no-match__';
+    if (query.category) filter.categoryId = (await this.taxonomyId(this.categoryRepository, query.category)) || '__no-match__';
     if (query.status) filter.status = query.status;
     return filter;
   }
 
+  async denormalize(items) {
+    if (!items) return items;
+    const list = Array.isArray(items) ? items : [items];
+    const brandIds = [...new Set(list.map((item) => item.brandId).filter(Boolean))];
+    const categoryIds = [...new Set(list.map((item) => item.categoryId).filter(Boolean))];
+    const [brands, categories] = await Promise.all([
+      Promise.all(brandIds.map((id) => this.brandRepository.findById(id))),
+      Promise.all(categoryIds.map((id) => this.categoryRepository.findById(id))),
+    ]);
+    const brandMap = new Map(brands.filter(Boolean).map((item) => [item.id, item.name]));
+    const categoryMap = new Map(categories.filter(Boolean).map((item) => [item.id, item.name]));
+    const result = list.map((item) => ({ ...item, brand: brandMap.get(item.brandId) || '', category: categoryMap.get(item.categoryId) || '' }));
+    return Array.isArray(items) ? result : result[0];
+  }
+
   async list(query = {}) {
-    const filter = this.buildFilter(query);
+    const filter = await this.buildFilter(query);
     const pagination = parsePagination(query);
     const sort = sortMap[query.sort] || sortMap.newest;
-
-    if (!pagination) {
-      return this.repository.findAll(filter, { sort });
-    }
-
+    if (!pagination) return this.denormalize(await this.repository.findAll(filter, { sort }));
     const skip = (pagination.page - 1) * pagination.limit;
-    const [items, total] = await Promise.all([
+    const [rawItems, total] = await Promise.all([
       this.repository.findAll(filter, { sort, skip, limit: pagination.limit }),
       this.repository.count(filter),
     ]);
-
-    return {
-      items,
-      pagination: {
-        page: pagination.page,
-        limit: pagination.limit,
-        total,
-        totalPages: Math.ceil(total / pagination.limit),
-      },
-    };
+    return { items: await this.denormalize(rawItems), pagination: { ...pagination, total, totalPages: Math.ceil(total / pagination.limit) } };
   }
 
   async getById(id) {
     const item = await this.repository.findById(id);
     if (!item) throw new AppError('Resource not found', 404);
-    return item;
+    return this.denormalize(item);
   }
 
-  async create(payload) {
-    return this.repository.create(payload);
-  }
-
-  async update(id, payload) {
-    return this.repository.update(id, payload);
-  }
-
-  async remove(id) {
-    return this.repository.softDelete(id);
-  }
+  async create(payload) { return this.denormalize(await this.repository.create(payload)); }
+  async update(id, payload) { return this.denormalize(await this.repository.update(id, payload)); }
+  async remove(id) { return this.repository.softDelete(id); }
 }
 
 module.exports = CatalogService;

@@ -26,7 +26,7 @@ export default function Footer() {
         </div>
         <div>
           <h4>Hỗ trợ khách hàng</h4>
-          <Link to="/order-lookup">Tra cứu đơn hàng</Link>
+          <Link to="/account?tab=orders">Đơn hàng của tôi</Link>
           <Link to="/contact">Chính sách bảo hành</Link>
           <Link to="/contact">Chính sách đổi trả</Link>
           <Link to="/contact">Hướng dẫn mua hàng</Link>

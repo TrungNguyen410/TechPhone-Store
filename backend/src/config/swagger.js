@@ -62,14 +62,34 @@ const swaggerDocument = {
           refreshToken: { type: 'string' },
         },
       },
+      OtpVerificationRequest: {
+        type: 'object',
+        required: ['email', 'otp'],
+        properties: {
+          email: { type: 'string', format: 'email' },
+          otp: { type: 'string', pattern: '^\\d{6}$' },
+        },
+      },
+      PasswordResetRequest: {
+        type: 'object',
+        required: ['identifier', 'channel', 'otp', 'newPassword'],
+        properties: {
+          identifier: { type: 'string' },
+          channel: { type: 'string', enum: ['email', 'sms'] },
+          otp: { type: 'string', pattern: '^\\d{6}$' },
+          newPassword: { type: 'string', minLength: 6 },
+        },
+      },
       CatalogItem: {
         type: 'object',
-        required: ['name', 'brand', 'category', 'price'],
+        required: ['name', 'brandId', 'categoryId', 'price'],
         properties: {
           id: { type: 'string' },
           name: { type: 'string' },
-          brand: { type: 'string' },
-          category: { type: 'string' },
+          brandId: { type: 'string', description: 'ID of an active Brand record' },
+          categoryId: { type: 'string', description: 'ID of an active Category record' },
+          brand: { type: 'string', readOnly: true, description: 'Denormalized brand display name' },
+          category: { type: 'string', readOnly: true, description: 'Denormalized category display name' },
           price: { type: 'number' },
           oldPrice: { type: 'number' },
           image: { type: 'string' },
@@ -136,9 +156,36 @@ const swaggerDocument = {
     '/auth/register': {
       post: {
         tags: ['Auth'],
-        summary: 'Register customer account',
+        summary: 'Request registration email OTP',
         requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/RegisterRequest' } } } },
-        responses: { 201: { description: 'Registered', content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiResponse' } } } } },
+        responses: { 202: { description: 'OTP sent', content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiResponse' } } } } },
+      },
+    },
+    '/auth/register/request-otp': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Request registration email OTP',
+        requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/RegisterRequest' } } } },
+      },
+    },
+    '/auth/register/verify-otp': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Verify email OTP and create customer account',
+        requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/OtpVerificationRequest' } } } },
+      },
+    },
+    '/auth/forgot-password/request-otp': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Request password reset OTP by email or SMS',
+      },
+    },
+    '/auth/forgot-password/reset': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Verify OTP and reset password',
+        requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/PasswordResetRequest' } } } },
       },
     },
     '/auth/login': {

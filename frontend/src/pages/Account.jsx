@@ -6,6 +6,7 @@ import { orderApi } from '../api/orderApi';
 import ConfirmModal from '../components/common/ConfirmModal';
 import EmptyState from '../components/common/EmptyState';
 import Loading from '../components/common/Loading';
+import OrderLookupPanel from '../components/order/OrderLookupPanel';
 import { useAuth } from '../hooks/useAuth';
 import { useCart } from '../hooks/useCart';
 import { formatCurrency, formatDate } from '../utils/formatCurrency';
@@ -24,6 +25,11 @@ export default function Account() {
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [cancelOrderId, setCancelOrderId] = useState(null);
+
+  useEffect(() => {
+    const requestedTab = searchParams.get('tab');
+    if (['profile', 'orders', 'password'].includes(requestedTab)) setTab(requestedTab);
+  }, [searchParams]);
 
   const loadOrders = useCallback(
     () => orderApi.getMyOrders(user.id).then(setOrders).finally(() => setLoadingOrders(false)),
@@ -110,6 +116,7 @@ export default function Account() {
             {tab === 'orders' && (
               <div>
                 <div className="content-heading"><h2>Đơn hàng của tôi</h2><p>Theo dõi trạng thái và xem lại lịch sử mua sắm.</p></div>
+                <OrderLookupPanel initialPhone={user.phone} />
                 {loadingOrders ? <Loading /> : orders.length === 0 ? <EmptyState title="Bạn chưa có đơn hàng" actionLabel="Mua sắm ngay" actionTo="/products" /> : (
                   <div className="account-orders">
                     {orders.map((order) => {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   FiArrowRight,
   FiAward,
@@ -15,7 +15,10 @@ import { accessoryApi } from '../api/accessoryApi';
 import { bannerApi } from '../api/bannerApi';
 import { productApi } from '../api/productApi';
 import Loading from '../components/common/Loading';
+import EmptyState from '../components/common/EmptyState';
+import CategoryCarousel from '../components/home/CategoryCarousel';
 import ProductGrid from '../components/product/ProductGrid';
+import { bestDeals, bestSellers, featuredAccessories } from '../utils/merchandising';
 
 const categories = [
   { name: 'iPhone', icon: FiSmartphone, query: 'Apple', color: 'blue' },
@@ -31,16 +34,30 @@ export default function Home() {
   const [banners, setBanners] = useState([]);
   const [activeBanner, setActiveBanner] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const loadHomeData = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [productData, accessoryData, bannerData] = await Promise.all([
+        productApi.getAll(),
+        accessoryApi.getAll(),
+        bannerApi.getAll(),
+      ]);
+      setProducts(productData.filter((item) => item.status === 'active'));
+      setAccessories(accessoryData.filter((item) => item.status === 'active'));
+      setBanners(bannerData.filter((item) => item.active));
+    } catch (requestError) {
+      setError(requestError.friendlyMessage || 'Không thể tải dữ liệu trang chủ. Vui lòng thử lại.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    Promise.all([productApi.getAll(), accessoryApi.getAll(), bannerApi.getAll()])
-      .then(([productData, accessoryData, bannerData]) => {
-        setProducts(productData.filter((item) => item.status === 'active'));
-        setAccessories(accessoryData.filter((item) => item.status === 'active'));
-        setBanners(bannerData.filter((item) => item.active));
-      })
-      .finally(() => setLoading(false));
-  }, []);
+    loadHomeData();
+  }, [loadHomeData]);
 
   useEffect(() => {
     if (banners.length < 2) return undefined;
@@ -49,9 +66,18 @@ export default function Home() {
   }, [banners.length]);
 
   if (loading) return <Loading />;
+  if (error) {
+    return (
+      <main className="page-shell">
+        <EmptyState title="Không thể tải trang chủ" description={error} />
+        <div className="home-retry"><button className="btn btn-primary" onClick={loadHomeData}>Thử lại</button></div>
+      </main>
+    );
+  }
 
-  const hotProducts = [...products].sort((a, b) => b.sold - a.sold).slice(0, 8);
-  const saleProducts = [...products].sort((a, b) => b.discountPercent - a.discountPercent).slice(0, 8);
+  const hotProducts = bestSellers(products);
+  const saleProducts = bestDeals(products);
+  const highlightedAccessories = featuredAccessories(accessories);
 
   return (
     <>
@@ -85,28 +111,12 @@ export default function Home() {
         <div className="section-heading compact">
           <div><span>Mua sắm dễ dàng</span><h2>Danh mục nổi bật</h2></div>
         </div>
-        <div className="category-marquee">
-          <div className="category-marquee-track">
-            {[...categories, ...categories].map(({ name, icon: Icon, query, path, color }, index) => (
-              <Link
-                key={`${name}-${index}`}
-                to={path || `/products?brand=${query}`}
-                className="category-card"
-                tabIndex={index < categories.length ? 0 : -1}
-                aria-hidden={index >= categories.length}
-              >
-                <div className={`category-icon ${color}`}><Icon /></div>
-                <strong>{name}</strong>
-                <span>Khám phá <FiArrowRight /></span>
-              </Link>
-            ))}
-          </div>
-        </div>
+        <CategoryCarousel categories={categories} />
       </section>
 
       <section className="container product-section">
         <div className="section-heading">
-          <div><span>Được yêu thích nhất</span><h2>Sản phẩm bán chạy</h2></div>
+          <div><span>Xếp hạng theo số lượng đã bán</span><h2>Sản phẩm bán chạy</h2></div>
           <Link to="/products">Xem tất cả <FiArrowRight /></Link>
         </div>
         <ProductGrid products={hotProducts} />
@@ -115,7 +125,7 @@ export default function Home() {
       <section className="sale-band">
         <div className="container">
           <div className="section-heading light">
-            <div><span>Ưu đãi có hạn</span><h2>Giá tốt hôm nay</h2></div>
+            <div><span>Giảm từ 10%, ưu tiên số tiền tiết kiệm cao</span><h2>Ưu đãi tiết kiệm nhất</h2></div>
             <Link to="/products">Săn ưu đãi <FiArrowRight /></Link>
           </div>
           <ProductGrid products={saleProducts} />
@@ -124,10 +134,10 @@ export default function Home() {
 
       <section className="container product-section" id="accessories">
         <div className="section-heading">
-          <div><span>Hoàn thiện trải nghiệm</span><h2>Phụ kiện nổi bật</h2></div>
+          <div><span>Điểm từ 4.5 sao và có ít nhất 20 lượt bán</span><h2>Phụ kiện nổi bật</h2></div>
           <Link to="/accessories">Xem tất cả <FiArrowRight /></Link>
         </div>
-        <ProductGrid products={accessories.slice(0, 8)} type="accessory" />
+        <ProductGrid products={highlightedAccessories} type="accessory" />
       </section>
 
       <section className="store-story">

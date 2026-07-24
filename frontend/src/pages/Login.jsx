@@ -46,6 +46,7 @@ export default function Login() {
           <p>Tiếp tục mua sắm và quản lý đơn hàng của bạn.</p>
           <label className="input-with-icon"><span>Email hoặc số điện thoại</span><div><FiMail /><input value={form.identifier} onChange={(event) => setForm({ ...form, identifier: event.target.value })} placeholder="user@gmail.com" /></div></label>
           <label className="input-with-icon"><span>Mật khẩu</span><div><FiLock /><input type={showPassword ? 'text' : 'password'} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder="Nhập mật khẩu" /><button type="button" onClick={() => setShowPassword(!showPassword)}>{showPassword ? <FiEyeOff /> : <FiEye />}</button></div></label>
+          <div className="auth-forgot-link"><Link to="/forgot-password">Quên mật khẩu?</Link></div>
           <button className="btn btn-primary auth-submit" disabled={loading}><FiLogIn /> {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}</button>
           <div className="mock-accounts">
             <strong>Tài khoản dùng thử</strong>

@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { FiX } from 'react-icons/fi';
 import { makeAccessoryImage, makeProductImage } from '../../mock/imageFactory';
+import { adminApi } from '../../api/adminApi';
 
 const emptyProduct = {
   name: '',
-  brand: '',
-  category: 'Điện thoại',
+  brandId: '',
+  categoryId: '',
   price: '',
   oldPrice: '',
   ram: '8GB',
@@ -22,11 +23,19 @@ const emptyProduct = {
 
 export default function ProductFormModal({ open, item, kind = 'product', onClose, onSubmit }) {
   const [form, setForm] = useState(emptyProduct);
+  const [taxonomies, setTaxonomies] = useState({ brands: [], categories: [] });
 
   useEffect(() => {
     if (!open) return;
-    setForm(item || { ...emptyProduct, category: kind === 'accessory' ? 'Tai nghe' : 'Điện thoại' });
+    setForm(item || emptyProduct);
   }, [item, kind, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    Promise.all([adminApi.brands.getAll(), adminApi.categories.getAll()]).then(([brands, categories]) => {
+      setTaxonomies({ brands: brands.filter((brand) => brand.active), categories: categories.filter((category) => category.active) });
+    });
+  }, [open]);
 
   if (!open) return null;
   const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
@@ -39,8 +48,15 @@ export default function ProductFormModal({ open, item, kind = 'product', onClose
       (kind === 'accessory'
         ? makeAccessoryImage(form.name || 'Phụ kiện')
         : makeProductImage(form.name || 'Điện thoại'));
+    const brand = taxonomies.brands.find((entry) => entry.id === form.brandId) || taxonomies.brands.find((entry) => entry.name === form.brand);
+    const category = taxonomies.categories.find((entry) => entry.id === form.categoryId) || taxonomies.categories.find((entry) => entry.name === form.category);
+    const catalogPayload = { ...form };
+    delete catalogPayload.brand;
+    delete catalogPayload.category;
     onSubmit({
-      ...form,
+      ...catalogPayload,
+      brandId: brand?.id || form.brandId,
+      categoryId: category?.id || form.categoryId,
       price,
       oldPrice,
       stock: Number(form.stock),
@@ -51,7 +67,7 @@ export default function ProductFormModal({ open, item, kind = 'product', onClose
       sold: form.sold || 0,
       specifications:
         kind === 'accessory'
-          ? { 'Thương hiệu': form.brand, 'Loại phụ kiện': form.category, 'Bảo hành': '12 tháng' }
+          ? { 'Thương hiệu': brand?.name || '', 'Loại phụ kiện': category?.name || '', 'Bảo hành': '12 tháng' }
           : {
               'Màn hình': form.screen,
               RAM: form.ram,
@@ -72,8 +88,8 @@ export default function ProductFormModal({ open, item, kind = 'product', onClose
         </div>
         <div className="form-grid">
           <label className="form-field full"><span>Tên {kind === 'product' ? 'sản phẩm' : 'phụ kiện'} *</span><input required value={form.name} onChange={(event) => update('name', event.target.value)} /></label>
-          <label className="form-field"><span>Thương hiệu *</span><input required value={form.brand} onChange={(event) => update('brand', event.target.value)} /></label>
-          <label className="form-field"><span>Danh mục *</span><input required value={form.category} onChange={(event) => update('category', event.target.value)} /></label>
+          <label className="form-field"><span>Thương hiệu *</span><select required value={form.brandId || taxonomies.brands.find((entry) => entry.name === form.brand)?.id || ''} onChange={(event) => update('brandId', event.target.value)}><option value="">Chọn thương hiệu</option>{taxonomies.brands.map((entry) => <option value={entry.id} key={entry.id}>{entry.name}</option>)}</select></label>
+          <label className="form-field"><span>Danh mục *</span><select required value={form.categoryId || taxonomies.categories.find((entry) => entry.name === form.category)?.id || ''} onChange={(event) => update('categoryId', event.target.value)}><option value="">Chọn danh mục</option>{taxonomies.categories.map((entry) => <option value={entry.id} key={entry.id}>{entry.name}</option>)}</select></label>
           <label className="form-field"><span>Giá bán *</span><input required min="0" type="number" value={form.price} onChange={(event) => update('price', event.target.value)} /></label>
           <label className="form-field"><span>Giá cũ</span><input min="0" type="number" value={form.oldPrice} onChange={(event) => update('oldPrice', event.target.value)} /></label>
           <label className="form-field"><span>Tồn kho *</span><input required min="0" type="number" value={form.stock} onChange={(event) => update('stock', event.target.value)} /></label>

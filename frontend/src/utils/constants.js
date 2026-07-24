@@ -18,6 +18,8 @@ export const STORAGE_KEYS = {
   mockSettings: 'mock_settings',
   mockCategories: 'mock_categories',
   mockBrands: 'mock_brands',
+  mockContacts: 'mock_contacts',
+  mockOtpRequests: 'mock_otp_requests',
 };
 
 export const PAYMENT_METHODS = [

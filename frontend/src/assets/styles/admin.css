@@ -258,13 +258,71 @@
 
 .notification-button span {
   position: absolute;
-  top: 7px;
-  right: 7px;
-  width: 6px;
-  height: 6px;
-  border: 1px solid #fff;
-  border-radius: 50%;
+  top: -6px;
+  right: -6px;
+  display: grid;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  place-items: center;
+  border: 2px solid #fff;
+  border-radius: 12px;
+  color: #fff;
   background: #ef4444;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.contact-status {
+  display: inline-flex;
+  width: fit-content;
+  padding: 4px 9px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.contact-status.new { color: #b91c1c; background: #fee2e2; }
+.contact-status.read { color: #1d4ed8; background: #dbeafe; }
+.contact-status.resolved { color: #047857; background: #d1fae5; }
+
+.contact-detail-modal {
+  position: relative;
+  width: min(620px, calc(100vw - 32px));
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 28px;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 28px 80px rgb(15 23 42 / 24%);
+}
+
+.contact-detail-modal h2 {
+  margin: 12px 40px 18px 0;
+}
+
+.contact-customer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.contact-customer-meta strong {
+  width: 100%;
+  color: #0f172a;
+  font-size: 15px;
+}
+
+.contact-message {
+  margin: 20px 0;
+  padding: 16px;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #334155;
+  line-height: 1.65;
+  white-space: pre-wrap;
 }
 
 .admin-profile {

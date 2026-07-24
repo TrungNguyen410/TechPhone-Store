@@ -21,8 +21,10 @@ const BANK_TRANSFER = {
 const paymentHint = (method) => {
   if (method === 'cod') return 'Thanh toán trực tiếp cho nhân viên giao hàng';
   if (method === 'bank') return 'Quét mã QR và xác nhận đã chuyển khoản trước khi đặt hàng';
-  return 'Thông tin thanh toán sẽ được hướng dẫn sau khi đặt hàng';
+  if (method === 'momo') return 'Quét mã MoMo và xác nhận thanh toán trước khi đặt hàng';
+  return 'Xác nhận thanh toán thẻ giả lập trước khi đặt hàng';
 };
+const PAYMENT_CONFIRM_METHODS = ['bank', 'momo', 'card'];
 
 export default function Checkout() {
   const navigate = useNavigate();
@@ -38,9 +40,10 @@ export default function Checkout() {
   });
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
-  const [bankTransferStep, setBankTransferStep] = useState(false);
+  const [paymentConfirmStep, setPaymentConfirmStep] = useState(false);
+  const [cardDetails, setCardDetails] = useState({ number: '', expiry: '', cvv: '' });
   const [paymentReference] = useState(() => `TP${Date.now().toString().slice(-8)}`);
-  const bankTransferRef = useRef(null);
+  const paymentConfirmRef = useRef(null);
 
   const transferContent = useMemo(
     () => `${paymentReference} ${form.phone || 'TECHPHONE'}`.trim().toUpperCase(),
@@ -55,6 +58,7 @@ export default function Checkout() {
     });
     return `https://img.vietqr.io/image/${BANK_TRANSFER.bankBin}-${BANK_TRANSFER.accountNumber}-compact2.png?${params.toString()}`;
   }, [cart.total, transferContent]);
+  const momoQrUrl = useMemo(() => `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(`MOMO|0900000000|${cart.total}|${transferContent}`)}`, [cart.total, transferContent]);
 
   if (cart.cartItems.length === 0) {
     return (
@@ -69,7 +73,7 @@ export default function Checkout() {
   const update = (key, value) => {
     setForm((current) => ({ ...current, [key]: value }));
     setErrors((current) => ({ ...current, [key]: '' }));
-    if (key === 'paymentMethod') setBankTransferStep(false);
+    if (key === 'paymentMethod') setPaymentConfirmStep(false);
   };
 
   const validateCheckout = () => {
@@ -101,7 +105,12 @@ export default function Checkout() {
           phone: form.phone.trim(),
           address: form.address.trim(),
         },
-        note: [form.note.trim(), form.paymentMethod === 'bank' ? `Ma chuyen khoan: ${transferContent}` : '']
+        note: [
+          form.note.trim(),
+          form.paymentMethod === 'bank' ? `Ma chuyen khoan: ${transferContent}` : '',
+          form.paymentMethod === 'momo' ? `Ma giao dich MoMo: ${transferContent}` : '',
+          form.paymentMethod === 'card' ? 'Da xac nhan thanh toan the (demo)' : '',
+        ]
           .filter(Boolean)
           .join('\n'),
         paymentMethod: form.paymentMethod,
@@ -124,10 +133,10 @@ export default function Checkout() {
     event.preventDefault();
     if (!validateCheckout()) return;
 
-    if (form.paymentMethod === 'bank' && !bankTransferStep) {
-      setBankTransferStep(true);
-      toast.info('Vui lòng quét mã QR và bấm đã chuyển khoản sau khi thanh toán.');
-      requestAnimationFrame(() => bankTransferRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+    if (PAYMENT_CONFIRM_METHODS.includes(form.paymentMethod) && !paymentConfirmStep) {
+      setPaymentConfirmStep(true);
+      toast.info('Hoàn tất thanh toán và bấm "Tôi đã thanh toán" để tạo đơn hàng.');
+      requestAnimationFrame(() => paymentConfirmRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
       return;
     }
 
@@ -196,8 +205,8 @@ export default function Checkout() {
               </div>
             </section>
 
-            {bankTransferStep && (
-              <section className="panel checkout-section bank-transfer-section" ref={bankTransferRef}>
+            {paymentConfirmStep && form.paymentMethod === 'bank' && (
+              <section className="panel checkout-section bank-transfer-section" ref={paymentConfirmRef}>
                 <h2><FiCreditCard /> Thanh toán chuyển khoản</h2>
                 <div className="bank-transfer-grid">
                   <div className="bank-qr-card">
@@ -219,6 +228,8 @@ export default function Checkout() {
                 </p>
               </section>
             )}
+            {paymentConfirmStep && form.paymentMethod === 'momo' && <section className="panel checkout-section bank-transfer-section" ref={paymentConfirmRef}><h2><FiCreditCard /> Thanh toán qua MoMo</h2><div className="bank-transfer-grid"><div className="bank-qr-card"><img src={momoQrUrl} alt="Mã QR thanh toán MoMo" /></div><div className="bank-transfer-info"><span>Quét mã trong ứng dụng MoMo</span><div><small>Số điện thoại nhận</small><strong>0900 000 000</strong></div><div><small>Số tiền</small><strong>{formatCurrency(cart.total)}</strong></div><div><small>Nội dung</small><strong>{transferContent}</strong></div></div></div><p className="bank-transfer-note">Sau khi thanh toán qua MoMo, bấm <strong>Tôi đã thanh toán</strong> để hoàn tất đơn hàng.</p></section>}
+            {paymentConfirmStep && form.paymentMethod === 'card' && <section className="panel checkout-section bank-transfer-section" ref={paymentConfirmRef}><h2><FiCreditCard /> Thanh toán bằng thẻ</h2><div className="form-grid"><label className="form-field full"><span>Số thẻ</span><input inputMode="numeric" placeholder="4242 4242 4242 4242" value={cardDetails.number} onChange={(event) => setCardDetails((current) => ({ ...current, number: event.target.value }))} /></label><label className="form-field"><span>Ngày hết hạn</span><input placeholder="MM/YY" value={cardDetails.expiry} onChange={(event) => setCardDetails((current) => ({ ...current, expiry: event.target.value }))} /></label><label className="form-field"><span>CVV</span><input inputMode="numeric" placeholder="123" value={cardDetails.cvv} onChange={(event) => setCardDetails((current) => ({ ...current, cvv: event.target.value }))} /></label></div><p className="bank-transfer-note">Đây là form thẻ giả lập; thông tin thẻ không được lưu lại.</p></section>}
           </div>
 
           <aside className="panel checkout-order">
@@ -241,19 +252,19 @@ export default function Checkout() {
             <button className="btn btn-primary checkout-button" disabled={submitting}>
               {submitting
                 ? 'Đang tạo đơn hàng...'
-                : bankTransferStep
-                  ? 'Tôi đã chuyển khoản'
-                  : form.paymentMethod === 'bank'
+                : paymentConfirmStep
+                  ? 'Tôi đã thanh toán'
+                  : PAYMENT_CONFIRM_METHODS.includes(form.paymentMethod)
                     ? 'Tiếp tục thanh toán'
                     : 'Xác nhận đặt hàng'}
             </button>
-            {bankTransferStep && (
+            {paymentConfirmStep && (
               <>
-                <button type="button" className="bank-edit-button" onClick={() => setBankTransferStep(false)}>
+                <button type="button" className="bank-edit-button" onClick={() => setPaymentConfirmStep(false)}>
                   Quay lại sửa thông tin
                 </button>
                 <p className="checkout-address-note">
-                  <FiCheckCircle /> Chưa tạo đơn hàng cho tới khi bạn xác nhận đã chuyển khoản
+                  <FiCheckCircle /> Chưa tạo đơn hàng cho tới khi bạn xác nhận đã thanh toán
                 </p>
               </>
             )}

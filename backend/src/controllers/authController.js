@@ -3,8 +3,23 @@ const asyncHandler = require('../utils/asyncHandler');
 const { successResponse } = require('../utils/apiResponse');
 
 const register = asyncHandler(async (req, res) => {
-  const session = await authService.register(req.body);
-  successResponse(res, session, 'Registration successful', 201);
+  const result = await authService.requestRegistrationOtp(req.body);
+  successResponse(res, result, 'Registration OTP sent', 202);
+});
+
+const verifyRegistrationOtp = asyncHandler(async (req, res) => {
+  const session = await authService.verifyRegistrationOtp(req.body);
+  successResponse(res, session, 'Registration verified', 201);
+});
+
+const requestPasswordReset = asyncHandler(async (req, res) => {
+  const result = await authService.requestPasswordReset(req.body);
+  successResponse(res, result, 'Password reset OTP requested');
+});
+
+const resetPassword = asyncHandler(async (req, res) => {
+  const result = await authService.resetPassword(req.body);
+  successResponse(res, result, 'Password reset successful');
 });
 
 const login = asyncHandler(async (req, res) => {
@@ -37,4 +52,15 @@ const logout = asyncHandler(async (req, res) => {
   successResponse(res, result, 'Logout successful');
 });
 
-module.exports = { register, login, me, updateProfile, changePassword, refresh, logout };
+module.exports = {
+  register,
+  verifyRegistrationOtp,
+  requestPasswordReset,
+  resetPassword,
+  login,
+  me,
+  updateProfile,
+  changePassword,
+  refresh,
+  logout,
+};

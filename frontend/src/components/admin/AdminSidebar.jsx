@@ -21,6 +21,7 @@ const links = [
   { to: '/admin/accessories', label: 'Phụ kiện', icon: FiShoppingBag },
   { to: '/admin/orders', label: 'Đơn hàng', icon: FiPackage },
   { to: '/admin/customers', label: 'Khách hàng', icon: FiUsers },
+  { to: '/admin/contacts', label: 'Liên hệ hỗ trợ', icon: FiMessageSquare },
   { to: '/admin/reviews', label: 'Đánh giá', icon: FiMessageSquare },
   { to: '/admin/banners', label: 'Banner', icon: FiImage },
   { to: '/admin/vouchers', label: 'Voucher', icon: FiTag },

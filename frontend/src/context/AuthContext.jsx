@@ -49,7 +49,11 @@ export function AuthProvider({ children }) {
   }, [loadCurrentUser]);
 
   const login = useCallback(async (credentials) => persistSession(await authApi.login(credentials)), [persistSession]);
-  const register = useCallback(async (payload) => persistSession(await authApi.register(payload)), [persistSession]);
+  const requestRegistrationOtp = useCallback((payload) => authApi.requestRegistrationOtp(payload), []);
+  const verifyRegistrationOtp = useCallback(
+    async (payload) => persistSession(await authApi.verifyRegistrationOtp(payload)),
+    [persistSession],
+  );
 
   const updateProfile = useCallback(
     async (payload) => {
@@ -74,13 +78,14 @@ export function AuthProvider({ children }) {
       isAuthenticated: Boolean(user && token),
       isAdmin: user?.role === 'admin',
       login,
-      register,
+      requestRegistrationOtp,
+      verifyRegistrationOtp,
       logout,
       updateProfile,
       changePassword,
       loadCurrentUser,
     }),
-    [changePassword, loadCurrentUser, loading, login, logout, register, token, updateProfile, user],
+    [changePassword, loadCurrentUser, loading, login, logout, requestRegistrationOtp, token, updateProfile, user, verifyRegistrationOtp],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

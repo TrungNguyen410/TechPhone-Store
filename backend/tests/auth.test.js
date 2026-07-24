@@ -3,19 +3,49 @@ const User = require('../src/models/User');
 const { app, createUser, login } = require('./helpers');
 
 describe('Auth API', () => {
-  it('registers a customer and returns frontend-compatible token data', async () => {
-    const response = await request(app).post('/api/auth/register').send({
+  it('creates a customer only after the email OTP is verified', async () => {
+    const requested = await request(app).post('/api/auth/register/request-otp').send({
       fullName: 'Nguyen Minh Anh',
       email: 'minhanh@example.com',
       phone: '0912345678',
       password: '123456',
     });
 
-    expect(response.status).toBe(201);
-    expect(response.body.success).toBe(true);
-    expect(response.body.data.token).toBeTruthy();
-    expect(response.body.data.user.email).toBe('minhanh@example.com');
-    expect(response.body.data.user.password).toBeUndefined();
+    expect(requested.status).toBe(202);
+    expect(await User.findOne({ email: 'minhanh@example.com' })).toBeNull();
+
+    const verified = await request(app).post('/api/auth/register/verify-otp').send({
+      email: 'minhanh@example.com',
+      otp: requested.body.data.debugOtp,
+    });
+
+    expect(verified.status).toBe(201);
+    expect(verified.body.data.token).toBeTruthy();
+    expect(verified.body.data.user.emailVerified).toBe(true);
+    expect(verified.body.data.user.password).toBeUndefined();
+  });
+
+  it('resets a forgotten password with a one-time code', async () => {
+    await createUser({ email: 'forgot@test.com', phone: '0977777777' });
+    const requested = await request(app).post('/api/auth/forgot-password/request-otp').send({
+      identifier: 'forgot@test.com',
+      channel: 'email',
+    });
+    expect(requested.status).toBe(200);
+
+    const reset = await request(app).post('/api/auth/forgot-password/reset').send({
+      identifier: 'forgot@test.com',
+      channel: 'email',
+      otp: requested.body.data.debugOtp,
+      newPassword: 'new-password',
+    });
+    expect(reset.status).toBe(200);
+
+    const loggedIn = await request(app).post('/api/auth/login').send({
+      identifier: 'forgot@test.com',
+      password: 'new-password',
+    });
+    expect(loggedIn.status).toBe(200);
   });
 
   it('does not allow public registration to set admin role', async () => {

@@ -254,11 +254,11 @@ p {
 }
 
 .header-search {
+  position: relative;
   display: flex;
   height: 46px;
   flex: 1;
   align-items: center;
-  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: #f8fafc;
@@ -281,12 +281,73 @@ p {
   background: transparent;
 }
 
-.header-search button {
+.header-search > button {
   align-self: stretch;
   padding: 0 20px;
   color: #fff;
   background: var(--primary);
   font-weight: 700;
+}
+
+.search-suggestions {
+  position: absolute;
+  z-index: 80;
+  top: calc(100% + 8px);
+  right: 0;
+  left: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.search-suggestions > button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #eef2f7;
+  text-align: left;
+}
+
+.search-suggestions > button:hover {
+  background: #f8fafc;
+}
+
+.search-suggestions img {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  border-radius: 9px;
+  object-fit: contain;
+  background: #f8fafc;
+}
+
+.search-suggestions span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.search-suggestions strong {
+  overflow: hidden;
+  color: var(--navy);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-suggestions small,
+.search-suggestions > p {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.search-suggestions > p {
+  margin: 0;
+  padding: 16px;
+  text-align: center;
 }
 
 .header-actions {
@@ -332,7 +393,8 @@ p {
   font-size: 13px;
 }
 
-.cart-action b {
+.cart-action b,
+.favorite-action b {
   position: absolute;
   top: -9px;
   left: 16px;
@@ -708,30 +770,47 @@ p {
 
 .category-marquee {
   overflow: hidden;
-  mask-image: linear-gradient(to right, transparent, #000 5%, #000 95%, transparent);
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 5%, #000 95%, transparent);
+  padding-bottom: 8px;
+}
+
+.category-marquee.is-static {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
 }
 
 .category-marquee-track {
   display: flex;
   gap: 15px;
   width: max-content;
-  animation: category-marquee-scroll 22s linear infinite;
+  will-change: transform;
 }
 
-.category-marquee:hover .category-marquee-track {
+.category-marquee-set {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 15px;
+}
+
+.category-marquee-track.is-looping {
+  animation: category-marquee-loop 22s linear infinite;
+}
+
+.category-marquee-track.is-paused {
   animation-play-state: paused;
 }
 
-@keyframes category-marquee-scroll {
-  from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
+@keyframes category-marquee-loop {
+  to {
+    transform: translateX(calc(-50% - 7.5px));
+  }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .category-marquee-track {
-    animation: none;
-  }
+.home-retry {
+  display: flex;
+  justify-content: center;
+  margin-top: -36px;
+  padding-bottom: 48px;
 }
 
 .category-card {
@@ -2391,6 +2470,20 @@ p {
   white-space: nowrap;
 }
 
+.payment-method-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 4px 9px;
+  border: 1px solid #bfdbfe;
+  border-radius: 20px;
+  color: #1d4ed8;
+  background: #eff6ff;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 .status-pending { color: #b45309; background: #fef3c7; }
 .status-confirmed { color: #1d4ed8; background: #dbeafe; }
 .status-shipping { color: #7c3aed; background: #ede9fe; }
@@ -2585,6 +2678,70 @@ p {
   width: 100%;
   min-height: 50px;
   margin-top: 5px;
+}
+
+.auth-forgot-link {
+  margin: -7px 0 14px;
+  text-align: right;
+}
+
+.auth-forgot-link a,
+.auth-text-button {
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.auth-text-button {
+  margin: -4px 0 12px;
+  padding: 0;
+  background: none;
+  text-align: left;
+}
+
+.otp-input input {
+  text-align: center;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 8px;
+}
+
+.otp-channel-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.otp-channel-options label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.account-order-lookup {
+  margin-bottom: 26px;
+  padding-bottom: 26px;
+  border-bottom: 1px solid var(--border);
+}
+
+.account-order-lookup .content-heading {
+  margin-bottom: 12px;
+}
+
+.account-order-lookup .content-heading h3 {
+  color: var(--navy);
+  font-size: 17px;
+}
+
+.account-order-lookup .lookup-result {
+  margin-top: 18px;
 }
 
 .mock-accounts {

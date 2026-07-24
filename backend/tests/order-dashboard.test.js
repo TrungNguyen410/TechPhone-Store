@@ -1,17 +1,24 @@
 const request = require('supertest');
 const Order = require('../src/models/Order');
 const Product = require('../src/models/Product');
+const Brand = require('../src/models/Brand');
+const Category = require('../src/models/Category');
 const { app, createUser, login } = require('./helpers');
 
 describe('Orders and dashboard APIs', () => {
+  const seedTaxonomy = async () => {
+    const brand = await Brand.create({ name: 'Apple', slug: 'apple', active: true });
+    const category = await Category.create({ name: 'Dien thoai', slug: 'dien-thoai', active: true });
+    return { brandId: brand.id, categoryId: category.id };
+  };
   it('creates an order and allows lookup by order number and phone', async () => {
     await createUser({ email: 'customer@test.com', phone: '0911111111' });
     const token = await login('customer@test.com');
+    const taxonomy = await seedTaxonomy();
     const product = await Product.create({
       _id: 'phone-1',
       name: 'iPhone 16 Pro Max',
-      brand: 'Apple',
-      category: 'Dien thoai',
+      ...taxonomy,
       price: 33990000,
       stock: 5,
       status: 'active',
@@ -53,11 +60,11 @@ describe('Orders and dashboard APIs', () => {
   it('rejects orders that exceed product stock', async () => {
     await createUser({ email: 'stock@test.com', phone: '0922222222' });
     const token = await login('stock@test.com');
+    const taxonomy = await seedTaxonomy();
     const product = await Product.create({
       _id: 'stock-phone-1',
       name: 'Low Stock Phone',
-      brand: 'Apple',
-      category: 'Dien thoai',
+      ...taxonomy,
       price: 1000000,
       stock: 1,
       status: 'active',

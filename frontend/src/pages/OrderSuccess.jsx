@@ -38,8 +38,8 @@ export default function OrderSuccess() {
           <EmptyState
             title="Không tìm thấy đơn hàng"
             description={error || 'Đơn hàng không tồn tại hoặc đường dẫn xác nhận không còn hợp lệ.'}
-            actionLabel="Tra cứu đơn hàng"
-            actionTo="/order-lookup"
+            actionLabel="Đến đơn hàng của tôi"
+            actionTo="/account?tab=orders"
           />
         </div>
       </main>

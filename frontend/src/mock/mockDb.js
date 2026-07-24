@@ -3,10 +3,12 @@ import { storage } from '../utils/storage';
 import { mockAccessories } from './mockAccessories';
 import { mockBanners } from './mockBanners';
 import { mockOrders } from './mockOrders';
+import { mockContacts } from './mockContacts';
 import { mockProducts } from './mockProducts';
 import { mockReviews } from './mockReviews';
 import { mockUsers } from './mockUsers';
 import { mockVouchers } from './mockVouchers';
+import { mockBrands, mockCategories } from './mockTaxonomy';
 
 const wait = (value, delay = 180) => new Promise((resolve) => setTimeout(() => resolve(value), delay));
 const fail = (message, status = 400) => {
@@ -15,6 +17,7 @@ const fail = (message, status = 400) => {
   throw error;
 };
 const clone = (value) => JSON.parse(JSON.stringify(value));
+const slugify = (value = '') => value.toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 
 const collections = {
   users: [STORAGE_KEYS.mockUsers, mockUsers],
@@ -24,22 +27,9 @@ const collections = {
   reviews: [STORAGE_KEYS.mockReviews, mockReviews],
   vouchers: [STORAGE_KEYS.mockVouchers, mockVouchers],
   banners: [STORAGE_KEYS.mockBanners, mockBanners],
-  categories: [
-    STORAGE_KEYS.mockCategories,
-    ['Điện thoại', 'Tai nghe', 'Sạc', 'Đồng hồ', 'Ốp lưng'].map((name, index) => ({
-      id: `category-${index + 1}`,
-      name,
-      active: true,
-    })),
-  ],
-  brands: [
-    STORAGE_KEYS.mockBrands,
-    ['Apple', 'Samsung', 'Xiaomi', 'OPPO', 'Vivo', 'Honor', 'Realme'].map((name, index) => ({
-      id: `brand-${index + 1}`,
-      name,
-      active: true,
-    })),
-  ],
+  categories: [STORAGE_KEYS.mockCategories, mockCategories],
+  brands: [STORAGE_KEYS.mockBrands, mockBrands],
+  contacts: [STORAGE_KEYS.mockContacts, mockContacts],
 };
 
 const read = (name) => {
@@ -58,6 +48,9 @@ const write = (name, value) => {
 const publicUser = ({ password: _password, ...user }) => user;
 const tokenFor = (user) => `mock-jwt-${user.id}-${Date.now()}`;
 const createId = (prefix) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+const readOtpRequests = () => storage.get(STORAGE_KEYS.mockOtpRequests, []);
+const writeOtpRequests = (items) => storage.set(STORAGE_KEYS.mockOtpRequests, items);
+const mockOtp = '123456';
 
 export const mockDb = {
   async login(identifier, password) {
@@ -85,6 +78,77 @@ export const mockDb = {
     };
     write('users', [...users, user]);
     return wait({ token: tokenFor(user), user: publicUser(user) });
+  },
+
+  async requestRegistrationOtp(payload) {
+    const users = read('users');
+    if (users.some((user) => user.email.toLowerCase() === payload.email.toLowerCase())) {
+      fail('Email đã được sử dụng');
+    }
+    if (users.some((user) => user.phone === payload.phone)) fail('Số điện thoại đã được sử dụng');
+    const request = {
+      id: createId('otp'),
+      purpose: 'register',
+      target: payload.email.toLowerCase(),
+      otp: mockOtp,
+      payload,
+      expiresAt: Date.now() + 10 * 60 * 1000,
+    };
+    writeOtpRequests([
+      request,
+      ...readOtpRequests().filter((item) => !(item.purpose === request.purpose && item.target === request.target)),
+    ]);
+    return wait({ deliveryTarget: payload.email, expiresInSeconds: 600, debugOtp: mockOtp });
+  },
+
+  async verifyRegistrationOtp(email, otp) {
+    const target = email.toLowerCase();
+    const request = readOtpRequests().find(
+      (item) => item.purpose === 'register' && item.target === target && item.expiresAt > Date.now(),
+    );
+    if (!request || request.otp !== otp) fail('Mã OTP không hợp lệ hoặc đã hết hạn');
+    writeOtpRequests(readOtpRequests().filter((item) => item.id !== request.id));
+    return this.register({ ...request.payload, emailVerified: true });
+  },
+
+  async requestPasswordReset(identifier, channel) {
+    const user = read('users').find(
+      (item) => item.email.toLowerCase() === identifier.toLowerCase() || item.phone === identifier,
+    );
+    if (!user) return wait({ message: 'Nếu tài khoản tồn tại, mã OTP đã được gửi.' });
+    const target = channel === 'sms' ? user.phone : user.email;
+    const request = {
+      id: createId('otp'),
+      purpose: 'password-reset',
+      identifier: identifier.toLowerCase(),
+      target,
+      channel,
+      userId: user.id,
+      otp: mockOtp,
+      expiresAt: Date.now() + 10 * 60 * 1000,
+    };
+    writeOtpRequests([
+      request,
+      ...readOtpRequests().filter((item) => !(item.purpose === request.purpose && item.userId === user.id)),
+    ]);
+    return wait({ deliveryTarget: target, expiresInSeconds: 600, debugOtp: mockOtp });
+  },
+
+  async resetPassword(identifier, channel, otp, newPassword) {
+    const request = readOtpRequests().find(
+      (item) =>
+        item.purpose === 'password-reset'
+        && item.identifier === identifier.toLowerCase()
+        && item.channel === channel
+        && item.expiresAt > Date.now(),
+    );
+    if (!request || request.otp !== otp) fail('Mã OTP không hợp lệ hoặc đã hết hạn');
+    const users = read('users');
+    const user = users.find((item) => item.id === request.userId);
+    user.password = newPassword;
+    write('users', users);
+    writeOtpRequests(readOtpRequests().filter((item) => item.id !== request.id));
+    return wait({ message: 'Đặt lại mật khẩu thành công' });
   },
 
   async updateUser(userId, updates) {
@@ -116,6 +180,7 @@ export const mockDb = {
   },
 
   async save(name, payload) {
+    if ((name === 'categories' || name === 'brands') && payload.name && !payload.slug) payload = { ...payload, slug: slugify(payload.name) };
     const items = read(name);
     const now = new Date().toISOString();
     if (payload.id) {
@@ -208,5 +273,6 @@ export const mockDb = {
 
   reset() {
     Object.values(collections).forEach(([key]) => storage.remove(key));
+    storage.remove(STORAGE_KEYS.mockOtpRequests);
   },
 };

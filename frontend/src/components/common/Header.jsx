@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   FiChevronDown,
+  FiHeart,
   FiMenu,
   FiPhoneCall,
   FiSearch,
@@ -11,20 +12,71 @@ import {
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useCart } from '../../hooks/useCart';
+import { useDebounce } from '../../hooks/useDebounce';
 import { useStoreSettings } from '../../hooks/useStoreSettings';
+import { accessoryApi } from '../../api/accessoryApi';
+import { productApi } from '../../api/productApi';
+import { STORAGE_KEYS } from '../../utils/constants';
+import { formatCurrency } from '../../utils/formatCurrency';
+import { storage } from '../../utils/storage';
 import StoreBrand from './StoreBrand';
+
+const normalizeSearch = (value = '') => value
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replaceAll('đ', 'd')
+  .toLowerCase();
 
 export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [wishlistCount, setWishlistCount] = useState(
+    () => storage.get(STORAGE_KEYS.wishlist, []).length,
+  );
+  const debouncedSearch = useDebounce(search.trim(), 250);
   const navigate = useNavigate();
   const { user, isAuthenticated, logout } = useAuth();
   const { cartCount } = useCart();
   const settings = useStoreSettings();
 
+  useEffect(() => {
+    const sync = () => setWishlistCount(storage.get(STORAGE_KEYS.wishlist, []).length);
+    window.addEventListener('wishlist-updated', sync);
+    return () => window.removeEventListener('wishlist-updated', sync);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    if (debouncedSearch.length < 2) {
+      setSuggestions([]);
+      return undefined;
+    }
+    Promise.all([
+      productApi.getAll({ q: debouncedSearch }),
+      accessoryApi.getAll({ q: debouncedSearch }),
+    ]).then(([products, accessories]) => {
+      if (!active) return;
+      const term = normalizeSearch(debouncedSearch);
+      const matches = [
+        ...products.map((item) => ({ ...item, type: 'product' })),
+        ...accessories.map((item) => ({ ...item, type: 'accessory' })),
+      ]
+        .filter((item) =>
+          normalizeSearch(`${item.name} ${item.brand} ${item.category}`).includes(term))
+        .slice(0, 6);
+      setSuggestions(matches);
+    }).catch(() => {
+      if (active) setSuggestions([]);
+    });
+    return () => { active = false; };
+  }, [debouncedSearch]);
+
   const submitSearch = (event) => {
     event.preventDefault();
     navigate(`/products?q=${encodeURIComponent(search.trim())}`);
+    setSearchFocused(false);
     setMobileOpen(false);
   };
 
@@ -42,7 +94,12 @@ export default function Header() {
             <FiMenu />
           </button>
           <StoreBrand />
-          <form className="header-search" onSubmit={submitSearch}>
+          <form
+            className="header-search"
+            onSubmit={submitSearch}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setTimeout(() => setSearchFocused(false), 120)}
+          >
             <FiSearch />
             <input
               value={search}
@@ -50,8 +107,32 @@ export default function Header() {
               placeholder="Bạn cần tìm điện thoại nào?"
             />
             <button>Tìm kiếm</button>
+            {searchFocused && debouncedSearch.length >= 2 && (
+              <div className="search-suggestions">
+                {suggestions.length ? suggestions.map((item) => (
+                  <button
+                    type="button"
+                    key={`${item.type}-${item.id}`}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      navigate(item.type === 'accessory' ? `/accessories/${item.id}` : `/products/${item.id}`);
+                      setSearch('');
+                      setSearchFocused(false);
+                    }}
+                  >
+                    <img src={item.image} alt="" />
+                    <span><strong>{item.name}</strong><small>{item.brand} · {formatCurrency(item.price)}</small></span>
+                  </button>
+                )) : <p>Không tìm thấy sản phẩm phù hợp.</p>}
+              </div>
+            )}
           </form>
           <div className="header-actions">
+            <Link className="header-action favorite-action" to="/favorites">
+              <FiHeart />
+              <span><small>Đã lưu</small><strong>Yêu thích</strong></span>
+              {wishlistCount > 0 && <b>{wishlistCount}</b>}
+            </Link>
             <Link className="header-action" to={isAuthenticated ? '/account' : '/login'}>
               <FiUser />
               <span>
@@ -73,7 +154,6 @@ export default function Header() {
             <NavLink to="/products">Điện thoại</NavLink>
             <NavLink to="/accessories">Phụ kiện</NavLink>
             <NavLink to="/reviews">Đánh giá</NavLink>
-            <NavLink to="/order-lookup">Tra cứu đơn hàng</NavLink>
             <NavLink to="/contact">Liên hệ</NavLink>
             {user?.role === 'admin' && <NavLink to="/admin/dashboard">Quản trị</NavLink>}
             {isAuthenticated && <button className="nav-logout" onClick={logout}>Đăng xuất</button>}
@@ -94,7 +174,7 @@ export default function Header() {
           <NavLink to="/products" onClick={() => setMobileOpen(false)}>Điện thoại</NavLink>
           <NavLink to="/accessories" onClick={() => setMobileOpen(false)}>Phụ kiện</NavLink>
           <NavLink to="/reviews" onClick={() => setMobileOpen(false)}>Đánh giá</NavLink>
-          <NavLink to="/order-lookup" onClick={() => setMobileOpen(false)}>Tra cứu đơn hàng</NavLink>
+          <NavLink to="/favorites" onClick={() => setMobileOpen(false)}>Sản phẩm yêu thích ({wishlistCount})</NavLink>
           <NavLink to="/contact" onClick={() => setMobileOpen(false)}>Liên hệ</NavLink>
           <NavLink to={isAuthenticated ? '/account' : '/login'} onClick={() => setMobileOpen(false)}>
             {isAuthenticated ? 'Tài khoản của tôi' : 'Đăng nhập'}

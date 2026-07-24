@@ -9,10 +9,11 @@ import Account from '../pages/Account';
 import Cart from '../pages/Cart';
 import Checkout from '../pages/Checkout';
 import Contact from '../pages/Contact';
+import Favorites from '../pages/Favorites';
+import ForgotPassword from '../pages/ForgotPassword';
 import Home from '../pages/Home';
 import Login from '../pages/Login';
 import NotFound from '../pages/NotFound';
-import OrderLookup from '../pages/OrderLookup';
 import OrderSuccess from '../pages/OrderSuccess';
 import ProductDetail from '../pages/ProductDetail';
 import Products from '../pages/Products';
@@ -23,6 +24,7 @@ import AdminLayout from '../pages/admin/AdminLayout';
 import BannerManagement from '../pages/admin/BannerManagement';
 import BrandManagement from '../pages/admin/BrandManagement';
 import CategoryManagement from '../pages/admin/CategoryManagement';
+import ContactManagement from '../pages/admin/ContactManagement';
 import CustomerManagement from '../pages/admin/CustomerManagement';
 import Dashboard from '../pages/admin/Dashboard';
 import OrderManagement from '../pages/admin/OrderManagement';
@@ -55,12 +57,14 @@ export default function AppRoutes() {
         <Route path="/order-success/:orderId" element={<OrderSuccess />} />
         <Route path="/reviews" element={<Reviews />} />
         <Route path="/contact" element={<Contact />} />
-        <Route path="/order-lookup" element={<OrderLookup />} />
+        <Route path="/favorites" element={<Favorites />} />
+        <Route path="/order-lookup" element={<Navigate to="/account?tab=orders" replace />} />
         <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
         <Route path="*" element={<NotFound />} />
       </Route>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route
         path="/admin"
         element={<AdminRoute><AdminLayout /></AdminRoute>}
@@ -71,6 +75,7 @@ export default function AppRoutes() {
         <Route path="accessories" element={<AccessoryManagement />} />
         <Route path="orders" element={<OrderManagement />} />
         <Route path="customers" element={<CustomerManagement />} />
+        <Route path="contacts" element={<ContactManagement />} />
         <Route path="reviews" element={<ReviewManagement />} />
         <Route path="banners" element={<BannerManagement />} />
         <Route path="vouchers" element={<VoucherManagement />} />

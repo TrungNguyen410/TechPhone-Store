@@ -1,0 +1,75 @@
+import { useCallback, useEffect, useState } from 'react';
+import { FiHeart } from 'react-icons/fi';
+import { accessoryApi } from '../api/accessoryApi';
+import { productApi } from '../api/productApi';
+import EmptyState from '../components/common/EmptyState';
+import Loading from '../components/common/Loading';
+import ProductGrid from '../components/product/ProductGrid';
+import { STORAGE_KEYS } from '../utils/constants';
+import { storage } from '../utils/storage';
+
+export default function Favorites() {
+  const [catalog, setCatalog] = useState({ products: [], accessories: [] });
+  const [wishlist, setWishlist] = useState(() => storage.get(STORAGE_KEYS.wishlist, []));
+  const [loading, setLoading] = useState(true);
+
+  const syncWishlist = useCallback(() => {
+    setWishlist(storage.get(STORAGE_KEYS.wishlist, []));
+  }, []);
+
+  useEffect(() => {
+    Promise.all([productApi.getAll(), accessoryApi.getAll()])
+      .then(([products, accessories]) => setCatalog({ products, accessories }))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener('wishlist-updated', syncWishlist);
+    return () => window.removeEventListener('wishlist-updated', syncWishlist);
+  }, [syncWishlist]);
+
+  if (loading) return <Loading />;
+
+  const products = catalog.products.filter((item) => wishlist.includes(item.id));
+  const accessories = catalog.accessories.filter((item) => wishlist.includes(item.id));
+  const total = products.length + accessories.length;
+
+  return (
+    <main className="page-shell favorites-page">
+      <div className="container">
+        <div className="page-hero small">
+          <div>
+            <span>Danh sách của bạn</span>
+            <h1>Sản phẩm yêu thích</h1>
+          </div>
+          <p>{total ? `${total} sản phẩm đang được lưu` : 'Lưu sản phẩm để dễ dàng xem lại sau.'}</p>
+        </div>
+
+        {!total ? (
+          <EmptyState
+            icon={FiHeart}
+            title="Chưa có sản phẩm yêu thích"
+            description="Nhấn biểu tượng trái tim trên sản phẩm bạn quan tâm."
+            actionLabel="Khám phá sản phẩm"
+            actionTo="/products"
+          />
+        ) : (
+          <>
+            {products.length > 0 && (
+              <section className="product-section">
+                <div className="section-heading compact"><div><h2>Điện thoại</h2></div></div>
+                <ProductGrid products={products} />
+              </section>
+            )}
+            {accessories.length > 0 && (
+              <section className="product-section">
+                <div className="section-heading compact"><div><h2>Phụ kiện</h2></div></div>
+                <ProductGrid products={accessories} type="accessory" />
+              </section>
+            )}
+          </>
+        )}
+      </div>
+    </main>
+  );
+}
