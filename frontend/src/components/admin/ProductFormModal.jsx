@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { FiX } from 'react-icons/fi';
+import { toast } from 'react-toastify';
 import { makeAccessoryImage, makeProductImage } from '../../mock/imageFactory';
 import { adminApi } from '../../api/adminApi';
+import AdminImageUpload from './AdminImageUpload';
 
 const emptyProduct = {
   name: '',
@@ -19,6 +21,7 @@ const emptyProduct = {
   status: 'active',
   description: '',
   image: '',
+  images: [],
 };
 
 export default function ProductFormModal({ open, item, kind = 'product', onClose, onSubmit }) {
@@ -27,7 +30,12 @@ export default function ProductFormModal({ open, item, kind = 'product', onClose
 
   useEffect(() => {
     if (!open) return;
-    setForm(item || emptyProduct);
+    if (!item) {
+      setForm({ ...emptyProduct, images: [] });
+      return;
+    }
+    const images = [...new Set([item.image, ...(item.images || [])].filter(Boolean))].slice(0, 5);
+    setForm({ ...emptyProduct, ...item, image: images[0] || '', images });
   }, [item, kind, open]);
 
   useEffect(() => {
@@ -41,9 +49,15 @@ export default function ProductFormModal({ open, item, kind = 'product', onClose
   const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
   const submit = (event) => {
     event.preventDefault();
+    if (event.currentTarget.querySelector('[data-uploading="true"]')) {
+      toast.error('Vui lòng chờ ảnh tải lên hoàn tất');
+      return;
+    }
     const price = Number(form.price);
     const oldPrice = Number(form.oldPrice || form.price);
+    const selectedImages = [...new Set((form.images || []).filter(Boolean))].slice(0, 5);
     const image =
+      selectedImages[0] ||
       form.image ||
       (kind === 'accessory'
         ? makeAccessoryImage(form.name || 'Phụ kiện')
@@ -61,7 +75,7 @@ export default function ProductFormModal({ open, item, kind = 'product', onClose
       oldPrice,
       stock: Number(form.stock),
       image,
-      images: form.images?.length ? form.images : [image],
+      images: selectedImages.length ? selectedImages : [image],
       discountPercent: oldPrice > price ? Math.round(((oldPrice - price) / oldPrice) * 100) : 0,
       rating: form.rating || 5,
       sold: form.sold || 0,
@@ -102,7 +116,17 @@ export default function ProductFormModal({ open, item, kind = 'product', onClose
             <label className="form-field"><span>Camera</span><input value={form.camera} onChange={(event) => update('camera', event.target.value)} /></label>
             <label className="form-field"><span>Chip</span><input value={form.chip} onChange={(event) => update('chip', event.target.value)} /></label>
           </>}
-          <label className="form-field full"><span>URL hình ảnh (để trống dùng ảnh mẫu)</span><input value={form.image} onChange={(event) => update('image', event.target.value)} /></label>
+          <AdminImageUpload
+            label={`Ảnh ${kind === 'product' ? 'sản phẩm' : 'phụ kiện'}`}
+            value={form.images}
+            multiple
+            maxImages={5}
+            onChange={(images) => setForm((current) => ({
+              ...current,
+              image: images[0] || '',
+              images,
+            }))}
+          />
           <label className="form-field full"><span>Mô tả *</span><textarea required rows="4" value={form.description} onChange={(event) => update('description', event.target.value)} /></label>
         </div>
         <div className="admin-modal-actions"><button type="button" className="btn btn-light" onClick={onClose}>Hủy</button><button className="btn btn-primary">{item ? 'Lưu thay đổi' : 'Thêm mới'}</button></div>

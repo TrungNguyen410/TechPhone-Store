@@ -65,8 +65,19 @@ class CatalogService {
     return this.denormalize(item);
   }
 
-  async create(payload) { return this.denormalize(await this.repository.create(payload)); }
-  async update(id, payload) { return this.denormalize(await this.repository.update(id, payload)); }
+  normalizeImages(payload) {
+    if (!Object.hasOwn(payload, 'images')) return payload;
+    const images = [...new Set((payload.images || []).filter(Boolean))].slice(0, 5);
+    return { ...payload, images, image: images[0] || payload.image || '' };
+  }
+
+  async create(payload) {
+    return this.denormalize(await this.repository.create(this.normalizeImages(payload)));
+  }
+
+  async update(id, payload) {
+    return this.denormalize(await this.repository.update(id, this.normalizeImages(payload)));
+  }
   async remove(id) { return this.repository.softDelete(id); }
 }
 

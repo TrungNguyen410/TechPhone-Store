@@ -16,14 +16,14 @@ describe('TaxonomyManagement', () => {
   it('shows logo and description fields for brands', async () => {
     render(<TaxonomyManagement api={api()} type="brand" />);
     fireEvent.click(await screen.findByRole('button', { name: /thêm thương hiệu/i }));
-    expect(screen.getByText('URL logo')).toBeInTheDocument();
+    expect(screen.getByText('Logo thương hiệu')).toBeInTheDocument();
     expect(screen.getByText('Mô tả')).toBeInTheDocument();
   });
 
   it('omits logo for categories', async () => {
     render(<TaxonomyManagement api={api()} type="category" />);
     fireEvent.click(await screen.findByRole('button', { name: /thêm danh mục/i }));
-    expect(screen.queryByText('URL logo')).not.toBeInTheDocument();
+    expect(screen.queryByText('Logo thương hiệu')).not.toBeInTheDocument();
     expect(screen.getByText('Mô tả')).toBeInTheDocument();
   });
 });

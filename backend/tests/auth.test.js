@@ -101,4 +101,13 @@ describe('Auth API', () => {
     expect(response.status).toBe(403);
     expect(response.body.success).toBe(false);
   });
+
+  it('returns 401 instead of 500 for an invalid access token', async () => {
+    const response = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', 'Bearer expired-or-invalid-token');
+
+    expect(response.status).toBe(401);
+    expect(response.body.message).toBe('Authentication token is invalid or expired');
+  });
 });

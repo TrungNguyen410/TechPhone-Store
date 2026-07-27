@@ -38,7 +38,7 @@ export default function ProductDetail() {
     Promise.all([productApi.getById(id), productApi.getAll()])
       .then(([detail, products]) => {
         setProduct(detail);
-        setSelectedImage(detail.image);
+        setSelectedImage(detail.images?.[0] || detail.image);
         setQuantity(detail.stock > 0 ? 1 : 0);
         setRelated(products.filter((item) => item.brand === detail.brand && item.id !== detail.id).slice(0, 4));
       })
@@ -51,6 +51,7 @@ export default function ProductDetail() {
 
   const requireLogin = () => navigate('/login', { state: { from: location } });
   const isOutOfStock = product.status !== 'active' || product.stock <= 0;
+  const galleryImages = [...new Set([product.image, ...(product.images || [])].filter(Boolean))].slice(0, 5);
   const add = () => {
     if (isOutOfStock) return toast.error('Sản phẩm đã hết hàng');
     addToCart(product, quantity);
@@ -71,7 +72,7 @@ export default function ProductDetail() {
           <div className="gallery">
             <div className="main-image"><img src={selectedImage} alt={product.name} /></div>
             <div className="thumbnail-row">
-              {product.images.map((image, index) => (
+              {galleryImages.map((image, index) => (
                 <button className={selectedImage === image ? 'active' : ''} key={image} onClick={() => setSelectedImage(image)}>
                   <img src={image} alt={`${product.name} ${index + 1}`} />
                 </button>

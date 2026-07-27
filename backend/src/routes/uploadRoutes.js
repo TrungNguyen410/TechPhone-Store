@@ -5,6 +5,7 @@ const { authorize, protect } = require('../middlewares/authMiddleware');
 
 const router = express.Router();
 
+router.post('/admin', protect, authorize('admin'), upload.single('adminImage'), uploadController.uploadSingle);
 router.post('/products', protect, authorize('admin'), upload.single('productImage'), uploadController.uploadSingle);
 router.post('/banners', protect, authorize('admin'), upload.single('bannerImage'), uploadController.uploadSingle);
 router.post('/avatar', protect, upload.single('avatar'), uploadController.uploadSingle);

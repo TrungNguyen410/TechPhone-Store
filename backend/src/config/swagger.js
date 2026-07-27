@@ -304,6 +304,26 @@ const swaggerDocument = {
     '/admin/orders/{id}/status': { put: { tags: ['Admin'], security: [{ bearerAuth: [] }], summary: 'Update order status' } },
     '/admin/reviews/{id}/approve': { put: { tags: ['Admin'], security: [{ bearerAuth: [] }], summary: 'Approve review' } },
     '/admin/reviews/{id}/reject': { put: { tags: ['Admin'], security: [{ bearerAuth: [] }], summary: 'Reject review' } },
+    '/uploads/admin': {
+      post: {
+        tags: ['Uploads'],
+        security: [{ bearerAuth: [] }],
+        summary: 'Upload an image selected in the admin area',
+        requestBody: {
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                required: ['adminImage'],
+                properties: {
+                  adminImage: { type: 'string', format: 'binary' },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
     '/uploads/products': { post: { tags: ['Uploads'], security: [{ bearerAuth: [] }], summary: 'Upload product image' } },
     '/uploads/banners': { post: { tags: ['Uploads'], security: [{ bearerAuth: [] }], summary: 'Upload banner image' } },
     '/uploads/avatar': { post: { tags: ['Uploads'], security: [{ bearerAuth: [] }], summary: 'Upload user avatar' } },

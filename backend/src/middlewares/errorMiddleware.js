@@ -6,14 +6,22 @@ const notFound = (req, _res, next) => {
 };
 
 const errorHandler = (error, _req, res, _next) => {
-  const statusCode = error.statusCode || (error.name === 'ValidationError' ? 422 : 500);
-  const message = error.message || 'Internal server error';
+  const isUploadLimit = error.code === 'LIMIT_FILE_SIZE';
+  const isJwtError = ['JsonWebTokenError', 'TokenExpiredError', 'NotBeforeError'].includes(error.name);
+  const statusCode =
+    error.statusCode
+    || (isJwtError ? 401 : error.name === 'ValidationError' || isUploadLimit ? 422 : 500);
+  const message = isJwtError
+    ? 'Authentication token is invalid or expired'
+    : isUploadLimit
+      ? 'Image must not exceed 5MB'
+      : error.message || 'Internal server error';
   const errors =
     error.errors && typeof error.errors === 'object'
       ? Object.values(error.errors).map((item) => item.message || item)
       : error.errors;
 
-  if (process.env.NODE_ENV !== 'test') {
+  if (process.env.NODE_ENV !== 'test' && statusCode >= 500) {
     console.error(error);
   }
 

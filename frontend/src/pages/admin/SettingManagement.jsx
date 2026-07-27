@@ -3,12 +3,17 @@ import { FiGlobe, FiMail, FiMapPin, FiPhone, FiSave, FiSettings } from 'react-ic
 import { toast } from 'react-toastify';
 import { getStoreSettings, saveStoreSettings } from '../../utils/storeSettings';
 import { isValidEmail, validateRequired } from '../../utils/validators';
+import AdminImageUpload from '../../components/admin/AdminImageUpload';
 
 export default function SettingManagement() {
   const [form, setForm] = useState(getStoreSettings);
   const update = (key, value) => setForm({ ...form, [key]: value });
   const save = (event) => {
     event.preventDefault();
+    if (event.currentTarget.querySelector('[data-uploading="true"]')) {
+      toast.error('Vui lòng chờ ảnh tải lên hoàn tất');
+      return;
+    }
     const errors = validateRequired({
       storeName: form.storeName,
       hotline: form.hotline,
@@ -33,7 +38,7 @@ export default function SettingManagement() {
           <label className="form-field"><span><FiPhone /> Hotline</span><input value={form.hotline} onChange={(event) => update('hotline', event.target.value)} /></label>
           <label className="form-field"><span><FiMail /> Email</span><input value={form.email} onChange={(event) => update('email', event.target.value)} /></label>
           <label className="form-field full"><span><FiMapPin /> Địa chỉ</span><textarea rows="3" value={form.address} onChange={(event) => update('address', event.target.value)} /></label>
-          <label className="form-field full"><span>URL Logo</span><input value={form.logo} onChange={(event) => update('logo', event.target.value)} placeholder="Để trống để dùng logo mặc định" /></label>
+          <AdminImageUpload label="Logo cửa hàng" value={form.logo} onChange={(value) => update('logo', value)} />
         </div>
       </section>
       <section className="admin-card settings-card">

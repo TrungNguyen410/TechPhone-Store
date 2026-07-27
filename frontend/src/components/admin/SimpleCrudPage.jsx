@@ -4,6 +4,7 @@ import { toast } from 'react-toastify';
 import ConfirmModal from '../common/ConfirmModal';
 import Loading from '../common/Loading';
 import DataTable from './DataTable';
+import AdminImageUpload from './AdminImageUpload';
 
 export default function SimpleCrudPage({ api, title, singular, fields, columns, createDefaults = {} }) {
   const [items, setItems] = useState([]);
@@ -25,6 +26,10 @@ export default function SimpleCrudPage({ api, title, singular, fields, columns, 
 
   const save = async (event) => {
     event.preventDefault();
+    if (event.currentTarget.querySelector('[data-uploading="true"]')) {
+      toast.error('Vui lòng chờ ảnh tải lên hoàn tất');
+      return;
+    }
     const payload = fields.reduce((result, field) => {
       let value = form[field.key];
       if (field.type === 'date' && value) value = String(value).slice(0, 10);
@@ -33,6 +38,13 @@ export default function SimpleCrudPage({ api, title, singular, fields, columns, 
       result[field.key] = value;
       return result;
     }, {});
+    const missingField = fields.find((field) =>
+      field.required
+      && (payload[field.key] === undefined || payload[field.key] === null || payload[field.key] === ''));
+    if (missingField) {
+      toast.error(`Vui lòng nhập ${missingField.label.toLowerCase()}`);
+      return;
+    }
 
     if (form.id) await api.update(form.id, payload);
     else await api.create(payload);
@@ -107,6 +119,17 @@ export default function SimpleCrudPage({ api, title, singular, fields, columns, 
 
             <div className="form-grid">
               {fields.map((field) => {
+                if (field.type === 'image') {
+                  return (
+                    <AdminImageUpload
+                      key={field.key}
+                      label={field.label}
+                      value={fieldValue(field)}
+                      required={field.required}
+                      onChange={(value) => setForm({ ...form, [field.key]: value })}
+                    />
+                  );
+                }
                 if (field.type === 'checkbox') {
                   return (
                     <label className="admin-checkbox" key={field.key}>

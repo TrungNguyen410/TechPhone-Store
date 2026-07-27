@@ -17,6 +17,7 @@ export default function AccessoryDetail() {
   const { addToCart } = useCart();
   const [accessory, setAccessory] = useState(null);
   const [related, setRelated] = useState([]);
+  const [selectedImage, setSelectedImage] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(true);
 
@@ -24,6 +25,7 @@ export default function AccessoryDetail() {
     Promise.all([accessoryApi.getById(id), accessoryApi.getAll()])
       .then(([detail, items]) => {
         setAccessory(detail);
+        setSelectedImage(detail.images?.[0] || detail.image);
         setQuantity(detail.stock > 0 ? 1 : 0);
         setRelated(items.filter((item) => item.id !== id).slice(0, 4));
       })
@@ -35,6 +37,7 @@ export default function AccessoryDetail() {
   if (!accessory) return <EmptyState title="Không tìm thấy phụ kiện" actionLabel="Về trang chủ" />;
 
   const isOutOfStock = accessory.status !== 'active' || accessory.stock <= 0;
+  const galleryImages = [...new Set([accessory.image, ...(accessory.images || [])].filter(Boolean))].slice(0, 5);
   const requireLogin = () => navigate('/login', { state: { from: location } });
   const add = () => {
     if (isOutOfStock) return toast.error('Phụ kiện đã hết hàng');
@@ -47,7 +50,18 @@ export default function AccessoryDetail() {
       <div className="container">
         <nav className="breadcrumbs"><Link to="/">Trang chủ</Link><FiChevronRight /><span>Phụ kiện</span><FiChevronRight /><span>{accessory.name}</span></nav>
         <section className="detail-grid">
-          <div className="gallery"><div className="main-image"><img src={accessory.image} alt={accessory.name} /></div></div>
+          <div className="gallery">
+            <div className="main-image"><img src={selectedImage} alt={accessory.name} /></div>
+            {galleryImages.length > 1 && (
+              <div className="thumbnail-row">
+                {galleryImages.map((image, index) => (
+                  <button className={selectedImage === image ? 'active' : ''} key={image} onClick={() => setSelectedImage(image)}>
+                    <img src={image} alt={`${accessory.name} ${index + 1}`} />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <div className="detail-info">
             <span className="detail-brand">{accessory.brand} · {accessory.category}</span>
             <h1>{accessory.name}</h1>
