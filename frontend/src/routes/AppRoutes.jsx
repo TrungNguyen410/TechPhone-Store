@@ -15,7 +15,12 @@ import Home from '../pages/Home';
 import Login from '../pages/Login';
 import NotFound from '../pages/NotFound';
 import OrderSuccess from '../pages/OrderSuccess';
+import OrderLookup from '../pages/OrderLookup';
+import PaymentResult from '../pages/PaymentResult';
+import PolicyPage from '../pages/PolicyPage';
+import SupportLauncher from '../components/common/SupportLauncher';
 import ProductDetail from '../pages/ProductDetail';
+import ProductCompare from '../pages/ProductCompare';
 import Products from '../pages/Products';
 import Register from '../pages/Register';
 import Reviews from '../pages/Reviews';
@@ -39,6 +44,7 @@ function StoreLayout() {
       <Header />
       <div className="store-content"><Outlet /></div>
       <Footer />
+      <SupportLauncher />
     </div>
   );
 }
@@ -50,15 +56,18 @@ export default function AppRoutes() {
         <Route path="/" element={<Home />} />
         <Route path="/products" element={<Products />} />
         <Route path="/products/:id" element={<ProductDetail />} />
+        <Route path="/compare" element={<ProductCompare />} />
         <Route path="/accessories" element={<Accessories />} />
         <Route path="/accessories/:id" element={<AccessoryDetail />} />
         <Route path="/cart" element={<Cart />} />
-        <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
+        <Route path="/checkout" element={<Checkout />} />
         <Route path="/order-success/:orderId" element={<OrderSuccess />} />
         <Route path="/reviews" element={<Reviews />} />
         <Route path="/contact" element={<Contact />} />
         <Route path="/favorites" element={<Favorites />} />
-        <Route path="/order-lookup" element={<Navigate to="/account?tab=orders" replace />} />
+        <Route path="/order-lookup" element={<OrderLookup />} />
+        <Route path="/payment-result" element={<PaymentResult />} />
+        <Route path="/policies/:type" element={<PolicyPage />} />
         <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
         <Route path="*" element={<NotFound />} />
       </Route>

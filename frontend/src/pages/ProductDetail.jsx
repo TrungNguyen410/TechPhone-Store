@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   FiCheck,
+  FiBarChart2,
   FiChevronRight,
   FiMinus,
   FiPlus,
@@ -13,13 +14,19 @@ import {
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { productApi } from '../api/productApi';
+import { accessoryApi } from '../api/accessoryApi';
 import Loading from '../components/common/Loading';
 import EmptyState from '../components/common/EmptyState';
 import ProductGrid from '../components/product/ProductGrid';
 import ProductReview from '../components/product/ProductReview';
+import RecentlyViewed from '../components/product/RecentlyViewed';
 import { useAuth } from '../hooks/useAuth';
 import { useCart } from '../hooks/useCart';
+import { usePageMeta } from '../hooks/usePageMeta';
 import { formatCurrency } from '../utils/formatCurrency';
+import { recommendAccessories, recommendProducts } from '../utils/merchandising';
+import { trackEvent } from '../utils/analytics';
+import { getComparedProducts, recordRecentlyViewedProduct, toggleComparedProduct } from '../utils/commercePreferences';
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -29,18 +36,73 @@ export default function ProductDetail() {
   const { addToCart } = useCart();
   const [product, setProduct] = useState(null);
   const [related, setRelated] = useState([]);
+  const [compatibleAccessories, setCompatibleAccessories] = useState([]);
   const [selectedImage, setSelectedImage] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [reviewSummary, setReviewSummary] = useState({ average: 0, count: 0 });
+
+  const productStructuredData = product ? {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'Product',
+        name: product.name,
+        image: [product.image, ...(product.images || [])].filter(Boolean),
+        description: product.description,
+        sku: product.id,
+        brand: { '@type': 'Brand', name: product.brand },
+        offers: {
+          '@type': 'Offer',
+          priceCurrency: 'VND',
+          price: product.price,
+          availability: product.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+          url: new URL(`/products/${product.id}`, window.location.origin).href,
+        },
+        ...(reviewSummary.count > 0 ? {
+          aggregateRating: {
+            '@type': 'AggregateRating',
+            ratingValue: reviewSummary.average.toFixed(1),
+            reviewCount: reviewSummary.count,
+          },
+        } : {}),
+      },
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Trang chủ', item: window.location.origin },
+          { '@type': 'ListItem', position: 2, name: 'Điện thoại', item: new URL('/products', window.location.origin).href },
+          { '@type': 'ListItem', position: 3, name: product.name },
+        ],
+      },
+    ],
+  } : null;
+
+  usePageMeta({
+    title: product?.name || 'Chi tiết điện thoại',
+    description: product?.description || 'Thông tin, giá bán và ưu đãi điện thoại chính hãng tại TechPhone.',
+    image: product?.image,
+    canonicalPath: product ? `/products/${product.id}` : window.location.pathname,
+    type: 'product',
+    structuredData: productStructuredData,
+  });
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([productApi.getById(id), productApi.getAll()])
-      .then(([detail, products]) => {
+    Promise.all([productApi.getById(id), productApi.getAll(), accessoryApi.getAll()])
+      .then(([detail, products, accessories]) => {
         setProduct(detail);
         setSelectedImage(detail.images?.[0] || detail.image);
         setQuantity(detail.stock > 0 ? 1 : 0);
-        setRelated(products.filter((item) => item.brand === detail.brand && item.id !== detail.id).slice(0, 4));
+        setRelated(recommendProducts(detail, products, 4));
+        setCompatibleAccessories(recommendAccessories(detail, accessories, 4));
+        recordRecentlyViewedProduct(detail.id);
+        trackEvent('view_item', {
+          item_id: detail.id,
+          item_type: 'product',
+          value: detail.price,
+          currency: 'VND',
+        });
       })
       .catch(() => setProduct(null))
       .finally(() => setLoading(false));
@@ -52,6 +114,16 @@ export default function ProductDetail() {
   const requireLogin = () => navigate('/login', { state: { from: location } });
   const isOutOfStock = product.status !== 'active' || product.stock <= 0;
   const galleryImages = [...new Set([product.image, ...(product.images || [])].filter(Boolean))].slice(0, 5);
+  const isCompared = getComparedProducts().includes(product.id);
+  const toggleCompare = () => {
+    const before = getComparedProducts();
+    const next = toggleComparedProduct(product.id);
+    if (!before.includes(product.id) && !next.includes(product.id)) {
+      toast.info('Danh sách so sánh đã đủ 4 sản phẩm. Hãy bỏ một sản phẩm trước.');
+      return;
+    }
+    toast.info(next.includes(product.id) ? `Đã thêm vào so sánh (${next.length}/4)` : 'Đã bỏ khỏi danh sách so sánh');
+  };
   const add = () => {
     if (isOutOfStock) return toast.error('Sản phẩm đã hết hàng');
     addToCart(product, quantity);
@@ -113,6 +185,7 @@ export default function ProductDetail() {
             <div className="detail-actions">
               <button className="btn btn-outline-primary" disabled={isOutOfStock} onClick={add}><FiShoppingBag /> Thêm vào giỏ</button>
               <button className="btn btn-primary" disabled={isOutOfStock} onClick={buyNow}>{isOutOfStock ? 'Hết hàng' : 'Mua ngay'}</button>
+              <button className="btn btn-light" onClick={toggleCompare}><FiBarChart2 /> {isCompared ? 'Bỏ so sánh' : 'So sánh'}</button>
             </div>
             <div className="detail-assurances">
               <span><FiShield /> Bảo hành 12 tháng</span>
@@ -129,7 +202,18 @@ export default function ProductDetail() {
           </aside>
         </section>
 
-        <ProductReview productId={product.id} onRequireLogin={requireLogin} />
+        <ProductReview productId={product.id} onRequireLogin={requireLogin} onSummaryChange={setReviewSummary} />
+
+        <RecentlyViewed currentId={product.id} />
+
+        {compatibleAccessories.length > 0 && (
+          <section className="product-section compatible-accessories-section">
+            <div className="section-heading">
+              <div><span>Cùng hãng hoặc dùng chung chuẩn kết nối</span><h2>Phụ kiện mua kèm</h2></div>
+            </div>
+            <ProductGrid products={compatibleAccessories} type="accessory" />
+          </section>
+        )}
 
         {related.length > 0 && (
           <section className="product-section related-section">

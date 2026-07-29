@@ -23,6 +23,8 @@ const swaggerDocument = {
     { name: 'Settings' },
     { name: 'Admin' },
     { name: 'Uploads' },
+    { name: 'Payments' },
+    { name: 'SEO' },
   ],
   components: {
     securitySchemes: {
@@ -245,7 +247,7 @@ const swaggerDocument = {
       delete: { tags: ['Brands'], security: [{ bearerAuth: [] }], summary: 'Soft delete brand' },
     },
     '/orders': {
-      post: { tags: ['Orders'], security: [{ bearerAuth: [] }], summary: 'Create order', requestBody: { content: { 'application/json': { schema: { $ref: '#/components/schemas/OrderRequest' } } } } },
+      post: { tags: ['Orders'], summary: 'Create an authenticated or guest order', requestBody: { content: { 'application/json': { schema: { $ref: '#/components/schemas/OrderRequest' } } } } },
       get: { tags: ['Orders'], security: [{ bearerAuth: [] }], summary: 'List orders for current user or all orders for admin' },
     },
     '/orders/my-orders': { get: { tags: ['Orders'], security: [{ bearerAuth: [] }], summary: 'List current customer orders' } },
@@ -323,6 +325,25 @@ const swaggerDocument = {
           },
         },
       },
+    },
+    '/payments/config': {
+      get: { tags: ['Payments'], summary: 'List enabled payment providers' },
+    },
+    '/payments/vnpay/checkout': {
+      post: {
+        tags: ['Payments'],
+        summary: 'Create an authenticated or guest order and VNPay payment URL',
+        requestBody: { content: { 'application/json': { schema: { $ref: '#/components/schemas/OrderRequest' } } } },
+      },
+    },
+    '/payments/vnpay/ipn': {
+      get: { tags: ['Payments'], summary: 'Receive and verify the server-to-server VNPay IPN' },
+    },
+    '/payments/vnpay/return': {
+      get: { tags: ['Payments'], summary: 'Verify the browser return and redirect to the storefront' },
+    },
+    '/seo/sitemap.xml': {
+      get: { tags: ['SEO'], summary: 'Generate a sitemap for active product detail routes' },
     },
     '/uploads/products': { post: { tags: ['Uploads'], security: [{ bearerAuth: [] }], summary: 'Upload product image' } },
     '/uploads/banners': { post: { tags: ['Uploads'], security: [{ bearerAuth: [] }], summary: 'Upload banner image' } },

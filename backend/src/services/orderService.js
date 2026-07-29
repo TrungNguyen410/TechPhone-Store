@@ -18,6 +18,18 @@ const statusTransitions = {
 };
 
 class OrderService {
+  shippingQuote(customer = {}, subtotal = 0) {
+    if (subtotal >= 10000000) return { fee: 0, days: 1 };
+    const province = String(customer.province || customer.address || '').toLowerCase();
+    if (province.includes('hồ chí minh') || province.includes('ho chi minh') || province.includes('tp.hcm')) {
+      return { fee: 20000, days: 1 };
+    }
+    if (province.includes('hà nội') || province.includes('ha noi') || province.includes('đà nẵng') || province.includes('da nang')) {
+      return { fee: 30000, days: 2 };
+    }
+    return { fee: 40000, days: 4 };
+  }
+
   async generateOrderNumber() {
     const now = new Date();
     const datePart = now.toISOString().slice(2, 10).replaceAll('-', '');
@@ -112,7 +124,8 @@ class OrderService {
     if (!items.length) throw new AppError('Order must contain at least one item', 422);
 
     const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const shippingFee = subtotal >= 10000000 ? 0 : 30000;
+    const shipping = this.shippingQuote(payload.customer, subtotal);
+    const shippingFee = shipping.fee;
     const voucher = payload.voucherCode ? await voucherService.validate(payload.voucherCode, subtotal) : null;
     const discount = this.calculateDiscount(voucher, subtotal, shippingFee);
     const total = Math.max(0, subtotal + shippingFee - discount);
@@ -132,6 +145,11 @@ class OrderService {
         total,
         customer: payload.customer,
         paymentMethod: payload.paymentMethod || 'cod',
+        paymentStatus: 'pending',
+        paymentReference: payload.paymentReference || '',
+        shippingProvider: 'TechPhone Express',
+        trackingNumber: `TPX${Date.now().toString().slice(-10)}`,
+        estimatedDelivery: new Date(Date.now() + shipping.days * 24 * 60 * 60 * 1000),
         note: payload.note || '',
         voucherCode: voucher?.code || null,
         status: 'pending',

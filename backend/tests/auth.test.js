@@ -110,4 +110,23 @@ describe('Auth API', () => {
     expect(response.status).toBe(401);
     expect(response.body.message).toBe('Authentication token is invalid or expired');
   });
+
+  it('persists a deduplicated wishlist with a 100 item limit', async () => {
+    await createUser({ email: 'wishlist@test.com', phone: '0977777777' });
+    const token = await login('wishlist@test.com');
+    const items = [...Array.from({ length: 105 }, (_, index) => `item-${index}`), 'item-0'];
+
+    const updated = await request(app)
+      .put('/api/auth/wishlist')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ items });
+    expect(updated.status).toBe(200);
+    expect(updated.body.data).toHaveLength(100);
+    expect(new Set(updated.body.data).size).toBe(100);
+
+    const fetched = await request(app)
+      .get('/api/auth/wishlist')
+      .set('Authorization', `Bearer ${token}`);
+    expect(fetched.body.data).toEqual(updated.body.data);
+  });
 });

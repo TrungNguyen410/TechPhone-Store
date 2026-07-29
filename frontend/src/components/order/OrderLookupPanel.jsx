@@ -100,6 +100,7 @@ export default function OrderLookupPanel({ initialPhone = '' }) {
           <div className="success-total">
             <span>Tổng thanh toán</span><strong>{formatCurrency(order.total)}</strong>
           </div>
+          {order.trackingNumber && <div className="order-shipping-note"><strong>{order.shippingProvider || 'Đơn vị giao hàng'}</strong><span>Mã vận đơn: <b>{order.trackingNumber}</b></span>{order.estimatedDelivery && <span>Dự kiến giao: {formatDate(order.estimatedDelivery, true)}</span>}</div>}
         </div>
       )}
     </section>

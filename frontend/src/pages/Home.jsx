@@ -18,6 +18,7 @@ import Loading from '../components/common/Loading';
 import EmptyState from '../components/common/EmptyState';
 import CategoryCarousel from '../components/home/CategoryCarousel';
 import ProductGrid from '../components/product/ProductGrid';
+import PersonalizedRecommendations from '../components/product/PersonalizedRecommendations';
 import { bestDeals, bestSellers, featuredAccessories } from '../utils/merchandising';
 
 const categories = [
@@ -33,6 +34,7 @@ export default function Home() {
   const [accessories, setAccessories] = useState([]);
   const [banners, setBanners] = useState([]);
   const [activeBanner, setActiveBanner] = useState(0);
+  const [bannerPaused, setBannerPaused] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -60,10 +62,10 @@ export default function Home() {
   }, [loadHomeData]);
 
   useEffect(() => {
-    if (banners.length < 2) return undefined;
+    if (banners.length < 2 || bannerPaused) return undefined;
     const timer = setInterval(() => setActiveBanner((current) => (current + 1) % banners.length), 5000);
     return () => clearInterval(timer);
-  }, [banners.length]);
+  }, [bannerPaused, banners.length]);
 
   if (loading) return <Loading />;
   if (error) {
@@ -83,7 +85,15 @@ export default function Home() {
     <>
       <section className="hero-section">
         <div className="container">
-          <div className="hero-slider">
+          <div
+            className="hero-slider"
+            onMouseEnter={() => setBannerPaused(true)}
+            onMouseLeave={() => setBannerPaused(false)}
+            onFocus={() => setBannerPaused(true)}
+            onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) setBannerPaused(false);
+            }}
+          >
             {banners.map((banner, index) => (
               <Link
                 to={banner.link}
@@ -122,6 +132,8 @@ export default function Home() {
         <ProductGrid products={hotProducts} />
       </section>
 
+      <PersonalizedRecommendations products={products} />
+
       <section className="sale-band">
         <div className="container">
           <div className="section-heading light">
@@ -152,10 +164,10 @@ export default function Home() {
             <Link className="btn btn-light btn-lg" to="/contact">Tìm hiểu về chúng tôi</Link>
           </div>
           <div className="story-stats">
-            <div><strong>8+</strong><span>Năm kinh nghiệm</span></div>
-            <div><strong>50K+</strong><span>Khách hàng tin chọn</span></div>
-            <div><strong>98%</strong><span>Khách hàng hài lòng</span></div>
-            <div><strong>24/7</strong><span>Hỗ trợ trực tuyến</span></div>
+            <div><strong>Kiểm định</strong><span>Tình trạng sản phẩm</span></div>
+            <div><strong>Minh bạch</strong><span>Giá và phí giao hàng</span></div>
+            <div><strong>Toàn quốc</strong><span>Phạm vi giao nhận</span></div>
+            <div><strong>Hậu mãi</strong><span>Tra cứu và bảo hành</span></div>
           </div>
         </div>
       </section>

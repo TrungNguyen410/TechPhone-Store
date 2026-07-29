@@ -42,6 +42,16 @@ const changePassword = asyncHandler(async (req, res) => {
   successResponse(res, result, 'Password changed');
 });
 
+const wishlist = asyncHandler(async (req, res) => {
+  const items = await authService.getWishlist(req.user.id);
+  successResponse(res, items, 'Wishlist retrieved');
+});
+
+const updateWishlist = asyncHandler(async (req, res) => {
+  const items = await authService.updateWishlist(req.user.id, req.body.items);
+  successResponse(res, items, 'Wishlist updated');
+});
+
 const refresh = asyncHandler(async (req, res) => {
   const session = await authService.refresh(req.body.refreshToken);
   successResponse(res, session, 'Token refreshed');
@@ -61,6 +71,8 @@ module.exports = {
   me,
   updateProfile,
   changePassword,
+  wishlist,
+  updateWishlist,
   refresh,
   logout,
 };

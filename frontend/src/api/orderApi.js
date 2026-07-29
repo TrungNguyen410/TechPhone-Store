@@ -18,4 +18,8 @@ export const orderApi = {
     USE_MOCK
       ? mockDb.updateOrderStatus(id, status)
       : axiosClient.put(`/admin/orders/${id}/status`, { status }),
+  updateShipping: (id, payload) =>
+    USE_MOCK
+      ? mockDb.updateOrderShipping(id, payload)
+      : axiosClient.put(`/admin/orders/${id}`, payload),
 };

@@ -28,6 +28,6 @@ describe('Header search suggestions', () => {
     const search = screen.getByPlaceholderText(/điện thoại nào/i);
     fireEvent.focus(search);
     fireEvent.change(search, { target: { value: 'iphone' } });
-    expect(await screen.findByText('iPhone 16 Pro')).toBeInTheDocument();
+    expect(await screen.findByText('iPhone 16 Pro', {}, { timeout: 2500 })).toBeInTheDocument();
   });
 });

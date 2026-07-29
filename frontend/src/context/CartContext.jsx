@@ -2,6 +2,7 @@ import { createContext, useCallback, useEffect, useMemo, useState } from 'react'
 import { voucherApi } from '../api/voucherApi';
 import { STORAGE_KEYS } from '../utils/constants';
 import { storage } from '../utils/storage';
+import { trackEvent } from '../utils/analytics';
 
 export const CartContext = createContext(null);
 
@@ -16,6 +17,13 @@ export function CartProvider({ children }) {
   }, [voucher]);
 
   const addToCart = useCallback((product, quantity = 1, type = 'product') => {
+    trackEvent('add_to_cart', {
+      item_id: product.id,
+      item_type: type,
+      quantity,
+      value: Number(product.price) * quantity,
+      currency: 'VND',
+    });
     setCartItems((current) => {
       const maxStock = Number(product.stock) || 0;
       if (maxStock <= 0) return current;

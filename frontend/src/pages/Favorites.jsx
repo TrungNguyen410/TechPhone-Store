@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useState } from 'react';
 import { FiHeart } from 'react-icons/fi';
 import { accessoryApi } from '../api/accessoryApi';
 import { productApi } from '../api/productApi';
@@ -7,15 +7,17 @@ import Loading from '../components/common/Loading';
 import ProductGrid from '../components/product/ProductGrid';
 import { STORAGE_KEYS } from '../utils/constants';
 import { storage } from '../utils/storage';
+import { AuthContext } from '../context/AuthContext';
 
 export default function Favorites() {
+  const user = useContext(AuthContext)?.user;
   const [catalog, setCatalog] = useState({ products: [], accessories: [] });
-  const [wishlist, setWishlist] = useState(() => storage.get(STORAGE_KEYS.wishlist, []));
+  const [wishlist, setWishlist] = useState(() => user?.wishlist || storage.get(STORAGE_KEYS.wishlist, []));
   const [loading, setLoading] = useState(true);
 
   const syncWishlist = useCallback(() => {
-    setWishlist(storage.get(STORAGE_KEYS.wishlist, []));
-  }, []);
+    setWishlist(user?.wishlist || storage.get(STORAGE_KEYS.wishlist, []));
+  }, [user?.wishlist]);
 
   useEffect(() => {
     Promise.all([productApi.getAll(), accessoryApi.getAll()])

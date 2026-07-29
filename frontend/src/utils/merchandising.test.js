@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { bestDeals, bestSellers, featuredAccessories } from './merchandising';
+import {
+  bestDeals,
+  bestSellers,
+  featuredAccessories,
+  recommendAccessories,
+  recommendFromHistory,
+  recommendProducts,
+} from './merchandising';
 
 const item = (id, values = {}) => ({
   id,
@@ -33,5 +40,29 @@ describe('homepage merchandising criteria', () => {
       item('rated', { rating: 4.9, sold: 30 }),
     ]);
     expect(featured[0].id).toBe('popular');
+  });
+
+  it('recommends available products by brand, price, RAM and storage', () => {
+    const anchor = item('anchor', { brand: 'Apple', price: 1000, ram: '8GB', storage: '256GB' });
+    const close = item('close', { brand: 'Apple', price: 1100, ram: '8GB', storage: '256GB' });
+    const far = item('far', { brand: 'Other', price: 400, ram: '4GB', storage: '64GB' });
+    const unavailable = item('sold-out', { brand: 'Apple', stock: 0 });
+    expect(recommendProducts(anchor, [far, unavailable, close]).map(({ id }) => id)).toEqual(['close', 'far']);
+  });
+
+  it('falls back to best sellers when browsing history has no usable anchor', () => {
+    expect(recommendFromHistory([item('a', { sold: 3 }), item('b', { sold: 8 })], ['missing'])[0].id).toBe('b');
+  });
+
+  it('prioritizes same-brand and universal accessories', () => {
+    const accessories = [
+      item('same-brand', { brand: 'Apple', category: 'Tai nghe', rating: 4.5 }),
+      item('universal', { brand: 'Anker', category: 'Sạc', rating: 4.8 }),
+      item('irrelevant', { brand: 'Other', category: 'Loa', rating: 5 }),
+    ];
+    expect(recommendAccessories({ brand: 'Apple' }, accessories).map(({ id }) => id)).toEqual([
+      'same-brand',
+      'universal',
+    ]);
   });
 });

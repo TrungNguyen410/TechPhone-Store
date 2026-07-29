@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FiCheck, FiHome, FiPackage } from 'react-icons/fi';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { orderApi } from '../api/orderApi';
@@ -6,6 +6,7 @@ import EmptyState from '../components/common/EmptyState';
 import Loading from '../components/common/Loading';
 import { formatCurrency, formatDate } from '../utils/formatCurrency';
 import { getOrderStatus } from '../utils/orderStatus';
+import { trackEvent } from '../utils/analytics';
 
 export default function OrderSuccess() {
   const { orderId } = useParams();
@@ -13,6 +14,7 @@ export default function OrderSuccess() {
   const [order, setOrder] = useState(location.state?.order || null);
   const [loading, setLoading] = useState(!location.state?.order);
   const [error, setError] = useState('');
+  const purchaseTrackedRef = useRef(false);
 
   useEffect(() => {
     if (order) return undefined;
@@ -29,6 +31,17 @@ export default function OrderSuccess() {
       });
     return () => { active = false; };
   }, [order, orderId]);
+
+  useEffect(() => {
+    if (!order || purchaseTrackedRef.current) return;
+    purchaseTrackedRef.current = true;
+    trackEvent('purchase', {
+      transaction_id: order.id,
+      item_count: order.items.reduce((sum, item) => sum + item.quantity, 0),
+      value: order.total,
+      currency: 'VND',
+    });
+  }, [order]);
 
   if (loading) return <Loading />;
   if (!order) {
@@ -64,10 +77,11 @@ export default function OrderSuccess() {
             <div><h3>Thông tin người nhận</h3><p>{order.customer.fullName}</p><p>{order.customer.phone}</p><p>{order.customer.email}</p><p>{order.customer.address}</p></div>
             <div><h3>Sản phẩm</h3>{order.items.map((item) => <p key={item.id}>{item.name} <strong>x{item.quantity}</strong></p>)}</div>
           </div>
+          {order.trackingNumber && <div className="order-shipping-note"><strong>{order.shippingProvider || 'Đơn vị giao hàng'}</strong><span>Mã vận đơn: <b>{order.trackingNumber}</b></span>{order.estimatedDelivery && <span>Dự kiến giao: {formatDate(order.estimatedDelivery, true)}</span>}</div>}
           <div className="success-total"><span>Tổng thanh toán</span><strong>{formatCurrency(order.total)}</strong></div>
           <div className="success-actions">
             <Link className="btn btn-light" to="/"><FiHome /> Về trang chủ</Link>
-            <Link className="btn btn-primary" to="/account?tab=orders"><FiPackage /> Xem đơn hàng</Link>
+            <Link className="btn btn-primary" to="/order-lookup"><FiPackage /> Tra cứu đơn</Link>
           </div>
         </section>
       </div>

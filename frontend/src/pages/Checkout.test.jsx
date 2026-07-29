@@ -2,16 +2,32 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { orderApi } from '../api/orderApi';
+import { paymentApi } from '../api/paymentApi';
 import { useAuth } from '../hooks/useAuth';
 import { useCart } from '../hooks/useCart';
 import Checkout from './Checkout';
 
 vi.mock('../api/orderApi', () => ({ orderApi: { create: vi.fn() } }));
+vi.mock('../api/paymentApi', () => ({
+  paymentApi: {
+    createVnpayCheckout: vi.fn(),
+    getConfig: vi.fn(),
+  },
+}));
 vi.mock('../hooks/useAuth', () => ({ useAuth: vi.fn() }));
 vi.mock('../hooks/useCart', () => ({ useCart: vi.fn() }));
 vi.mock('react-toastify', () => ({ toast: { error: vi.fn(), info: vi.fn() } }));
 
 describe('Checkout payment confirmations', () => {
+  const completeCurrentAddress = () => {
+    fireEvent.change(screen.getByRole('combobox', { name: /Tỉnh\/thành phố/i }), {
+      target: { value: 'TP. Hồ Chí Minh' },
+    });
+    fireEvent.change(screen.getByRole('textbox', { name: /Phường\/xã\/đặc khu/i }), {
+      target: { value: 'Bến Nghé' },
+    });
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
     window.requestAnimationFrame = (callback) => callback();
@@ -36,23 +52,41 @@ describe('Checkout payment confirmations', () => {
       clearCart: vi.fn(),
     });
     orderApi.create.mockResolvedValue({ id: 'order-1' });
+    paymentApi.getConfig.mockResolvedValue({ providers: { vnpay: { enabled: true } } });
+    paymentApi.createVnpayCheckout.mockResolvedValue({
+      order: {
+        id: 'order-vnpay',
+        orderNumber: 'TP26072801',
+        customer: { phone: '0911111111' },
+      },
+      transaction: { reference: 'TP26072801REF' },
+      paymentUrl: '/payment-result?valid=true&code=00&mock=true',
+    });
   });
   afterEach(cleanup);
 
-  it.each([
-    ['Ví điện tử MoMo', 'Thanh toán qua MoMo', 'momo'],
-    ['Thẻ ngân hàng', 'Thanh toán bằng thẻ', 'card'],
-  ])('confirms %s before creating the order', async (label, heading, value) => {
+  it('confirms MoMo before creating the order', async () => {
     render(<MemoryRouter><Checkout /></MemoryRouter>);
-    fireEvent.click(screen.getByRole('radio', { name: new RegExp(label, 'i') }));
+    completeCurrentAddress();
+    fireEvent.click(screen.getByRole('radio', { name: /Ví điện tử MoMo/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục thanh toán' }));
-    expect(await screen.findByRole('heading', { name: heading })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Thanh toán qua MoMo' })).toBeInTheDocument();
     expect(orderApi.create).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Tôi đã thanh toán' }));
     await waitFor(() => expect(orderApi.create).toHaveBeenCalledTimes(1));
-    expect(orderApi.create.mock.calls[0][0].paymentMethod).toBe(value);
-    expect(orderApi.create.mock.calls[0][0].note).toMatch(
-      value === 'momo' ? /Ma giao dich MoMo:/ : /Da xac nhan thanh toan the/,
-    );
+    expect(orderApi.create.mock.calls[0][0].paymentMethod).toBe('momo');
+    expect(orderApi.create.mock.calls[0][0].note).toMatch(/Ma giao dich MoMo:/);
+  });
+
+  it('redirects card payments to VNPay without rendering card inputs', async () => {
+    render(<MemoryRouter><Checkout /></MemoryRouter>);
+    completeCurrentAddress();
+    fireEvent.click(await screen.findByRole('radio', { name: /VNPay/i }));
+    expect(screen.queryByLabelText(/Số thẻ/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Thanh toán qua VNPay' }));
+
+    await waitFor(() => expect(paymentApi.createVnpayCheckout).toHaveBeenCalledTimes(1));
+    expect(paymentApi.createVnpayCheckout.mock.calls[0][0].paymentMethod).toBe('card');
+    expect(orderApi.create).not.toHaveBeenCalled();
   });
 });

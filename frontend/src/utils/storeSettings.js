@@ -10,6 +10,7 @@ export const DEFAULT_STORE_SETTINGS = {
   facebook: 'https://facebook.com/techphone',
   instagram: 'https://instagram.com/techphone',
   youtube: 'https://youtube.com/@techphone',
+  zaloUrl: '',
 };
 
 export const STORE_SETTINGS_EVENT = 'store-settings-updated';

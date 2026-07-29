@@ -1,5 +1,6 @@
 const request = require('supertest');
 const Voucher = require('../src/models/Voucher');
+const Order = require('../src/models/Order');
 const { app, createUser, login } = require('./helpers');
 
 describe('Voucher and review APIs', () => {
@@ -96,5 +97,46 @@ describe('Voucher and review APIs', () => {
         expect.objectContaining({ accessoryId: 'accessory-1', status: 'approved' }),
       ]),
     );
+  });
+
+  it('derives verified purchase from delivered orders and ignores client claims', async () => {
+    const customer = await createUser({ email: 'verified@test.com', phone: '0933333333' });
+    const token = await login('verified@test.com');
+    await Order.create({
+      orderNumber: 'TP26072888',
+      userId: customer.id,
+      status: 'delivered',
+      items: [{ productId: 'verified-phone', name: 'Verified Phone', price: 1000000, quantity: 1 }],
+      subtotal: 1000000,
+      total: 1000000,
+      customer: {
+        fullName: customer.fullName,
+        email: customer.email,
+        phone: customer.phone,
+        address: 'Test address',
+      },
+    });
+
+    const verified = await request(app)
+      .post('/api/reviews')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        productId: 'verified-phone',
+        rating: 5,
+        comment: 'This review comes from a delivered order.',
+        verifiedPurchase: false,
+      });
+    expect(verified.body.data.verifiedPurchase).toBe(true);
+
+    const unverified = await request(app)
+      .post('/api/reviews')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        productId: 'other-phone',
+        rating: 4,
+        comment: 'The client cannot forge a verified purchase.',
+        verifiedPurchase: true,
+      });
+    expect(unverified.body.data.verifiedPurchase).toBe(false);
   });
 });

@@ -22,5 +22,7 @@ router.post('/logout', validators.logout, validate, authController.logout);
 router.get('/me', protect, authController.me);
 router.put('/profile', protect, validators.updateProfile, validate, authController.updateProfile);
 router.put('/change-password', protect, validators.changePassword, validate, authController.changePassword);
+router.get('/wishlist', protect, authController.wishlist);
+router.put('/wishlist', protect, authController.updateWishlist);
 
 module.exports = router;

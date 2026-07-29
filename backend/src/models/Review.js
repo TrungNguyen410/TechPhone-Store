@@ -12,6 +12,7 @@ const reviewSchema = new mongoose.Schema(
     rating: { type: Number, required: true, min: 1, max: 5 },
     comment: { type: String, required: true, trim: true },
     images: [{ type: String }],
+    verifiedPurchase: { type: Boolean, default: false },
     status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending', index: true },
   },
   baseSchemaOptions,

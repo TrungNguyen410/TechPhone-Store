@@ -20,4 +20,7 @@ export const authApi = {
     USE_MOCK
       ? mockDb.changePassword(userId, payload.currentPassword, payload.newPassword)
       : axiosClient.put('/auth/change-password', payload),
+  getWishlist: (userId) => (USE_MOCK ? mockDb.getWishlist(userId) : axiosClient.get('/auth/wishlist')),
+  updateWishlist: (userId, items) =>
+    (USE_MOCK ? mockDb.updateWishlist(userId, items) : axiosClient.put('/auth/wishlist', { items })),
 };

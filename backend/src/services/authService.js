@@ -188,6 +188,18 @@ class AuthService {
     return { message: 'Password changed successfully' };
   }
 
+  async getWishlist(userId) {
+    const user = await userRepository.findById(userId);
+    if (!user) throw new AppError('User not found', 404);
+    return user.wishlist || [];
+  }
+
+  async updateWishlist(userId, items = []) {
+    const uniqueItems = [...new Set((Array.isArray(items) ? items : []).filter((item) => typeof item === 'string'))].slice(0, 100);
+    const user = await userRepository.update(userId, { wishlist: uniqueItems });
+    return user.wishlist || [];
+  }
+
   async refresh(refreshToken) {
     if (!refreshToken) throw new AppError('Refresh token is required', 401);
     const payload = jwt.verify(refreshToken, env.jwtRefreshSecret);

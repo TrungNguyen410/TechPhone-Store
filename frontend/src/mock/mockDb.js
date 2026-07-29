@@ -160,6 +160,21 @@ export const mockDb = {
     return wait(publicUser(user));
   },
 
+  async getWishlist(userId) {
+    const user = read('users').find((item) => item.id === userId);
+    if (!user) fail('Không tìm thấy người dùng', 404);
+    return wait([...(user.wishlist || [])]);
+  },
+
+  async updateWishlist(userId, items) {
+    const users = read('users');
+    const user = users.find((item) => item.id === userId);
+    if (!user) fail('Không tìm thấy người dùng', 404);
+    user.wishlist = [...new Set((items || []).filter((item) => typeof item === 'string'))].slice(0, 100);
+    write('users', users);
+    return wait([...user.wishlist]);
+  },
+
   async changePassword(userId, currentPassword, newPassword) {
     const users = read('users');
     const user = users.find((item) => item.id === userId);
@@ -216,6 +231,24 @@ export const mockDb = {
     return wait(clone(order));
   },
 
+  async createVnpayCheckout(payload) {
+    const order = await this.createOrder({
+      ...payload,
+      paymentMethod: 'card',
+      paymentStatus: 'pending',
+      paymentReference: createId('vnpay'),
+    });
+    return wait({
+      order,
+      transaction: {
+        reference: order.paymentReference,
+        provider: 'vnpay',
+        status: 'pending',
+      },
+      paymentUrl: `/payment-result?provider=vnpay&reference=${encodeURIComponent(order.paymentReference)}&code=00&valid=true&mock=true`,
+    });
+  },
+
   async ordersForUser(userId) {
     return wait(clone(read('orders').filter((order) => order.userId === userId)));
   },
@@ -235,6 +268,15 @@ export const mockDb = {
     if (!order) fail('Không tìm thấy đơn hàng', 404);
     order.status = status;
     order.updatedAt = new Date().toISOString();
+    write('orders', orders);
+    return wait(clone(order));
+  },
+
+  async updateOrderShipping(id, payload) {
+    const orders = read('orders');
+    const order = orders.find((item) => item.id === id);
+    if (!order) fail('Không tìm thấy đơn hàng', 404);
+    Object.assign(order, payload, { updatedAt: new Date().toISOString() });
     write('orders', orders);
     return wait(clone(order));
   },

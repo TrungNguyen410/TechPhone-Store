@@ -21,6 +21,7 @@ const env = {
   jwtAccessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
   jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
+  publicSiteUrl: process.env.PUBLIC_SITE_URL || process.env.FRONTEND_URL || 'http://localhost:5173',
   uploadDir: process.env.UPLOAD_DIR || 'uploads',
   smtp: {
     host: process.env.SMTP_HOST || '',
@@ -34,6 +35,15 @@ const env = {
     accountSid: process.env.TWILIO_ACCOUNT_SID || '',
     authToken: process.env.TWILIO_AUTH_TOKEN || '',
     from: process.env.TWILIO_FROM || '',
+  },
+  vnpay: {
+    tmnCode: process.env.VNPAY_TMN_CODE || '',
+    hashSecret: process.env.VNPAY_HASH_SECRET || '',
+    paymentUrl: process.env.VNPAY_PAYMENT_URL || 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html',
+    returnUrl:
+      process.env.VNPAY_RETURN_URL
+      || `http://localhost:${Number(process.env.PORT || 5000)}/api/payments/vnpay/return`,
+    version: process.env.VNPAY_VERSION || '2.1.0',
   },
 };
 

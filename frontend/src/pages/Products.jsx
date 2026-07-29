@@ -9,6 +9,7 @@ import ProductFilter from '../components/product/ProductFilter';
 import ProductGrid from '../components/product/ProductGrid';
 import ProductSort from '../components/product/ProductSort';
 import { useDebounce } from '../hooks/useDebounce';
+import { trackEvent } from '../utils/analytics';
 
 const initialFilters = { brand: '', price: '', ram: '', storage: '', battery: '' };
 const PAGE_SIZE = 9;
@@ -35,6 +36,10 @@ export default function Products() {
     setSearchParams(params, { replace: true });
     setPage(1);
   }, [debouncedSearch, filters.brand, setSearchParams]);
+
+  useEffect(() => {
+    if (debouncedSearch) trackEvent('search', { query_length: debouncedSearch.length });
+  }, [debouncedSearch]);
 
   const options = useMemo(
     () => ({

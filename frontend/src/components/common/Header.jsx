@@ -20,6 +20,7 @@ import { STORAGE_KEYS } from '../../utils/constants';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { storage } from '../../utils/storage';
 import StoreBrand from './StoreBrand';
+import { trackEvent } from '../../utils/analytics';
 
 const normalizeSearch = (value = '') => value
   .normalize('NFD')
@@ -46,6 +47,10 @@ export default function Header() {
     window.addEventListener('wishlist-updated', sync);
     return () => window.removeEventListener('wishlist-updated', sync);
   }, []);
+
+  useEffect(() => {
+    setWishlistCount((user?.wishlist || storage.get(STORAGE_KEYS.wishlist, [])).length);
+  }, [user?.wishlist]);
 
   useEffect(() => {
     let active = true;
@@ -75,6 +80,7 @@ export default function Header() {
 
   const submitSearch = (event) => {
     event.preventDefault();
+    trackEvent('search', { query_length: search.trim().length });
     navigate(`/products?q=${encodeURIComponent(search.trim())}`);
     setSearchFocused(false);
     setMobileOpen(false);
@@ -153,6 +159,7 @@ export default function Header() {
             <NavLink to="/" end>Trang chủ</NavLink>
             <NavLink to="/products">Điện thoại</NavLink>
             <NavLink to="/accessories">Phụ kiện</NavLink>
+            <NavLink to="/compare">So sánh</NavLink>
             <NavLink to="/reviews">Đánh giá</NavLink>
             <NavLink to="/contact">Liên hệ</NavLink>
             {user?.role === 'admin' && <NavLink to="/admin/dashboard">Quản trị</NavLink>}
@@ -173,6 +180,7 @@ export default function Header() {
           <NavLink to="/" onClick={() => setMobileOpen(false)}>Trang chủ</NavLink>
           <NavLink to="/products" onClick={() => setMobileOpen(false)}>Điện thoại</NavLink>
           <NavLink to="/accessories" onClick={() => setMobileOpen(false)}>Phụ kiện</NavLink>
+          <NavLink to="/compare" onClick={() => setMobileOpen(false)}>So sánh sản phẩm</NavLink>
           <NavLink to="/reviews" onClick={() => setMobileOpen(false)}>Đánh giá</NavLink>
           <NavLink to="/favorites" onClick={() => setMobileOpen(false)}>Sản phẩm yêu thích ({wishlistCount})</NavLink>
           <NavLink to="/contact" onClick={() => setMobileOpen(false)}>Liên hệ</NavLink>

@@ -8,7 +8,9 @@ import Loading from '../components/common/Loading';
 import ProductGrid from '../components/product/ProductGrid';
 import ProductReview from '../components/product/ProductReview';
 import { useCart } from '../hooks/useCart';
+import { usePageMeta } from '../hooks/usePageMeta';
 import { formatCurrency } from '../utils/formatCurrency';
+import { trackEvent } from '../utils/analytics';
 
 export default function AccessoryDetail() {
   const { id } = useParams();
@@ -21,6 +23,29 @@ export default function AccessoryDetail() {
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(true);
 
+  usePageMeta({
+    title: accessory?.name || 'Chi tiết phụ kiện',
+    description: accessory?.description || 'Phụ kiện chính hãng tại TechPhone.',
+    image: accessory?.image,
+    canonicalPath: accessory ? `/accessories/${accessory.id}` : window.location.pathname,
+    type: 'product',
+    structuredData: accessory ? {
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      name: accessory.name,
+      image: accessory.image,
+      description: accessory.description,
+      sku: accessory.id,
+      brand: { '@type': 'Brand', name: accessory.brand },
+      offers: {
+        '@type': 'Offer',
+        priceCurrency: 'VND',
+        price: accessory.price,
+        availability: accessory.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+      },
+    } : null,
+  });
+
   useEffect(() => {
     Promise.all([accessoryApi.getById(id), accessoryApi.getAll()])
       .then(([detail, items]) => {
@@ -28,6 +53,12 @@ export default function AccessoryDetail() {
         setSelectedImage(detail.images?.[0] || detail.image);
         setQuantity(detail.stock > 0 ? 1 : 0);
         setRelated(items.filter((item) => item.id !== id).slice(0, 4));
+        trackEvent('view_item', {
+          item_id: detail.id,
+          item_type: 'accessory',
+          value: detail.price,
+          currency: 'VND',
+        });
       })
       .catch(() => setAccessory(null))
       .finally(() => setLoading(false));
