@@ -117,27 +117,32 @@ describe('Checkout payment confirmations', () => {
         orderId: 'order-vnpay',
         orderNumber: 'TP26072801',
         checkoutKey: expect.stringMatching(/^checkout-/),
+        paymentMethod: 'card',
         resultProof: 'mock-result-proof',
       }),
     );
     expect(orderApi.create).not.toHaveBeenCalled();
   });
 
-  it('reuses the pending checkout key on the browser-visible retry route', async () => {
+  it('restores and locks VNPay when following the browser-visible retry route', async () => {
     sessionStorage.setItem('techphone_pending_payment', JSON.stringify({
       orderId: 'existing-order',
       orderNumber: 'TP26072800',
       reference: 'FAILED-REFERENCE',
       checkoutKey: 'checkout-existing-attempt',
+      paymentMethod: 'card',
       createdAt: Date.now(),
     }));
     render(<MemoryRouter initialEntries={['/checkout']}><Checkout /></MemoryRouter>);
     completeCurrentAddress();
-    fireEvent.click(await screen.findByRole('radio', { name: /VNPay/i }));
+    const vnpay = await screen.findByRole('radio', { name: /VNPay/i });
+    expect(vnpay).toBeChecked();
+    expect(screen.getByRole('radio', { name: /COD/i })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: /VNPay/i }));
 
     await waitFor(() => expect(paymentApi.createVnpayCheckout).toHaveBeenCalledTimes(1));
     expect(paymentApi.createVnpayCheckout.mock.calls[0][1]).toBe('checkout-existing-attempt');
+    expect(orderApi.create).not.toHaveBeenCalled();
     expect(JSON.parse(sessionStorage.getItem('techphone_pending_payment')).checkoutKey)
       .toBe('checkout-existing-attempt');
   });

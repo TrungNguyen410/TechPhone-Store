@@ -4,8 +4,10 @@ const env = require('../src/config/env');
 const Product = require('../src/models/Product');
 const Order = require('../src/models/Order');
 const PaymentTransaction = require('../src/models/PaymentTransaction');
+const paymentTransactionRepository = require('../src/repositories/paymentTransactionRepository');
 const { signParams } = require('../src/services/paymentProviders/vnpayProvider');
 const vnpayProvider = require('../src/services/paymentProviders/vnpayProvider');
+const { createUser, login } = require('./helpers');
 
 const customer = {
   fullName: 'Guest Customer',
@@ -82,6 +84,24 @@ describe('VNPay checkout and IPN', () => {
       accountName: 'TECHPHONE TEST',
     });
     expect(response.body.data.providers.momo).toEqual({ enabled: false });
+  });
+
+  it('does not enable or accept whitespace-only VNPay credentials', async () => {
+    env.vnpay.tmnCode = '   ';
+    env.vnpay.hashSecret = '   ';
+
+    const config = await request(app).get('/api/payments/config').expect(200);
+
+    expect(config.body.data.providers.vnpay.enabled).toBe(false);
+    await request(app)
+      .post('/api/payments/vnpay/checkout')
+      .set('Idempotency-Key', 'whitespace-vnpay')
+      .send({
+        items: [{ id: 'missing', type: 'product', quantity: 1 }],
+        customer,
+        paymentMethod: 'card',
+      })
+      .expect(503);
   });
 
   it('creates a guest order and confirms it only after a valid IPN', async () => {
@@ -368,6 +388,193 @@ describe('VNPay checkout and IPN', () => {
       .toBe('expired');
     await post().expect(409);
     expect(await PaymentTransaction.countDocuments()).toBe(2);
+  });
+
+  it('keeps a concurrently cancelled and restocked order cancelled when a paid IPN arrives', async () => {
+    await createUser({ email: 'cancel-race@test.com', phone: '0908181818' });
+    const token = await login('cancel-race@test.com');
+    const product = await Product.create({
+      name: 'Cancel Race Phone',
+      slug: 'cancel-race-phone',
+      categoryId: 'category-test',
+      brandId: 'brand-test',
+      price: 6100000,
+      stock: 3,
+      status: 'active',
+    });
+    const checkout = await request(app)
+      .post('/api/payments/vnpay/checkout')
+      .set('Authorization', `Bearer ${token}`)
+      .set('Idempotency-Key', 'cancel-paid-race')
+      .send({
+        items: [{ id: product.id, type: 'product', quantity: 1 }],
+        customer: {
+          ...customer,
+          email: 'cancel-race@test.com',
+          phone: '0908181818',
+        },
+        paymentMethod: 'card',
+      })
+      .expect(201);
+    const transaction = checkout.body.data.transaction;
+    const paidQuery = {
+      vnp_Amount: String(transaction.amount * 100),
+      vnp_ResponseCode: '00',
+      vnp_TransactionStatus: '00',
+      vnp_TxnRef: transaction.reference,
+    };
+    paidQuery.vnp_SecureHash = signParams(paidQuery, env.vnpay.hashSecret);
+
+    const restore = Product.updateOne;
+    let releaseRestore;
+    let restoreReached;
+    const restoreGate = new Promise((resolve) => { releaseRestore = resolve; });
+    const reached = new Promise((resolve) => { restoreReached = resolve; });
+    const restoreSpy = jest.spyOn(Product, 'updateOne').mockImplementationOnce(
+      async function pausedRestore(...args) {
+        restoreReached();
+        await restoreGate;
+        return restore.apply(this, args);
+      },
+    );
+
+    try {
+      const cancelPromise = request(app)
+        .put(`/api/orders/${checkout.body.data.order.id}/cancel`)
+        .set('Authorization', `Bearer ${token}`)
+        .then((response) => response);
+      await reached;
+      const ipnPromise = request(app)
+        .get('/api/payments/vnpay/ipn')
+        .query(paidQuery)
+        .then((response) => response);
+      await new Promise((resolve) => setImmediate(resolve));
+      releaseRestore();
+
+      const [cancelled, ipn] = await Promise.all([cancelPromise, ipnPromise]);
+      expect(cancelled.status).toBe(200);
+      expect(ipn.status).toBe(200);
+    } finally {
+      releaseRestore();
+      restoreSpy.mockRestore();
+    }
+
+    const order = await Order.findById(checkout.body.data.order.id);
+    expect(order.status).toBe('cancelled');
+    expect(order.paymentStatus).toBe('refund_required');
+    expect((await Product.findById(product.id)).stock).toBe(3);
+    expect((await PaymentTransaction.findById(transaction.id)).status).toBe('paid');
+  });
+
+  it('rejects cancellation after payment commits without restocking the order', async () => {
+    await createUser({ email: 'paid-first@test.com', phone: '0908282828' });
+    const token = await login('paid-first@test.com');
+    const product = await Product.create({
+      name: 'Paid First Phone',
+      slug: 'paid-first-phone',
+      categoryId: 'category-test',
+      brandId: 'brand-test',
+      price: 6200000,
+      stock: 3,
+      status: 'active',
+    });
+    const checkout = await request(app)
+      .post('/api/payments/vnpay/checkout')
+      .set('Authorization', `Bearer ${token}`)
+      .set('Idempotency-Key', 'paid-before-cancel')
+      .send({
+        items: [{ id: product.id, type: 'product', quantity: 1 }],
+        customer: {
+          ...customer,
+          email: 'paid-first@test.com',
+          phone: '0908282828',
+        },
+        paymentMethod: 'card',
+      })
+      .expect(201);
+    const transaction = checkout.body.data.transaction;
+    const paidQuery = {
+      vnp_Amount: String(transaction.amount * 100),
+      vnp_ResponseCode: '00',
+      vnp_TransactionStatus: '00',
+      vnp_TxnRef: transaction.reference,
+    };
+    paidQuery.vnp_SecureHash = signParams(paidQuery, env.vnpay.hashSecret);
+
+    await request(app).get('/api/payments/vnpay/ipn').query(paidQuery).expect(200);
+    await request(app)
+      .put(`/api/orders/${checkout.body.data.order.id}/cancel`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(400);
+
+    const order = await Order.findById(checkout.body.data.order.id);
+    expect(order.status).toBe('confirmed');
+    expect(order.paymentStatus).toBe('paid');
+    expect((await Product.findById(product.id)).stock).toBe(2);
+  });
+
+  it('does not expose a replacement URL when payment commits during attempt creation', async () => {
+    const product = await Product.create({
+      name: 'Replacement Payment Race Phone',
+      slug: 'replacement-payment-race-phone',
+      categoryId: 'category-test',
+      brandId: 'brand-test',
+      price: 6300000,
+      stock: 3,
+      status: 'active',
+    });
+    const payload = {
+      items: [{ id: product.id, type: 'product', quantity: 1 }],
+      customer,
+      paymentMethod: 'card',
+    };
+    const post = () => request(app)
+      .post('/api/payments/vnpay/checkout')
+      .set('Idempotency-Key', 'replacement-paid-race')
+      .send(payload);
+    const initial = await post().expect(201);
+    await PaymentTransaction.updateOne(
+      { _id: initial.body.data.transaction.id },
+      { $set: { status: 'failed' }, $unset: { activeIdempotencyKey: 1 } },
+    );
+    const paidQuery = {
+      vnp_Amount: String(initial.body.data.transaction.amount * 100),
+      vnp_ResponseCode: '00',
+      vnp_TransactionStatus: '00',
+      vnp_TxnRef: initial.body.data.transaction.reference,
+    };
+    paidQuery.vnp_SecureHash = signParams(paidQuery, env.vnpay.hashSecret);
+
+    const create = paymentTransactionRepository.create.bind(paymentTransactionRepository);
+    let releaseCreate;
+    let createReached;
+    const createGate = new Promise((resolve) => { releaseCreate = resolve; });
+    const reached = new Promise((resolve) => { createReached = resolve; });
+    const createSpy = jest
+      .spyOn(paymentTransactionRepository, 'create')
+      .mockImplementationOnce(async (...args) => {
+        createReached();
+        await createGate;
+        return create(...args);
+      });
+
+    try {
+      const retryPromise = post().then((response) => response);
+      await reached;
+      await request(app).get('/api/payments/vnpay/ipn').query(paidQuery).expect(200);
+      releaseCreate();
+      const retry = await retryPromise;
+      expect(retry.status).toBe(409);
+    } finally {
+      releaseCreate();
+      createSpy.mockRestore();
+    }
+
+    const order = await Order.findById(initial.body.data.order.id);
+    expect(order.paymentStatus).toBe('paid');
+    expect(order.status).toBe('confirmed');
+    expect(await PaymentTransaction.countDocuments()).toBe(1);
+    expect(await PaymentTransaction.countDocuments({ status: 'pending' })).toBe(0);
   });
 
   it('issues and verifies a short-lived result proof for a signed VNPay return', async () => {

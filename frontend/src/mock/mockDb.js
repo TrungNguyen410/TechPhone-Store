@@ -281,9 +281,11 @@ export const mockDb = {
         && voucher.active
         && subtotal >= Number(voucher.minOrder || 0)
         && now >= new Date(voucher.startDate)
-        && now <= new Date(`${voucher.endDate}T23:59:59`);
+        && now <= new Date(`${voucher.endDate}T23:59:59`)
+        && (!Number(voucher.quantity) || Number(voucher.used || 0) < Number(voucher.quantity));
       if (!usable) fail('MÃ£ giáº£m giÃ¡ khÃ´ng há»£p lá»‡');
     }
+    if (voucher) voucher.used = Number(voucher.used || 0) + 1;
     const discount = calculateVoucherDiscount(voucher, subtotal, shipping.fee);
     const now = new Date();
     const order = {
@@ -295,6 +297,7 @@ export const mockDb = {
       discount,
       total: Math.max(0, subtotal + shipping.fee - discount),
       voucherCode: voucher?.code || null,
+      voucherUsageReleased: false,
       idempotencyKey: scopedKey || undefined,
       id: createId('order'),
       orderNumber: `TP${now.toISOString().slice(2, 10).replaceAll('-', '')}${String(orders.length + 1).padStart(2, '0')}`,
@@ -304,6 +307,11 @@ export const mockDb = {
     };
     write('products', products);
     write('accessories', accessories);
+    if (voucher) {
+      write('vouchers', read('vouchers').map(
+        (item) => (item.code === voucher.code ? voucher : item),
+      ));
+    }
     write('orders', [order, ...orders]);
     return wait(clone(order));
   },
@@ -346,6 +354,29 @@ export const mockDb = {
     const orders = read('orders');
     const order = orders.find((item) => item.id === id);
     if (!order) fail('Không tìm thấy đơn hàng', 404);
+    if (status === 'cancelled' && order.status !== 'cancelled') {
+      const products = read('products');
+      const accessories = read('accessories');
+      (order.items || []).forEach((item) => {
+        const catalog = item.type === 'accessory' ? accessories : products;
+        const current = catalog.find(
+          (entry) => entry.id === (item.accessoryId || item.productId || item.id),
+        );
+        if (current) {
+          current.stock = Number(current.stock || 0) + Number(item.quantity);
+          current.sold = Math.max(0, Number(current.sold || 0) - Number(item.quantity));
+        }
+      });
+      if (order.voucherCode && !order.voucherUsageReleased) {
+        const vouchers = read('vouchers');
+        const voucher = vouchers.find((item) => item.code === order.voucherCode);
+        if (voucher) voucher.used = Math.max(0, Number(voucher.used || 0) - 1);
+        write('vouchers', vouchers);
+        order.voucherUsageReleased = true;
+      }
+      write('products', products);
+      write('accessories', accessories);
+    }
     order.status = status;
     order.updatedAt = new Date().toISOString();
     write('orders', orders);

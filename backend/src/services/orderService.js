@@ -6,6 +6,7 @@ const productRepository = require('../repositories/productRepository');
 const Accessory = require('../models/Accessory');
 const Product = require('../models/Product');
 const voucherService = require('./voucherService');
+const withTransaction = require('../utils/withTransaction');
 
 const allowedStatuses = ['pending', 'confirmed', 'shipping', 'delivered', 'completed', 'cancelled'];
 const statusTransitions = {
@@ -39,14 +40,14 @@ class OrderService {
     return { fee: 40000, days: 4 };
   }
 
-  async generateOrderNumber() {
+  async generateOrderNumber(session) {
     const now = new Date();
     const datePart = now.toISOString().slice(2, 10).replaceAll('-', '');
-    const count = await orderRepository.count();
+    const count = await orderRepository.count({}, { session });
     return `TP${datePart}${String(count + 1).padStart(2, '0')}`;
   }
 
-  async normalizeItems(items = []) {
+  async normalizeItems(items = [], session) {
     return Promise.all(
       items.map(async (item) => {
         const type = item.type === 'accessory' || item.accessoryId ? 'accessory' : 'product';
@@ -54,8 +55,8 @@ class OrderService {
         const quantity = Number(item.quantity);
         const catalogItem =
           type === 'accessory'
-            ? await accessoryRepository.findById(itemId)
-            : await productRepository.findById(itemId);
+            ? await accessoryRepository.findById(itemId, { session })
+            : await productRepository.findById(itemId, { session });
 
         if (!catalogItem || catalogItem.status !== 'active') {
           throw new AppError(`${type === 'accessory' ? 'Accessory' : 'Product'} is unavailable`, 400);
@@ -88,15 +89,19 @@ class OrderService {
     return 0;
   }
 
-  async rollbackInventory(decrements) {
+  async rollbackInventory(decrements, session) {
     await Promise.all(
       decrements.map(({ Model, id, quantity }) =>
-        Model.updateOne({ _id: id }, { $inc: { stock: quantity, sold: -quantity } }),
+        Model.updateOne(
+          { _id: id },
+          { $inc: { stock: quantity, sold: -quantity } },
+          { session },
+        ),
       ),
     );
   }
 
-  async decrementInventory(items) {
+  async decrementInventory(items, session) {
     const decrements = [];
     for (const item of items) {
       const Model = item.type === 'accessory' ? Accessory : Product;
@@ -104,11 +109,11 @@ class OrderService {
       const updated = await Model.findOneAndUpdate(
         { _id: id, isDeleted: false, status: 'active', stock: { $gte: item.quantity } },
         { $inc: { stock: -item.quantity, sold: item.quantity } },
-        { returnDocument: 'after', runValidators: true },
+        { returnDocument: 'after', runValidators: true, session },
       );
 
       if (!updated) {
-        await this.rollbackInventory(decrements);
+        if (!session) await this.rollbackInventory(decrements);
         throw new AppError(`${item.name} does not have enough stock`, 400);
       }
 
@@ -117,13 +122,17 @@ class OrderService {
     return decrements;
   }
 
-  async restoreInventory(items = []) {
+  async restoreInventory(items = [], session) {
     await Promise.all(
       items.map((item) => {
         const type = item.type === 'accessory' || item.accessoryId ? 'accessory' : 'product';
         const Model = type === 'accessory' ? Accessory : Product;
         const id = type === 'accessory' ? item.accessoryId || item.id : item.productId || item.id;
-        return Model.updateOne({ _id: id }, { $inc: { stock: item.quantity, sold: -item.quantity } });
+        return Model.updateOne(
+          { _id: id },
+          { $inc: { stock: item.quantity, sold: -item.quantity } },
+          { session },
+        );
       }),
     );
   }
@@ -134,56 +143,51 @@ class OrderService {
       user,
       payload.customer,
     );
-    if (idempotencyKey) {
-      const existing = await orderRepository.findByIdempotencyKey(idempotencyKey);
-      if (existing) return existing;
-    }
-
-    const items = await this.normalizeItems(payload.items);
-    if (!items.length) throw new AppError('Order must contain at least one item', 422);
-
-    const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const shipping = this.shippingQuote(payload.customer, subtotal);
-    const shippingFee = shipping.fee;
-    let decrements = [];
-    let voucher = null;
-    let voucherReserved = false;
-    let orderCreated = false;
+    await orderRepository.ensureIndexes();
     try {
-      if (payload.voucherCode) {
-        voucher = await voucherService.reserve(payload.voucherCode, subtotal);
-        voucherReserved = true;
-      }
-      const discount = this.calculateDiscount(voucher, subtotal, shippingFee);
-      const total = Math.max(0, subtotal + shippingFee - discount);
+      return await withTransaction(async (session) => {
+        if (idempotencyKey) {
+          const existing = await orderRepository.findByIdempotencyKey(
+            idempotencyKey,
+            session,
+          );
+          if (existing) return existing;
+        }
 
-      decrements = await this.decrementInventory(items);
+        const items = await this.normalizeItems(payload.items, session);
+        if (!items.length) throw new AppError('Order must contain at least one item', 422);
+        const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+        const shipping = this.shippingQuote(payload.customer, subtotal);
+        const shippingFee = shipping.fee;
+        const voucher = payload.voucherCode
+          ? await voucherService.reserve(payload.voucherCode, subtotal, session)
+          : null;
+        const discount = this.calculateDiscount(voucher, subtotal, shippingFee);
+        const total = Math.max(0, subtotal + shippingFee - discount);
 
-      const order = await orderRepository.create({
-        orderNumber: await this.generateOrderNumber(),
-        idempotencyKey: idempotencyKey || undefined,
-        userId: user?.id || null,
-        items,
-        subtotal,
-        shippingFee,
-        discount,
-        total,
-        customer: payload.customer,
-        paymentMethod: payload.paymentMethod || 'cod',
-        paymentStatus: 'pending',
-        paymentReference: payload.paymentReference || '',
-        shippingProvider: 'TechPhone Express',
-        trackingNumber: `TPX${Date.now().toString().slice(-10)}`,
-        estimatedDelivery: new Date(Date.now() + shipping.days * 24 * 60 * 60 * 1000),
-        note: payload.note || '',
-        voucherCode: voucher?.code || null,
-        status: 'pending',
+        await this.decrementInventory(items, session);
+        return orderRepository.create({
+          orderNumber: await this.generateOrderNumber(session),
+          idempotencyKey: idempotencyKey || undefined,
+          userId: user?.id || null,
+          items,
+          subtotal,
+          shippingFee,
+          discount,
+          total,
+          customer: payload.customer,
+          paymentMethod: payload.paymentMethod || 'cod',
+          paymentStatus: 'pending',
+          paymentReference: payload.paymentReference || '',
+          shippingProvider: 'TechPhone Express',
+          trackingNumber: `TPX${Date.now().toString().slice(-10)}`,
+          estimatedDelivery: new Date(Date.now() + shipping.days * 24 * 60 * 60 * 1000),
+          note: payload.note || '',
+          voucherCode: voucher?.code || null,
+          status: 'pending',
+        }, session);
       });
-      orderCreated = true;
-      return order;
     } catch (error) {
-      if (decrements.length && !orderCreated) await this.rollbackInventory(decrements);
-      if (voucherReserved && !orderCreated) await voucherService.release(voucher.code);
       if (idempotencyKey && error?.code === 11000) {
         const existing = await orderRepository.findByIdempotencyKey(idempotencyKey);
         if (existing) return existing;
@@ -228,30 +232,47 @@ class OrderService {
     if (!statusTransitions[order.status].includes(status)) {
       throw new AppError(`Cannot change order status from ${order.status} to ${status}`, 400);
     }
-    if (status === 'cancelled') return this.cancelOrder(order);
+    if (status === 'cancelled') return this.cancelOrder(order.id);
     return orderRepository.update(id, { status });
   }
 
-  async cancelOrder(order) {
-    const previous = await orderRepository.transitionToCancelled(
-      order.id,
-      ['pending', 'confirmed'],
-    );
-    if (!previous) return orderRepository.findById(order.id);
+  async cancelOrder(id, user) {
+    return withTransaction(async (session) => {
+      const order = await orderRepository.findById(id, { session });
+      if (!order) throw new AppError('Order not found', 404);
+      if (user && user.role !== 'admin' && order.userId !== user.id) {
+        throw new AppError('Order access denied', 403);
+      }
+      if (order.status === 'cancelled') return order;
+      if (['paid', 'refund_required', 'refunded'].includes(order.paymentStatus)) {
+        throw new AppError('A paid order cannot be cancelled automatically', 400);
+      }
+      if (['shipping', 'delivered', 'completed'].includes(order.status)) {
+        throw new AppError('Order can no longer be cancelled', 400);
+      }
 
-    await this.restoreInventory(previous.items);
-    const claimedVoucher = await orderRepository.claimVoucherUsageRelease(order.id);
-    if (claimedVoucher?.voucherCode) await voucherService.release(claimedVoucher.voucherCode);
-    return orderRepository.findById(order.id);
+      const previous = await orderRepository.transitionToCancelled(
+        id,
+        ['pending', 'confirmed'],
+        session,
+      );
+      if (!previous) {
+        const current = await orderRepository.findById(id, { session });
+        if (current?.status === 'cancelled') return current;
+        throw new AppError('Order can no longer be cancelled', 400);
+      }
+
+      await this.restoreInventory(previous.items, session);
+      if (previous.voucherCode && !previous.voucherUsageReleased) {
+        await voucherService.release(previous.voucherCode, session);
+        await orderRepository.claimVoucherUsageRelease(id, session);
+      }
+      return orderRepository.findById(id, { session });
+    });
   }
 
   async cancel(id, user) {
-    const order = await this.getById(id, user);
-    if (order.status === 'cancelled') return order;
-    if (['shipping', 'delivered', 'completed'].includes(order.status)) {
-      throw new AppError('Order can no longer be cancelled', 400);
-    }
-    return this.cancelOrder(order);
+    return this.cancelOrder(id, user);
   }
 
   async remove(id) {

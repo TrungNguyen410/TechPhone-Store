@@ -47,7 +47,11 @@ const orderSchema = new mongoose.Schema(
     discount: { type: Number, default: 0, min: 0 },
     total: { type: Number, required: true, min: 0 },
     paymentMethod: { type: String, enum: ['cod', 'bank', 'momo', 'card'], default: 'cod' },
-    paymentStatus: { type: String, enum: ['pending', 'paid', 'failed', 'refunded'], default: 'pending' },
+    paymentStatus: {
+      type: String,
+      enum: ['pending', 'paid', 'failed', 'refund_required', 'refunded'],
+      default: 'pending',
+    },
     paymentReference: { type: String, default: '' },
     shippingProvider: { type: String, default: 'TechPhone Express' },
     trackingNumber: { type: String, default: '' },

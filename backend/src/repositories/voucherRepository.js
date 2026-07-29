@@ -14,7 +14,7 @@ class VoucherRepository extends BaseRepository {
     return voucher?.toJSON() || null;
   }
 
-  async reserve(code, subtotal, now = new Date()) {
+  async reserve(code, subtotal, now = new Date(), session) {
     const dayStart = new Date(now);
     dayStart.setHours(0, 0, 0, 0);
     const voucher = await Voucher.findOneAndUpdate(
@@ -31,12 +31,12 @@ class VoucherRepository extends BaseRepository {
         ],
       },
       { $inc: { used: 1 } },
-      { returnDocument: 'after', runValidators: true },
+      { returnDocument: 'after', runValidators: true, session },
     );
     return voucher?.toJSON() || null;
   }
 
-  async release(code) {
+  async release(code, session) {
     if (!code) return null;
     const voucher = await Voucher.findOneAndUpdate(
       {
@@ -45,7 +45,7 @@ class VoucherRepository extends BaseRepository {
         used: { $gt: 0 },
       },
       { $inc: { used: -1 } },
-      { returnDocument: 'after', runValidators: true },
+      { returnDocument: 'after', runValidators: true, session },
     );
     return voucher?.toJSON() || null;
   }

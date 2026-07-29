@@ -10,17 +10,19 @@ class PaymentTransactionRepository extends BaseRepository {
     await PaymentTransaction.init();
   }
 
-  async create(payload) {
+  async create(payload, session) {
     await this.ensureIndexes();
-    return super.create(payload);
+    if (!session) return super.create(payload);
+    const [transaction] = await PaymentTransaction.create([payload], { session });
+    return transaction.toJSON();
   }
 
-  async findByReference(reference) {
-    const doc = await PaymentTransaction.findOne({ reference });
+  async findByReference(reference, session) {
+    const doc = await PaymentTransaction.findOne({ reference }).session(session || null);
     return doc?.toJSON() || null;
   }
 
-  async findPendingByIdempotencyKey(idempotencyKey) {
+  async findPendingByIdempotencyKey(idempotencyKey, session) {
     if (!idempotencyKey) return null;
     await this.ensureIndexes();
     const doc = await PaymentTransaction.findOne({
@@ -29,37 +31,39 @@ class PaymentTransactionRepository extends BaseRepository {
         { activeIdempotencyKey: idempotencyKey },
         { idempotencyKey, activeIdempotencyKey: { $exists: false } },
       ],
-    });
+    }).session(session || null);
     return doc?.toJSON() || null;
   }
 
-  async expirePendingBefore(idempotencyKey, cutoff) {
+  async expirePendingBefore(idempotencyKey, cutoff, session) {
     if (!idempotencyKey) return null;
     const doc = await PaymentTransaction.findOneAndUpdate(
       { idempotencyKey, status: 'pending', createdAt: { $lte: cutoff } },
       { $set: { status: 'expired' }, $unset: { activeIdempotencyKey: 1 } },
-      { returnDocument: 'after', runValidators: true },
+      { returnDocument: 'after', runValidators: true, session },
     );
     return doc?.toJSON() || null;
   }
 
-  async findPendingByOrderId(orderId) {
-    const doc = await PaymentTransaction.findOne({ orderId, status: 'pending' });
+  async findPendingByOrderId(orderId, session) {
+    const doc = await PaymentTransaction.findOne({ orderId, status: 'pending' })
+      .session(session || null);
     return doc?.toJSON() || null;
   }
 
-  async expireOtherPending(orderId, transactionId) {
+  async expireOtherPending(orderId, transactionId, session) {
     return PaymentTransaction.updateMany(
       { orderId, _id: { $ne: transactionId }, status: 'pending' },
       { $set: { status: 'expired' }, $unset: { activeIdempotencyKey: 1 } },
+      { session },
     );
   }
 
-  async settle(id, payload) {
+  async settle(id, payload, session) {
     const doc = await PaymentTransaction.findOneAndUpdate(
-      { _id: id },
+      { _id: id, status: { $ne: 'paid' } },
       { $set: payload, $unset: { activeIdempotencyKey: 1 } },
-      { returnDocument: 'after', runValidators: true },
+      { returnDocument: 'after', runValidators: true, session },
     );
     return doc?.toJSON() || null;
   }

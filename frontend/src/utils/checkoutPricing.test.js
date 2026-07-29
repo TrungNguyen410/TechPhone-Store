@@ -38,6 +38,8 @@ describe('mock checkout invariants', () => {
         type: 'shipping',
         value: 30000,
         minOrder: 0,
+        quantity: 1,
+        used: 0,
         active: true,
         startDate: '2020-01-01',
         endDate: '2099-12-31',
@@ -228,5 +230,51 @@ describe('mock checkout invariants', () => {
     }, 'stock-key')).rejects.toThrow('does not have enough stock');
 
     expect(storage.get(STORAGE_KEYS.mockProducts)[0].stock).toBe(2);
+  });
+
+  it('enforces limited voucher usage across distinct mock orders', async () => {
+    const payload = {
+      items: [{ id: 'current-phone', quantity: 1 }],
+      customer: {
+        fullName: 'Voucher Guest',
+        email: 'voucher@example.com',
+        phone: '0911111111',
+        address: 'Test address',
+      },
+      voucherCode: 'SHIP',
+    };
+
+    await mockDb.createOrder(payload, 'limited-voucher-1');
+    await expect(mockDb.createOrder(
+      {
+        ...payload,
+        customer: { ...payload.customer, email: 'other@example.com', phone: '0922222222' },
+      },
+      'limited-voucher-2',
+    )).rejects.toThrow();
+
+    expect(storage.get(STORAGE_KEYS.mockVouchers)[0].used).toBe(1);
+    expect(storage.get(STORAGE_KEYS.mockProducts)[0].stock).toBe(1);
+  });
+
+  it('restores mock inventory and voucher usage exactly once on cancellation', async () => {
+    const order = await mockDb.createOrder({
+      items: [{ id: 'current-phone', quantity: 1 }],
+      customer: {
+        fullName: 'Voucher Guest',
+        email: 'cancel@example.com',
+        phone: '0933333333',
+        address: 'Test address',
+      },
+      voucherCode: 'SHIP',
+    }, 'mock-cancel');
+
+    await mockDb.updateOrderStatus(order.id, 'cancelled');
+    await mockDb.updateOrderStatus(order.id, 'cancelled');
+
+    expect(storage.get(STORAGE_KEYS.mockProducts)[0]).toEqual(
+      expect.objectContaining({ stock: 2, sold: 0 }),
+    );
+    expect(storage.get(STORAGE_KEYS.mockVouchers)[0].used).toBe(0);
   });
 });

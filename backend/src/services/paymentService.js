@@ -6,10 +6,19 @@ const orderRepository = require('../repositories/orderRepository');
 const paymentTransactionRepository = require('../repositories/paymentTransactionRepository');
 const orderService = require('./orderService');
 const vnpayProvider = require('./paymentProviders/vnpayProvider');
+const withTransaction = require('../utils/withTransaction');
 
 const PAYMENT_URL_TTL_MS = 15 * 60 * 1000;
 
 class PaymentService {
+  getVnpayConfig() {
+    return {
+      ...env.vnpay,
+      tmnCode: String(env.vnpay.tmnCode || '').trim(),
+      hashSecret: String(env.vnpay.hashSecret || '').trim(),
+    };
+  }
+
   getConfig() {
     const bank = {
       name: String(env.bank.name || '').trim(),
@@ -48,7 +57,9 @@ class PaymentService {
             : {}),
         },
         vnpay: {
-          enabled: Boolean(env.vnpay.tmnCode && env.vnpay.hashSecret),
+          enabled: Boolean(
+            this.getVnpayConfig().tmnCode && this.getVnpayConfig().hashSecret,
+          ),
           mode: env.nodeEnv === 'production' ? 'production' : 'sandbox',
         },
       },
@@ -56,52 +67,30 @@ class PaymentService {
   }
 
   assertVnpayConfigured() {
-    if (!env.vnpay.tmnCode || !env.vnpay.hashSecret) {
+    const config = this.getVnpayConfig();
+    if (!config.tmnCode || !config.hashSecret) {
       throw new AppError('VNPay is not configured. Add VNPAY_TMN_CODE and VNPAY_HASH_SECRET.', 503);
     }
+    return config;
   }
 
   async createVnpayCheckout(payload, user, metadata = {}) {
-    this.assertVnpayConfigured();
+    const vnpayConfig = this.assertVnpayConfigured();
 
     const idempotencyKey = orderService.buildIdempotencyKey(
       metadata.idempotencyKey,
       user,
       payload.customer,
     );
-    const existing = await paymentTransactionRepository.findPendingByIdempotencyKey(
-      idempotencyKey,
-    );
-    if (existing) {
-      const stale = new Date(existing.createdAt).getTime() <= Date.now() - PAYMENT_URL_TTL_MS;
-      if (!stale) {
-        const order = await orderRepository.findById(existing.orderId);
-        return { order, paymentUrl: existing.rawResponse?.paymentUrl, transaction: existing };
-      }
-      await paymentTransactionRepository.expirePendingBefore(
-        idempotencyKey,
-        new Date(Date.now() - PAYMENT_URL_TTL_MS),
-      );
-
-      const replacement = await paymentTransactionRepository.findPendingByIdempotencyKey(
-        idempotencyKey,
-      );
-      if (replacement) {
-        const order = await orderRepository.findById(replacement.orderId);
-        return {
-          order,
-          paymentUrl: replacement.rawResponse?.paymentUrl,
-          transaction: replacement,
-        };
-      }
-    }
-
     const order = await orderService.create(
       { ...payload, paymentMethod: 'card' },
       user,
       { idempotencyKey: metadata.idempotencyKey },
     );
-    if (order.paymentStatus === 'paid') {
+    if (
+      order.status === 'cancelled'
+      || ['paid', 'refund_required', 'refunded'].includes(order.paymentStatus)
+    ) {
       throw new AppError('This order has already been paid', 409);
     }
     const reference =
@@ -109,31 +98,79 @@ class PaymentService {
 
     const paymentUrl = vnpayProvider.createPaymentUrl({
       amount: order.total,
-      config: env.vnpay,
+      config: vnpayConfig,
       ipAddress: metadata.ipAddress,
       orderInfo: `Thanh toan don hang ${order.orderNumber}`,
       reference,
     });
+    await paymentTransactionRepository.ensureIndexes();
     try {
-      const transaction = await paymentTransactionRepository.create({
-        orderId: order.id,
-        provider: 'vnpay',
-        method: 'card',
-        amount: order.total,
-        reference,
-        idempotencyKey: idempotencyKey || undefined,
-        activeIdempotencyKey: idempotencyKey || undefined,
-        rawResponse: { paymentUrl },
+      return await withTransaction(async (session) => {
+        const currentOrder = await orderRepository.findById(order.id, { session });
+        if (
+          !currentOrder
+          || currentOrder.status === 'cancelled'
+          || ['paid', 'refund_required', 'refunded'].includes(currentOrder.paymentStatus)
+        ) {
+          throw new AppError('This order is no longer payable', 409);
+        }
+
+        const existing = await paymentTransactionRepository.findPendingByIdempotencyKey(
+          idempotencyKey,
+          session,
+        );
+        if (existing) {
+          const stale =
+            new Date(existing.createdAt).getTime() <= Date.now() - PAYMENT_URL_TTL_MS;
+          if (!stale) {
+            const payableOrder = await orderRepository.updateState(
+              currentOrder.id,
+              {
+                status: { $ne: 'cancelled' },
+                paymentStatus: { $in: ['pending', 'failed'] },
+              },
+              {
+                paymentReference: existing.reference,
+                paymentStatus: 'pending',
+              },
+              session,
+            );
+            if (!payableOrder) throw new AppError('This order is no longer payable', 409);
+            return {
+              order: payableOrder,
+              paymentUrl: existing.rawResponse?.paymentUrl,
+              transaction: existing,
+            };
+          }
+          await paymentTransactionRepository.expirePendingBefore(
+            idempotencyKey,
+            new Date(Date.now() - PAYMENT_URL_TTL_MS),
+            session,
+          );
+        }
+
+        const transaction = await paymentTransactionRepository.create({
+          orderId: currentOrder.id,
+          provider: 'vnpay',
+          method: 'card',
+          amount: currentOrder.total,
+          reference,
+          idempotencyKey: idempotencyKey || undefined,
+          activeIdempotencyKey: idempotencyKey || undefined,
+          rawResponse: { paymentUrl },
+        }, session);
+        const payableOrder = await orderRepository.updateState(
+          currentOrder.id,
+          {
+            status: { $ne: 'cancelled' },
+            paymentStatus: { $in: ['pending', 'failed'] },
+          },
+          { paymentReference: reference, paymentStatus: 'pending' },
+          session,
+        );
+        if (!payableOrder) throw new AppError('This order is no longer payable', 409);
+        return { order: payableOrder, paymentUrl, transaction };
       });
-      await orderRepository.update(order.id, {
-        paymentReference: reference,
-        paymentStatus: 'pending',
-      });
-      return {
-        order: { ...order, paymentReference: reference, paymentStatus: 'pending' },
-        paymentUrl,
-        transaction,
-      };
     } catch (error) {
       if (idempotencyKey && error?.code === 11000) {
         const winner = await paymentTransactionRepository.findPendingByIdempotencyKey(
@@ -141,6 +178,13 @@ class PaymentService {
         );
         if (winner) {
           const winnerOrder = await orderRepository.findById(winner.orderId);
+          if (
+            !winnerOrder
+            || winnerOrder.status === 'cancelled'
+            || ['paid', 'refund_required', 'refunded'].includes(winnerOrder.paymentStatus)
+          ) {
+            throw new AppError('This order is no longer payable', 409);
+          }
           return {
             order: winnerOrder,
             paymentUrl: winner.rawResponse?.paymentUrl,
@@ -153,59 +197,87 @@ class PaymentService {
   }
 
   async processVnpayIpn(query) {
-    if (!vnpayProvider.verifyCallback(query, env.vnpay.hashSecret)) {
+    if (!vnpayProvider.verifyCallback(query, this.getVnpayConfig().hashSecret)) {
       return { RspCode: '97', Message: 'Invalid checksum' };
     }
 
-    const reference = query.vnp_TxnRef;
-    const transaction = await paymentTransactionRepository.findByReference(reference);
-    if (!transaction) return { RspCode: '01', Message: 'Order not found' };
-
-    const callbackAmount = Number(query.vnp_Amount) / 100;
-    if (callbackAmount !== transaction.amount) {
-      return { RspCode: '04', Message: 'Invalid amount' };
-    }
-    if (transaction.status === 'paid') {
-      return { RspCode: '02', Message: 'Order already confirmed' };
-    }
-    const order = await orderRepository.findById(transaction.orderId);
-    if (order?.paymentStatus === 'paid') {
-      return { RspCode: '02', Message: 'Order already confirmed' };
-    }
-
     const paid = query.vnp_ResponseCode === '00' && query.vnp_TransactionStatus === '00';
-    const transactionUpdate = {
-      status: paid ? 'paid' : 'failed',
-      providerTransactionId: query.vnp_TransactionNo || '',
-      bankCode: query.vnp_BankCode || '',
-      responseCode: query.vnp_ResponseCode || '',
-      rawResponse: query,
-      paidAt: paid ? new Date() : null,
-    };
-    await paymentTransactionRepository.settle(transaction.id, transactionUpdate);
-    if (paid) {
-      await paymentTransactionRepository.expireOtherPending(
-        transaction.orderId,
-        transaction.id,
+    return withTransaction(async (session) => {
+      const transaction = await paymentTransactionRepository.findByReference(
+        query.vnp_TxnRef,
+        session,
       );
-      await orderRepository.update(transaction.orderId, {
-        paymentStatus: 'paid',
-        status: 'confirmed',
-      });
-    } else {
-      const activeAttempt = await paymentTransactionRepository.findPendingByOrderId(
-        transaction.orderId,
-      );
-      if (!activeAttempt) {
-        await orderRepository.update(transaction.orderId, { paymentStatus: 'failed' });
+      if (!transaction) return { RspCode: '01', Message: 'Order not found' };
+      if (Number(query.vnp_Amount) / 100 !== transaction.amount) {
+        return { RspCode: '04', Message: 'Invalid amount' };
       }
-    }
+      if (transaction.status === 'paid') {
+        return { RspCode: '02', Message: 'Order already confirmed' };
+      }
+      const order = await orderRepository.findById(transaction.orderId, { session });
+      if (!order) return { RspCode: '01', Message: 'Order not found' };
+      if (order.paymentStatus === 'paid') {
+        return { RspCode: '02', Message: 'Order already confirmed' };
+      }
 
-    return { RspCode: '00', Message: 'Confirm Success' };
+      await paymentTransactionRepository.settle(
+        transaction.id,
+        {
+          status: paid ? 'paid' : 'failed',
+          providerTransactionId: query.vnp_TransactionNo || '',
+          bankCode: query.vnp_BankCode || '',
+          responseCode: query.vnp_ResponseCode || '',
+          rawResponse: query,
+          paidAt: paid ? new Date() : null,
+        },
+        session,
+      );
+      if (paid) {
+        const nextPaymentState = order.status === 'cancelled'
+          ? { paymentStatus: 'refund_required' }
+          : { paymentStatus: 'paid', status: 'confirmed' };
+        const updatedOrder = await orderRepository.updateState(
+          order.id,
+          order.status === 'cancelled'
+            ? { status: 'cancelled', paymentStatus: { $nin: ['paid', 'refunded'] } }
+            : {
+                status: { $ne: 'cancelled' },
+                paymentStatus: { $nin: ['paid', 'refund_required', 'refunded'] },
+              },
+          nextPaymentState,
+          session,
+        );
+        if (!updatedOrder) {
+          throw new AppError('Order payment state changed concurrently', 409);
+        }
+        await paymentTransactionRepository.expireOtherPending(
+          transaction.orderId,
+          transaction.id,
+          session,
+        );
+      } else {
+        const activeAttempt = await paymentTransactionRepository.findPendingByOrderId(
+          transaction.orderId,
+          session,
+        );
+        if (!activeAttempt && order.status !== 'cancelled') {
+          await orderRepository.updateState(
+            transaction.orderId,
+            {
+              status: { $ne: 'cancelled' },
+              paymentStatus: { $in: ['pending', 'failed'] },
+            },
+            { paymentStatus: 'failed' },
+            session,
+          );
+        }
+      }
+      return { RspCode: '00', Message: 'Confirm Success' };
+    });
   }
 
   verifyVnpayReturn(query) {
-    return vnpayProvider.verifyCallback(query, env.vnpay.hashSecret);
+    return vnpayProvider.verifyCallback(query, this.getVnpayConfig().hashSecret);
   }
 
   createResultProof(query) {

@@ -21,13 +21,16 @@ class BaseRepository {
     return docs.map(toResource);
   }
 
-  async count(filter = {}) {
-    return this.model.countDocuments({ ...filter, isDeleted: false });
+  async count(filter = {}, options = {}) {
+    const query = this.model.countDocuments({ ...filter, isDeleted: false });
+    if (options.session) query.session(options.session);
+    return query;
   }
 
   async findById(id, options = {}) {
     const query = this.model.findOne({ _id: id, isDeleted: false });
     if (options.select) query.select(options.select);
+    if (options.session) query.session(options.session);
     const doc = await query;
     return toResource(doc);
   }

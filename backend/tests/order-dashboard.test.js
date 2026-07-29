@@ -8,6 +8,8 @@ const Category = require('../src/models/Category');
 const Voucher = require('../src/models/Voucher');
 const env = require('../src/config/env');
 const orderItemRepository = require('../src/repositories/orderItemRepository');
+const orderRepository = require('../src/repositories/orderRepository');
+const voucherService = require('../src/services/voucherService');
 const { app, createUser, login } = require('./helpers');
 
 describe('Orders and dashboard APIs', () => {
@@ -183,6 +185,18 @@ describe('Orders and dashboard APIs', () => {
     expect(second.body.data.id).toBe(first.body.data.id);
     const productAfter = await Product.findById(product.id);
     expect(productAfter.stock).toBe(2);
+  });
+
+  it('ensures the real unique order idempotency index before accepting requests', async () => {
+    expect(typeof orderRepository.ensureIndexes).toBe('function');
+
+    await orderRepository.ensureIndexes();
+
+    const idempotencyIndex = (await Order.collection.indexes())
+      .find((index) => index.key?.idempotencyKey === 1);
+    expect(idempotencyIndex).toEqual(
+      expect.objectContaining({ unique: true, sparse: true }),
+    );
   });
 
   it('returns only fully durable embedded orders when secondary item persistence fails', async () => {
@@ -421,6 +435,42 @@ describe('Orders and dashboard APIs', () => {
     expect((await Product.findById(product.id)).stock).toBe(2);
   });
 
+  it('converges same-key concurrent requests that consume the final voucher redemption', async () => {
+    const taxonomy = await seedTaxonomy();
+    const product = await Product.create({
+      _id: 'same-key-final-voucher-phone',
+      name: 'Same Key Final Voucher Phone',
+      ...taxonomy,
+      price: 2800000,
+      stock: 3,
+      status: 'active',
+    });
+    await seedVoucher({ code: 'SAMEKEYLAST', quantity: 1 });
+    const payload = {
+      items: [{ productId: product.id, quantity: 1 }],
+      customer: {
+        fullName: 'Same Voucher Guest',
+        email: 'same-voucher@test.com',
+        phone: '0906161616',
+        address: 'Test address',
+      },
+      voucherCode: 'SAMEKEYLAST',
+    };
+    const post = () => request(app)
+      .post('/api/orders')
+      .set('Idempotency-Key', 'same-key-final-voucher')
+      .send(payload);
+
+    const [first, second] = await Promise.all([post(), post()]);
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
+    expect(second.body.data.id).toBe(first.body.data.id);
+    expect((await Voucher.findOne({ code: 'SAMEKEYLAST' })).used).toBe(1);
+    expect(await Order.countDocuments()).toBe(1);
+    expect((await Product.findById(product.id)).stock).toBe(2);
+  });
+
   it('compensates the duplicate loser and releases voucher usage once on cancellation', async () => {
     await createUser({ email: 'voucher-cancel@test.com', phone: '0907070707' });
     const token = await login('voucher-cancel@test.com');
@@ -467,6 +517,123 @@ describe('Orders and dashboard APIs', () => {
 
     expect((await Voucher.findOne({ code: 'CANCELONCE' })).used).toBe(0);
     expect((await Product.findById(product.id)).stock).toBe(3);
+  });
+
+  it('rolls back a failed inventory restore so cancellation can be retried exactly once', async () => {
+    await createUser({ email: 'restore-retry@test.com', phone: '0907171717' });
+    const token = await login('restore-retry@test.com');
+    const taxonomy = await seedTaxonomy();
+    const product = await Product.create({
+      _id: 'restore-retry-phone',
+      name: 'Restore Retry Phone',
+      ...taxonomy,
+      price: 3100000,
+      stock: 3,
+      status: 'active',
+    });
+    const created = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .set('Idempotency-Key', 'restore-retry-order')
+      .send({
+        items: [{ productId: product.id, quantity: 1 }],
+        customer: {
+          fullName: 'Restore Retry',
+          email: 'restore-retry@test.com',
+          phone: '0907171717',
+          address: 'Test address',
+        },
+      })
+      .expect(201);
+    const restore = Product.updateOne;
+    const restoreSpy = jest
+      .spyOn(Product, 'updateOne')
+      .mockRejectedValueOnce(new Error('Injected inventory restore failure'))
+      .mockImplementation(restore);
+
+    try {
+      await request(app)
+        .put(`/api/orders/${created.body.data.id}/cancel`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(500);
+    } finally {
+      restoreSpy.mockRestore();
+    }
+
+    expect((await Order.findById(created.body.data.id)).status).toBe('pending');
+    expect((await Product.findById(product.id)).stock).toBe(2);
+
+    await request(app)
+      .put(`/api/orders/${created.body.data.id}/cancel`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    await request(app)
+      .put(`/api/orders/${created.body.data.id}/cancel`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    expect((await Order.findById(created.body.data.id)).status).toBe('cancelled');
+    expect((await Product.findById(product.id)).stock).toBe(3);
+  });
+
+  it('rolls back a failed voucher release so cancellation can be retried exactly once', async () => {
+    await createUser({ email: 'voucher-retry@test.com', phone: '0907272727' });
+    const token = await login('voucher-retry@test.com');
+    const taxonomy = await seedTaxonomy();
+    const product = await Product.create({
+      _id: 'voucher-retry-phone',
+      name: 'Voucher Retry Phone',
+      ...taxonomy,
+      price: 3200000,
+      stock: 3,
+      status: 'active',
+    });
+    await seedVoucher({ code: 'RELEASEFAIL', quantity: 1 });
+    const created = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .set('Idempotency-Key', 'voucher-release-retry')
+      .send({
+        items: [{ productId: product.id, quantity: 1 }],
+        customer: {
+          fullName: 'Voucher Retry',
+          email: 'voucher-retry@test.com',
+          phone: '0907272727',
+          address: 'Test address',
+        },
+        voucherCode: 'RELEASEFAIL',
+      })
+      .expect(201);
+    const release = voucherService.release.bind(voucherService);
+    const releaseSpy = jest
+      .spyOn(voucherService, 'release')
+      .mockRejectedValueOnce(new Error('Injected voucher release failure'))
+      .mockImplementation(release);
+
+    try {
+      await request(app)
+        .put(`/api/orders/${created.body.data.id}/cancel`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(500);
+    } finally {
+      releaseSpy.mockRestore();
+    }
+
+    expect((await Order.findById(created.body.data.id)).status).toBe('pending');
+    expect((await Product.findById(product.id)).stock).toBe(2);
+    expect((await Voucher.findOne({ code: 'RELEASEFAIL' })).used).toBe(1);
+
+    await request(app)
+      .put(`/api/orders/${created.body.data.id}/cancel`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    await request(app)
+      .put(`/api/orders/${created.body.data.id}/cancel`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    expect((await Product.findById(product.id)).stock).toBe(3);
+    expect((await Voucher.findOne({ code: 'RELEASEFAIL' })).used).toBe(0);
   });
 
   it('enforces valid admin order status transitions', async () => {
