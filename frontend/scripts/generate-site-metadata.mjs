@@ -7,7 +7,8 @@ export const normalizeSiteUrl = (value = 'http://localhost:5173') =>
 
 export const staticRoutes = [
   '/', '/products', '/accessories', '/compare', '/reviews',
-  '/contact', '/order-lookup',
+  '/contact', '/order-lookup', '/policies/warranty', '/policies/returns',
+  '/policies/shipping', '/policies/payment',
 ];
 
 const routeEntries = staticRoutes.map((route) => `  <url><loc>{{origin}}${route}</loc></url>`).join('\n');

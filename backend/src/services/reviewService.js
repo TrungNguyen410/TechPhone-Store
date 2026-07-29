@@ -38,16 +38,23 @@ class ReviewService {
       throw new AppError('You already reviewed this item', 409);
     }
 
-    return reviewRepository.create({
-      ...payload,
-      userId,
-      userName: user?.fullName || payload.userName,
-      productId,
-      accessoryId,
-      images: Array.isArray(payload.images) ? payload.images.slice(0, 5) : [],
-      verifiedPurchase,
-      status: 'pending',
-    });
+    try {
+      return await reviewRepository.create({
+        ...payload,
+        userId,
+        userName: user?.fullName || payload.userName,
+        productId,
+        accessoryId,
+        images: Array.isArray(payload.images) ? payload.images.slice(0, 5) : [],
+        verifiedPurchase,
+        status: 'pending',
+      });
+    } catch (error) {
+      if (error?.code === 11000) {
+        throw new AppError('You already reviewed this item', 409);
+      }
+      throw error;
+    }
   }
 
   async update(id, payload) {

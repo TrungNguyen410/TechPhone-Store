@@ -13,7 +13,9 @@ Services:
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:5000/api
 - Swagger: http://localhost:5000/api/docs
-- MongoDB: mongodb://localhost:27017/techphone_store
+- MongoDB: mongodb://localhost:27017/techphone_store?replicaSet=rs0
+
+Docker Compose tự khởi tạo MongoDB thành single-node replica set `rs0`. Cấu hình này là bắt buộc vì checkout dùng transaction nguyên tử.
 
 Seed demo data after the backend is running:
 
@@ -21,10 +23,10 @@ Seed demo data after the backend is running:
 docker compose exec backend npm run seed
 ```
 
-Demo accounts:
+Trước khi seed, điền `SEED_DEMO_PASSWORD` dài ít nhất 12 ký tự trong file `.env` ở thư mục gốc rồi chạy lại `docker compose up -d`. Demo accounts:
 
-- Admin: `admin@gmail.com` / `123456`
-- Customer: `user@gmail.com` / `123456`
+- Admin: `admin@gmail.com` / giá trị `SEED_DEMO_PASSWORD`
+- Customer: `user@gmail.com` / giá trị `SEED_DEMO_PASSWORD`
 
 ## Frontend: Netlify
 
@@ -68,6 +70,7 @@ PORT=5000
 MONGO_URI=mongodb+srv://USER:PASSWORD@CLUSTER.mongodb.net/techphone_store
 JWT_ACCESS_SECRET=<strong-random-secret>
 JWT_REFRESH_SECRET=<strong-random-secret>
+SEED_DEMO_PASSWORD=<strong-demo-password-at-least-12-characters>
 JWT_ACCESS_EXPIRES_IN=15m
 JWT_REFRESH_EXPIRES_IN=7d
 FRONTEND_URL=https://YOUR_NETLIFY_SITE.netlify.app

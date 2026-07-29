@@ -6,6 +6,22 @@
 
 ---
 
+## Trạng thái thực hiện — 2026-07-29
+
+Plan rebuild đã hoàn thành trong phạm vi mã nguồn và hồ sơ có thể tạo trong repository:
+
+- [x] Sprint 0: Git, Scrum/Jira, sơ đồ và burndown.
+- [x] Sprint 1: storefront/admin mock mode, lint và build.
+- [x] Sprint 2: backend nhiều lớp, database, auth/RBAC và health API.
+- [x] Sprint 3: API nghiệp vụ, seed và tích hợp frontend/backend.
+- [x] Sprint 4: test, Swagger, Docker Compose replica set, deployment guide và báo cáo 10 chương.
+- [x] Coverage backend vượt 80%: 98,91% statements, 92,3% branches, 100% functions, 98,71% lines.
+- [x] Docker smoke test: ba service chạy; health API, Swagger, frontend và SPA fallback trả HTTP 200.
+
+Các checkbox chi tiết bên dưới là baseline lịch sử được viết trước khi triển khai; trạng thái nghiệm thu hiện tại được ghi ở phần này. Slide/clip demo là sản phẩm quay thủ công và chỉ thực hiện nếu giảng viên yêu cầu, không phải task code còn thiếu.
+
+---
+
 ## 0. Mục tiêu & tiêu chí thành công
 
 | Khía cạnh | Mục tiêu nghiệm thu |

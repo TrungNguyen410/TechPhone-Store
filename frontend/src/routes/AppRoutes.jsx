@@ -5,6 +5,7 @@ import ProtectedRoute from '../components/auth/ProtectedRoute';
 import Footer from '../components/common/Footer';
 import Header from '../components/common/Header';
 import Loading from '../components/common/Loading';
+import RouteMeta from '../components/common/RouteMeta';
 import SupportLauncher from '../components/common/SupportLauncher';
 import AdminLayout from '../pages/admin/AdminLayout';
 
@@ -55,6 +56,7 @@ function StoreLayout() {
 export default function AppRoutes() {
   return (
     <Suspense fallback={<Loading text="Đang tải trang..." />}>
+      <RouteMeta />
       <Routes>
         <Route element={<StoreLayout />}>
           <Route path="/" element={<Home />} />

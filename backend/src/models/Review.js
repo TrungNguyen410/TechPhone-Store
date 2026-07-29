@@ -19,5 +19,15 @@ const reviewSchema = new mongoose.Schema(
 );
 
 reviewSchema.plugin(softDeletePlugin);
+reviewSchema.index(
+  { userId: 1, productId: 1, accessoryId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      userId: { $type: 'string' },
+      isDeleted: false,
+    },
+  },
+);
 
 module.exports = mongoose.model('Review', reviewSchema);

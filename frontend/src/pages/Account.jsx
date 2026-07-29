@@ -169,9 +169,10 @@ export default function Account() {
                       const status = getOrderStatus(order.status);
                       return (
                         <article key={order.id}>
-                          <div className="order-card-head"><span><small>Mã đơn</small><strong>{order.orderNumber}</strong></span><span><small>Ngày đặt</small><strong>{formatDate(order.createdAt)}</strong></span><span className={`status-badge ${status.className}`}>{status.label}</span></div>
-                          <div className="order-preview"><img src={order.items[0].image} alt="" /><div><strong>{order.items[0].name}</strong><small>{order.items.length > 1 ? `và ${order.items.length - 1} sản phẩm khác` : `${order.items[0].quantity} sản phẩm`}</small></div><b>{formatCurrency(order.total)}</b></div>
-                          <div className="order-card-actions"><button onClick={() => setSelectedOrder(order)}><FiEye /> Chi tiết</button><button disabled={reorderingId === order.id} onClick={() => reorder(order)}><FiRefreshCcw /> {reorderingId === order.id ? 'Đang thêm…' : 'Đặt lại'}</button>{['pending', 'confirmed'].includes(order.status) && <button className="danger" onClick={() => setCancelOrderId(order.id)}><FiXCircle /> Hủy đơn</button>}</div>
+                           <div className="order-card-head"><span><small>Mã đơn</small><strong>{order.orderNumber}</strong></span><span><small>Ngày đặt</small><strong>{formatDate(order.createdAt)}</strong></span><span className={`status-badge ${status.className}`}>{status.label}</span></div>
+                           <div className="order-preview"><img src={order.items[0].image} alt="" /><div><strong>{order.items[0].name}</strong><small>{order.items.length > 1 ? `và ${order.items.length - 1} sản phẩm khác` : `${order.items[0].quantity} sản phẩm`}</small></div><b>{formatCurrency(order.total)}</b></div>
+                           {order.trackingNumber && <div className="order-shipping-note"><strong>{order.shippingProvider || 'Đơn vị giao hàng'}</strong><span>Mã vận đơn: <b>{order.trackingNumber}</b></span>{order.estimatedDelivery && <span>Dự kiến giao: {formatDate(order.estimatedDelivery, true)}</span>}</div>}
+                           <div className="order-card-actions"><button onClick={() => setSelectedOrder(order)}><FiEye /> Chi tiết</button><button disabled={reorderingId === order.id} onClick={() => reorder(order)}><FiRefreshCcw /> {reorderingId === order.id ? 'Đang thêm…' : 'Đặt lại'}</button>{['pending', 'confirmed'].includes(order.status) && <button className="danger" onClick={() => setCancelOrderId(order.id)}><FiXCircle /> Hủy đơn</button>}</div>
                         </article>
                       );
                     })}
@@ -201,9 +202,10 @@ export default function Account() {
           onClose={() => setSelectedOrder(null)}
         >
             <button className="icon-button modal-close" aria-label="Đóng chi tiết đơn" onClick={() => setSelectedOrder(null)}>×</button>
-            <h2>Chi tiết đơn {selectedOrder.orderNumber}</h2>
-            {selectedOrder.items.map((item) => <div className="modal-order-item" key={item.id}><img src={item.image} alt={item.name} /><span><strong>{item.name}</strong><small>{formatCurrency(item.price)} × {item.quantity}</small></span><b>{formatCurrency(item.price * item.quantity)}</b></div>)}
-            <div className="success-total"><span>Tổng thanh toán</span><strong>{formatCurrency(selectedOrder.total)}</strong></div>
+             <h2>Chi tiết đơn {selectedOrder.orderNumber}</h2>
+             {selectedOrder.items.map((item) => <div className="modal-order-item" key={item.id}><img src={item.image} alt={item.name} /><span><strong>{item.name}</strong><small>{formatCurrency(item.price)} × {item.quantity}</small></span><b>{formatCurrency(item.price * item.quantity)}</b></div>)}
+             {selectedOrder.trackingNumber && <div className="order-shipping-note"><strong>{selectedOrder.shippingProvider || 'Đơn vị giao hàng'}</strong><span>Mã vận đơn: <b>{selectedOrder.trackingNumber}</b></span>{selectedOrder.estimatedDelivery && <span>Dự kiến giao: {formatDate(selectedOrder.estimatedDelivery, true)}</span>}</div>}
+             <div className="success-total"><span>Tổng thanh toán</span><strong>{formatCurrency(selectedOrder.total)}</strong></div>
         </AccessibleDialog>
       )}
       <ConfirmModal open={Boolean(cancelOrderId)} title="Hủy đơn hàng?" message="Đơn hàng sẽ được chuyển sang trạng thái đã hủy và không thể khôi phục." onCancel={() => setCancelOrderId(null)} onConfirm={cancelOrder} />

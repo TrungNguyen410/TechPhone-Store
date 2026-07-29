@@ -3,15 +3,23 @@ services:
     image: mongo:7
     container_name: techphone-mongodb
     restart: unless-stopped
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
     ports:
       - "27017:27017"
     volumes:
       - mongodb_data:/data/db
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
-      interval: 10s
+      test:
+        [
+          "CMD",
+          "mongosh",
+          "--quiet",
+          "--eval",
+          "try { const status = rs.status(); quit(status.myState === 1 ? 0 : 1); } catch (error) { try { rs.initiate({_id:'rs0',members:[{_id:0,host:'mongodb:27017'}]}); } finally { quit(1); } }",
+        ]
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 12
 
   backend:
     build:
@@ -21,10 +29,11 @@ services:
     environment:
       NODE_ENV: production
       PORT: 5000
-      MONGO_URI: mongodb://mongodb:27017/techphone_store
+      MONGO_URI: mongodb://mongodb:27017/techphone_store?replicaSet=rs0
       FRONTEND_URL: http://localhost:3000
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?Set JWT_ACCESS_SECRET in your environment or root .env file}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?Set JWT_REFRESH_SECRET in your environment or root .env file}
+      SEED_DEMO_PASSWORD: ${SEED_DEMO_PASSWORD:-}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_SECURE: ${SMTP_SECURE:-false}

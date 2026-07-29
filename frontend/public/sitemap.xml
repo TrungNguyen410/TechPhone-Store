@@ -7,4 +7,8 @@
   <url><loc>http://localhost:5173/reviews</loc></url>
   <url><loc>http://localhost:5173/contact</loc></url>
   <url><loc>http://localhost:5173/order-lookup</loc></url>
+  <url><loc>http://localhost:5173/policies/warranty</loc></url>
+  <url><loc>http://localhost:5173/policies/returns</loc></url>
+  <url><loc>http://localhost:5173/policies/shipping</loc></url>
+  <url><loc>http://localhost:5173/policies/payment</loc></url>
 </urlset>

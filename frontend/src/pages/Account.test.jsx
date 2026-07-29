@@ -110,4 +110,31 @@ describe('Account profile', () => {
     expect(await screen.findByText('Orders offline')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /thử lại/i })).toBeInTheDocument();
   });
+
+  it('shows shipping tracking directly in account order history', async () => {
+    orderApiMock.getMyOrders.mockResolvedValue([{
+      id: 'order-tracking',
+      orderNumber: 'TPTRACKING',
+      createdAt: '2026-07-29T08:00:00.000Z',
+      estimatedDelivery: '2026-08-01T08:00:00.000Z',
+      shippingProvider: 'TechPhone Express',
+      trackingNumber: 'TPX123456',
+      status: 'shipping',
+      total: 12000000,
+      items: [{
+        id: 'phone-1',
+        image: '/phone.png',
+        name: 'Điện thoại đang giao',
+        price: 12000000,
+        quantity: 1,
+        type: 'product',
+      }],
+    }]);
+
+    render(<MemoryRouter initialEntries={['/account?tab=orders']}><Account /></MemoryRouter>);
+
+    expect(await screen.findByText('TPX123456')).toBeInTheDocument();
+    expect(screen.getByText('TechPhone Express')).toBeInTheDocument();
+    expect(screen.getByText(/Dự kiến giao:/)).toBeInTheDocument();
+  });
 });

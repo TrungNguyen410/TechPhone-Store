@@ -13,6 +13,29 @@ const upsertMeta = (selector, attribute, key, value) => {
   node.content = value;
 };
 
+const setCanonical = (value) => {
+  let canonical = document.head.querySelector('link[rel="canonical"]');
+  if (!canonical) {
+    canonical = document.createElement('link');
+    canonical.rel = 'canonical';
+    document.head.appendChild(canonical);
+  }
+  canonical.href = value;
+};
+
+const resetPageMeta = () => {
+  const canonicalUrl = new URL(window.location.pathname, window.location.origin).href;
+  document.title = DEFAULT_TITLE;
+  upsertMeta('meta[name="description"]', 'name', 'description', DEFAULT_DESCRIPTION);
+  upsertMeta('meta[property="og:title"]', 'property', 'og:title', DEFAULT_TITLE);
+  upsertMeta('meta[property="og:description"]', 'property', 'og:description', DEFAULT_DESCRIPTION);
+  upsertMeta('meta[property="og:type"]', 'property', 'og:type', 'website');
+  upsertMeta('meta[property="og:url"]', 'property', 'og:url', canonicalUrl);
+  upsertMeta('meta[name="twitter:card"]', 'name', 'twitter:card', 'summary');
+  document.head.querySelector('meta[property="og:image"]')?.remove();
+  setCanonical(canonicalUrl);
+};
+
 export function usePageMeta({ title, description, image, canonicalPath, type = 'website', structuredData }) {
   useEffect(() => {
     const fullTitle = title ? `${title} | TechPhone` : DEFAULT_TITLE;
@@ -25,14 +48,12 @@ export function usePageMeta({ title, description, image, canonicalPath, type = '
     upsertMeta('meta[property="og:type"]', 'property', 'og:type', type);
     upsertMeta('meta[property="og:url"]', 'property', 'og:url', canonicalUrl);
     upsertMeta('meta[name="twitter:card"]', 'name', 'twitter:card', image ? 'summary_large_image' : 'summary');
-    if (image) upsertMeta('meta[property="og:image"]', 'property', 'og:image', new URL(image, window.location.origin).href);
-    let canonical = document.head.querySelector('link[rel="canonical"]');
-    if (!canonical) {
-      canonical = document.createElement('link');
-      canonical.rel = 'canonical';
-      document.head.appendChild(canonical);
+    if (image) {
+      upsertMeta('meta[property="og:image"]', 'property', 'og:image', new URL(image, window.location.origin).href);
+    } else {
+      document.head.querySelector('meta[property="og:image"]')?.remove();
     }
-    canonical.href = canonicalUrl;
+    setCanonical(canonicalUrl);
 
     const scriptId = 'page-structured-data';
     document.getElementById(scriptId)?.remove();
@@ -45,9 +66,8 @@ export function usePageMeta({ title, description, image, canonicalPath, type = '
     }
 
     return () => {
-      document.title = DEFAULT_TITLE;
-      upsertMeta('meta[name="description"]', 'name', 'description', DEFAULT_DESCRIPTION);
       document.getElementById(scriptId)?.remove();
+      resetPageMeta();
     };
   }, [canonicalPath, description, image, structuredData, title, type]);
 }

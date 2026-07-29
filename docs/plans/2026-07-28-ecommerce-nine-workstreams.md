@@ -14,6 +14,31 @@ Ngày lập: 2026-07-28
 - UI mới dùng token hiện có, một bộ icon `react-icons/fi`, hỗ trợ bàn phím, reduced motion và màn hình 320/375/414/768 px.
 - Không lưu số thẻ/CVV. Không đánh dấu đơn “đã thanh toán” nếu chưa nhận callback hợp lệ từ nhà cung cấp.
 
+## Trạng thái thực hiện
+
+Cập nhật lần cuối: 2026-07-29 — **9/9 workstream đã hoàn thành trong phạm vi repository**.
+
+- [x] **1. Thanh toán production-ready:** có `PaymentTransaction`, VNPay adapter, URL thanh toán do backend tạo, IPN/return có kiểm tra chữ ký, idempotency và proof cho trang kết quả. API `/payments/config` tự ẩn VNPay, ngân hàng hoặc MoMo khi thiếu cấu hình; COD luôn còn dùng được. Test nằm tại `backend/tests/payment.test.js`, `backend/tests/vnpay-provider.test.js` và `frontend/src/pages/Checkout.test.jsx`.
+- [x] **2. Guest checkout:** route tạo đơn dùng optional auth, đơn có tài khoản được gắn `userId`, guest vẫn đặt được hàng và tra cứu công khai bằng mã đơn + số điện thoại. Trang thành công không tải công khai đơn guest chỉ bằng ID sau khi refresh. Test nằm tại `backend/tests/order-dashboard.test.js` và `backend/tests/payment.test.js`.
+- [x] **3. Địa chỉ, phí giao hàng và tracking:** checkout tách tỉnh/thành, quận/huyện, phường/xã và địa chỉ chi tiết; frontend/backend cùng áp dụng miễn phí từ 10 triệu và quy tắc vùng. Dự án dùng danh mục 34 đơn vị cấp tỉnh hiện hành thay cho danh mục 63 đơn vị trong bản nháp ban đầu. Admin cập nhật được đơn vị vận chuyển, mã vận đơn, ngày giao dự kiến; tracking hiển thị tại trang thành công, tra cứu và tài khoản. Test nằm tại `frontend/src/utils/shipping.test.js`, `backend/tests/shipping.test.js` và `frontend/src/pages/Account.test.jsx`.
+- [x] **4. Review theo sản phẩm và verified purchase:** trang chi tiết có điểm trung bình, phân bố sao, lọc, ảnh và nhãn “Đã mua hàng”. Backend tự suy ra verified purchase từ đơn delivered/completed, luôn tạo review ở trạng thái pending và dùng unique index để giữ đúng một review cho mỗi user/target kể cả khi gửi đồng thời. Test nằm tại `backend/tests/voucher-review.test.js`.
+- [x] **5. So sánh sản phẩm:** thêm/xóa từ product card hoặc trang chi tiết, tối đa bốn điện thoại, giữ thứ tự trong local storage và highlight thông số khác nhau trong bảng responsive. Test nằm tại `frontend/src/utils/commercePreferences.test.js` và `frontend/src/pages/ProductCompare.test.jsx`.
+- [x] **6. Cá nhân hóa merchandising:** lưu sản phẩm đã xem, gợi ý theo thương hiệu/giá/RAM/bộ nhớ/tồn kho, có fallback best seller và khối phụ kiện tương thích. Logic không thu thập dữ liệu nhạy cảm và không gắn nhãn “AI”. Test nằm tại `frontend/src/utils/merchandising.test.js`.
+- [x] **7. Wishlist đồng bộ tài khoản:** guest lưu local; khi đăng nhập hệ thống merge local + server, loại trùng, giới hạn 100 mục và đồng bộ Header/Favorites/product card qua cùng event/contract. Test nằm tại `frontend/src/utils/wishlist.test.js` và `backend/tests/auth.test.js`.
+- [x] **8. Chính sách và hỗ trợ:** có bốn trang bảo hành/đổi trả/vận chuyển/thanh toán, Footer trỏ đúng route, support launcher lấy hotline/email/Zalo từ settings, đóng bằng Escape và hỗ trợ focus. Các điều khoản cần chủ shop duyệt đã được ghi chú rõ. Test hành vi dialog/focus nằm tại `frontend/src/components/common/AccessibleDialog.test.jsx`; responsive được kiểm tra trong plan remediation frontend.
+- [x] **9. SEO và đo lường:** mọi route có title, description, canonical và Open Graph theo route; trang sản phẩm có Product/Offer/AggregateRating/Breadcrumb JSON-LD, trang gốc có Organization JSON-LD; sitemap gồm route tĩnh/chính sách và backend sinh URL sản phẩm. Analytics mặc định no-op khi thiếu measurement ID, lọc PII và có đủ `view_item`, `search`, `add_to_cart`, `begin_checkout`, `purchase`. Test nằm tại `frontend/src/hooks/usePageMeta.test.jsx`, `frontend/src/components/common/RouteMeta.test.jsx`, `frontend/src/utils/analytics.test.js`, `frontend/scripts/generate-site-metadata.test.js` và `backend/tests/seo.test.js`.
+
+### Phần phụ thuộc bên ngoài
+
+Kích hoạt thanh toán live không phải phần code còn thiếu. Khi không có merchant credentials, phương thức live được ẩn an toàn. Nếu sau này cần bật VNPay thật, chỉ điền credentials và callback URL vào biến môi trường runtime; không đưa khóa vào Git.
+
+### Quality gate cuối
+
+- Frontend: 40 test file, 121 test đều pass; ESLint pass; production build pass và không còn cảnh báo thiếu `VITE_SITE_URL`.
+- Backend: 16 test suite, 74 test đều pass; coverage đạt 98,91% statements, 92,3% branches, 100% functions và 98,71% lines.
+- Docker Compose: MongoDB `rs0`, backend và frontend đều khởi động; MongoDB/backend healthy; health API, Swagger, frontend và SPA fallback đều trả HTTP 200.
+- Production dependency audit: backend không còn advisory. Frontend dùng React Router 7.18.2 mới nhất đang phát hành; advisory RSC/Server Action còn được npm liệt kê không áp dụng cho Vite SPA này vì dự án không dùng RSC hoặc server action.
+
 ## 9 workstream
 
 ### 1. Thanh toán production-ready
