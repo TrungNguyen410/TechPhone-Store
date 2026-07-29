@@ -81,6 +81,9 @@ jobs:
   docker:
     name: Docker build
     runs-on: ubuntu-latest
+    env:
+      JWT_ACCESS_SECRET: ci-docker-access-secret-at-least-32-characters
+      JWT_REFRESH_SECRET: ci-docker-refresh-secret-at-least-32-characters
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
