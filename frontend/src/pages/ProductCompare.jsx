@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { FiArrowLeft, FiX } from 'react-icons/fi';
 import { Link } from 'react-router-dom';
 import { productApi } from '../api/productApi';
 import EmptyState from '../components/common/EmptyState';
 import Loading from '../components/common/Loading';
+import LoadError from '../components/common/LoadError';
 import { getComparedProducts, removeComparedProduct } from '../utils/commercePreferences';
 import { formatCurrency } from '../utils/formatCurrency';
 
@@ -21,19 +22,25 @@ const rows = [
 export default function ProductCompare() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true);
-    productApi.getAll().then((items) => {
-      const ids = getComparedProducts();
-      setProducts(ids.map((id) => items.find((item) => item.id === id)).filter(Boolean));
-    }).finally(() => setLoading(false));
-  };
+    setError('');
+    return productApi.getAll()
+      .then((items) => {
+        const ids = getComparedProducts();
+        setProducts(ids.map((id) => items.find((item) => item.id === id)).filter(Boolean));
+      })
+      .catch((loadError) => setError(loadError.friendlyMessage || loadError.message))
+      .finally(() => setLoading(false));
+  }, []);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
   const remove = (id) => { removeComparedProduct(id); load(); };
 
   if (loading) return <Loading />;
+  if (error) return <main className="page-shell"><div className="container narrow-page"><LoadError message={error} onRetry={load} /></div></main>;
   if (!products.length) return <main className="page-shell"><div className="container narrow-page"><EmptyState title="Chưa có sản phẩm để so sánh" description="Chọn tối đa 4 điện thoại từ trang chi tiết để xem khác biệt thông số." actionLabel="Xem điện thoại" actionTo="/products" /></div></main>;
 
   return (

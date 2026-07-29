@@ -23,6 +23,14 @@ describe('Product API', () => {
     expect(response.status).toBe(200);
     expect(response.body.data).toHaveLength(1);
     expect(response.body.data[0]).toEqual(expect.objectContaining({ brand: 'Apple', category: 'Dien thoai', brandId: apple.id }));
+
+    const brandResponse = await request(app).get('/api/products?q=Apple');
+    expect(brandResponse.status).toBe(200);
+    expect(brandResponse.body.data.map((item) => item.name)).toEqual(['iPhone 16 Pro Max']);
+
+    const categoryResponse = await request(app).get('/api/products?q=Dien%20thoai');
+    expect(categoryResponse.status).toBe(200);
+    expect(categoryResponse.body.data).toHaveLength(2);
   });
 
   it('lets admins create products, validates taxonomy, and blocks customers', async () => {

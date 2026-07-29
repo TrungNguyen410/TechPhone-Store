@@ -4,6 +4,7 @@ import { accessoryApi } from '../api/accessoryApi';
 import { productApi } from '../api/productApi';
 import EmptyState from '../components/common/EmptyState';
 import Loading from '../components/common/Loading';
+import LoadError from '../components/common/LoadError';
 import ProductGrid from '../components/product/ProductGrid';
 import { STORAGE_KEYS } from '../utils/constants';
 import { storage } from '../utils/storage';
@@ -14,16 +15,21 @@ export default function Favorites() {
   const [catalog, setCatalog] = useState({ products: [], accessories: [] });
   const [wishlist, setWishlist] = useState(() => user?.wishlist || storage.get(STORAGE_KEYS.wishlist, []));
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   const syncWishlist = useCallback(() => {
     setWishlist(user?.wishlist || storage.get(STORAGE_KEYS.wishlist, []));
   }, [user?.wishlist]);
 
-  useEffect(() => {
-    Promise.all([productApi.getAll(), accessoryApi.getAll()])
+  const loadCatalog = useCallback(() => {
+    setLoading(true);
+    setError('');
+    return Promise.all([productApi.getAll(), accessoryApi.getAll()])
       .then(([products, accessories]) => setCatalog({ products, accessories }))
+      .catch((loadError) => setError(loadError.friendlyMessage || loadError.message))
       .finally(() => setLoading(false));
   }, []);
+  useEffect(() => { loadCatalog(); }, [loadCatalog]);
 
   useEffect(() => {
     window.addEventListener('wishlist-updated', syncWishlist);
@@ -31,6 +37,15 @@ export default function Favorites() {
   }, [syncWishlist]);
 
   if (loading) return <Loading />;
+  if (error) {
+    return (
+      <main className="page-shell favorites-page">
+        <div className="container">
+          <LoadError message={error} onRetry={loadCatalog} />
+        </div>
+      </main>
+    );
+  }
 
   const products = catalog.products.filter((item) => wishlist.includes(item.id));
   const accessories = catalog.accessories.filter((item) => wishlist.includes(item.id));

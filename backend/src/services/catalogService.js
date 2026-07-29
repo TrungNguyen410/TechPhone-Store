@@ -21,10 +21,25 @@ class CatalogService {
     return (await repository.findAll({ name }))[0]?.id;
   }
 
+  async taxonomyIdsMatching(repository, keyword) {
+    if (!repository || !keyword) return [];
+    return (await repository.findAll({ name: buildRegex(keyword) })).map((item) => item.id);
+  }
+
   async buildFilter(query = {}) {
     const filter = {};
     const keyword = query.q || query.search || query.keyword;
-    if (keyword) filter.name = buildRegex(keyword);
+    if (keyword) {
+      const [brandIds, categoryIds] = await Promise.all([
+        this.taxonomyIdsMatching(this.brandRepository, keyword),
+        this.taxonomyIdsMatching(this.categoryRepository, keyword),
+      ]);
+      filter.$or = [
+        { name: buildRegex(keyword) },
+        ...(brandIds.length ? [{ brandId: { $in: brandIds } }] : []),
+        ...(categoryIds.length ? [{ categoryId: { $in: categoryIds } }] : []),
+      ];
+    }
     if (query.brand) filter.brandId = (await this.taxonomyId(this.brandRepository, query.brand)) || '__no-match__';
     if (query.category) filter.categoryId = (await this.taxonomyId(this.categoryRepository, query.category)) || '__no-match__';
     if (query.status) filter.status = query.status;

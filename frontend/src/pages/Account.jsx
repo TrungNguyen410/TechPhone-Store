@@ -2,10 +2,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { FiEye, FiLock, FiLogOut, FiPackage, FiRefreshCcw, FiUser, FiXCircle } from 'react-icons/fi';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
+import { accessoryApi } from '../api/accessoryApi';
 import { orderApi } from '../api/orderApi';
+import { productApi } from '../api/productApi';
 import ConfirmModal from '../components/common/ConfirmModal';
 import EmptyState from '../components/common/EmptyState';
 import Loading from '../components/common/Loading';
+import LoadError from '../components/common/LoadError';
 import OrderLookupPanel from '../components/order/OrderLookupPanel';
 import { useAuth } from '../hooks/useAuth';
 import { useCart } from '../hooks/useCart';
@@ -23,8 +26,10 @@ export default function Account() {
   const [passwords, setPasswords] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [orders, setOrders] = useState([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
+  const [ordersError, setOrdersError] = useState('');
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [cancelOrderId, setCancelOrderId] = useState(null);
+  const [reorderingId, setReorderingId] = useState(null);
 
   useEffect(() => {
     const requestedTab = searchParams.get('tab');
@@ -32,7 +37,14 @@ export default function Account() {
   }, [searchParams]);
 
   const loadOrders = useCallback(
-    () => orderApi.getMyOrders(user.id).then(setOrders).finally(() => setLoadingOrders(false)),
+    () => {
+      setLoadingOrders(true);
+      setOrdersError('');
+      return orderApi.getMyOrders(user.id)
+        .then(setOrders)
+        .catch((error) => setOrdersError(error.friendlyMessage || error.message))
+        .finally(() => setLoadingOrders(false));
+    },
     [user.id],
   );
   useEffect(() => { loadOrders(); }, [loadOrders]);
@@ -79,9 +91,44 @@ export default function Account() {
     loadOrders();
     toast.success('Đã hủy đơn hàng');
   };
-  const reorder = (order) => {
-    order.items.forEach((item) => addToCart({ ...item, stock: 99 }, item.quantity, item.type));
-    toast.success('Đã thêm lại sản phẩm vào giỏ hàng');
+  const reorder = async (order) => {
+    if (reorderingId) return;
+    setReorderingId(order.id);
+    try {
+      const resolved = await Promise.all(order.items.map(async (item) => {
+        const type = item.type === 'accessory' || item.accessoryId ? 'accessory' : 'product';
+        const id = type === 'accessory'
+          ? item.accessoryId || item.id
+          : item.productId || item.id;
+        try {
+          const current = type === 'accessory'
+            ? await accessoryApi.getById(id)
+            : await productApi.getById(id);
+          return { current, historical: item, type };
+        } catch {
+          return { current: null, historical: item, type };
+        }
+      }));
+      const unavailable = [];
+      let added = 0;
+      resolved.forEach(({ current, historical, type }) => {
+        if (!current || current.status !== 'active' || Number(current.stock) <= 0) {
+          unavailable.push(historical.name);
+          return;
+        }
+        const quantity = Math.min(Number(historical.quantity) || 1, Number(current.stock));
+        addToCart(current, quantity, type);
+        added += 1;
+      });
+      if (added) toast.success('Đã thêm lại sản phẩm còn hàng vào giỏ hàng');
+      if (unavailable.length) {
+        toast.error(`Không thể thêm: ${unavailable.join(', ')}`);
+      }
+    } catch (error) {
+      toast.error(error.friendlyMessage || error.message);
+    } finally {
+      setReorderingId(null);
+    }
   };
 
   return (
@@ -113,7 +160,9 @@ export default function Account() {
               <div>
                 <div className="content-heading"><h2>Đơn hàng của tôi</h2><p>Theo dõi trạng thái và xem lại lịch sử mua sắm.</p></div>
                 <OrderLookupPanel initialPhone={user.phone} />
-                {loadingOrders ? <Loading /> : orders.length === 0 ? <EmptyState title="Bạn chưa có đơn hàng" actionLabel="Mua sắm ngay" actionTo="/products" /> : (
+                {loadingOrders ? <Loading /> : ordersError ? (
+                  <LoadError message={ordersError} onRetry={loadOrders} />
+                ) : orders.length === 0 ? <EmptyState title="Bạn chưa có đơn hàng" actionLabel="Mua sắm ngay" actionTo="/products" /> : (
                   <div className="account-orders">
                     {orders.map((order) => {
                       const status = getOrderStatus(order.status);
@@ -121,7 +170,7 @@ export default function Account() {
                         <article key={order.id}>
                           <div className="order-card-head"><span><small>Mã đơn</small><strong>{order.orderNumber}</strong></span><span><small>Ngày đặt</small><strong>{formatDate(order.createdAt)}</strong></span><span className={`status-badge ${status.className}`}>{status.label}</span></div>
                           <div className="order-preview"><img src={order.items[0].image} alt="" /><div><strong>{order.items[0].name}</strong><small>{order.items.length > 1 ? `và ${order.items.length - 1} sản phẩm khác` : `${order.items[0].quantity} sản phẩm`}</small></div><b>{formatCurrency(order.total)}</b></div>
-                          <div className="order-card-actions"><button onClick={() => setSelectedOrder(order)}><FiEye /> Chi tiết</button><button onClick={() => reorder(order)}><FiRefreshCcw /> Đặt lại</button>{['pending', 'confirmed'].includes(order.status) && <button className="danger" onClick={() => setCancelOrderId(order.id)}><FiXCircle /> Hủy đơn</button>}</div>
+                          <div className="order-card-actions"><button onClick={() => setSelectedOrder(order)}><FiEye /> Chi tiết</button><button disabled={reorderingId === order.id} onClick={() => reorder(order)}><FiRefreshCcw /> {reorderingId === order.id ? 'Đang thêm…' : 'Đặt lại'}</button>{['pending', 'confirmed'].includes(order.status) && <button className="danger" onClick={() => setCancelOrderId(order.id)}><FiXCircle /> Hủy đơn</button>}</div>
                         </article>
                       );
                     })}
