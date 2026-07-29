@@ -3,6 +3,7 @@ import { FiEye, FiEyeOff, FiLock, FiLogIn, FiMail, FiShield } from 'react-icons/
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useAuth } from '../hooks/useAuth';
+import { USE_MOCK } from '../utils/constants';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -48,11 +49,11 @@ export default function Login() {
           <label className="input-with-icon"><span>Mật khẩu</span><div><FiLock /><input type={showPassword ? 'text' : 'password'} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder="Nhập mật khẩu" /><button type="button" onClick={() => setShowPassword(!showPassword)}>{showPassword ? <FiEyeOff /> : <FiEye />}</button></div></label>
           <div className="auth-forgot-link"><Link to="/forgot-password">Quên mật khẩu?</Link></div>
           <button className="btn btn-primary auth-submit" disabled={loading}><FiLogIn /> {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}</button>
-          <div className="mock-accounts">
+          {USE_MOCK && <div className="mock-accounts">
             <strong>Tài khoản dùng thử</strong>
             <button type="button" onClick={() => setForm({ identifier: 'user@gmail.com', password: '123456' })}>Khách hàng: user@gmail.com</button>
             <button type="button" onClick={() => setForm({ identifier: 'admin@gmail.com', password: '123456' })}>Quản trị: admin@gmail.com</button>
-          </div>
+          </div>}
           <p className="auth-switch">Chưa có tài khoản? <Link to="/register">Đăng ký ngay</Link></p>
         </form>
       </div>

@@ -14,6 +14,7 @@ const Setting = require('../models/Setting');
 const User = require('../models/User');
 const Voucher = require('../models/Voucher');
 const VerificationCode = require('../models/VerificationCode');
+const { resolveSeedPassword } = require('../utils/seedCredentials');
 
 const imageFor = (label, color = '2563eb') =>
   `https://placehold.co/800x800/${color}/ffffff?text=${encodeURIComponent(label)}`;
@@ -117,7 +118,7 @@ const run = async () => {
     VerificationCode.deleteMany({}),
   ]);
 
-  const password = await bcrypt.hash('123456', 12);
+  const password = await bcrypt.hash(resolveSeedPassword(), 12);
   await User.insertMany([
     {
       _id: 'user-admin',

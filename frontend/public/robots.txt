@@ -4,4 +4,4 @@ Disallow: /admin
 Disallow: /account
 Disallow: /checkout
 
-Sitemap: https://techphone.vn/sitemap.xml
+Sitemap: http://localhost:5173/sitemap.xml
