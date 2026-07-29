@@ -24,7 +24,14 @@ const emptyProduct = {
   images: [],
 };
 
-export default function ProductFormModal({ open, item, kind = 'product', onClose, onSubmit }) {
+export default function ProductFormModal({
+  open,
+  item,
+  kind = 'product',
+  onClose,
+  onSubmit,
+  saving = false,
+}) {
   const [form, setForm] = useState(emptyProduct);
   const [taxonomies, setTaxonomies] = useState({ brands: [], categories: [] });
 
@@ -49,6 +56,7 @@ export default function ProductFormModal({ open, item, kind = 'product', onClose
   const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
   const submit = (event) => {
     event.preventDefault();
+    if (saving) return;
     if (event.currentTarget.querySelector('[data-uploading="true"]')) {
       toast.error('Vui lòng chờ ảnh tải lên hoàn tất');
       return;
@@ -98,7 +106,7 @@ export default function ProductFormModal({ open, item, kind = 'product', onClose
       <form className="admin-form-modal" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
         <div className="admin-modal-head">
           <div><span>{item ? 'Chỉnh sửa dữ liệu' : 'Tạo dữ liệu mới'}</span><h2>{item ? item.name : kind === 'product' ? 'Thêm sản phẩm' : 'Thêm phụ kiện'}</h2></div>
-          <button type="button" onClick={onClose}><FiX /></button>
+          <button type="button" disabled={saving} onClick={onClose}><FiX /></button>
         </div>
         <div className="form-grid">
           <label className="form-field full"><span>Tên {kind === 'product' ? 'sản phẩm' : 'phụ kiện'} *</span><input required value={form.name} onChange={(event) => update('name', event.target.value)} /></label>
@@ -129,7 +137,12 @@ export default function ProductFormModal({ open, item, kind = 'product', onClose
           />
           <label className="form-field full"><span>Mô tả *</span><textarea required rows="4" value={form.description} onChange={(event) => update('description', event.target.value)} /></label>
         </div>
-        <div className="admin-modal-actions"><button type="button" className="btn btn-light" onClick={onClose}>Hủy</button><button className="btn btn-primary">{item ? 'Lưu thay đổi' : 'Thêm mới'}</button></div>
+        <div className="admin-modal-actions">
+          <button type="button" className="btn btn-light" disabled={saving} onClick={onClose}>Hủy</button>
+          <button className="btn btn-primary" disabled={saving}>
+            {saving ? 'Đang lưu…' : item ? 'Lưu thay đổi' : 'Thêm mới'}
+          </button>
+        </div>
       </form>
     </div>
   );

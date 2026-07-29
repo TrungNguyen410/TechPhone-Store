@@ -6,7 +6,7 @@ import DataTable from '../../components/admin/DataTable';
 import Loading from '../../components/common/Loading';
 import { ORDER_STATUSES, PAYMENT_METHODS } from '../../utils/constants';
 import { formatCurrency, formatDate } from '../../utils/formatCurrency';
-import { getOrderStatus } from '../../utils/orderStatus';
+import { getNextOrderStatuses, getOrderStatus } from '../../utils/orderStatus';
 
 const paymentMethodLabel = (value) => PAYMENT_METHODS.find((method) => method.value === value)?.label || value;
 
@@ -22,6 +22,7 @@ export default function OrderManagement() {
     estimatedDelivery: '',
   });
   const [savingTracking, setSavingTracking] = useState(false);
+  const [mutatingOrderId, setMutatingOrderId] = useState(null);
   const load = () => orderApi.getAllAdmin().then(setOrders).finally(() => setLoading(false));
   useEffect(() => { load(); }, []);
 
@@ -30,9 +31,20 @@ export default function OrderManagement() {
     (!statusFilter || order.status === statusFilter)
   ), [orders, search, statusFilter]);
   const updateStatus = async (order, status) => {
-    await orderApi.updateStatus(order.id, status);
-    toast.success(`Đã cập nhật đơn ${order.orderNumber}`);
-    load();
+    if (mutatingOrderId || status === order.status) return;
+    setMutatingOrderId(order.id);
+    try {
+      const updated = await orderApi.updateStatus(order.id, status);
+      setOrders((current) => current.map((item) => (
+        item.id === order.id ? updated : item
+      )));
+      if (selectedOrder?.id === order.id) setSelectedOrder(updated);
+      toast.success(`Đã cập nhật đơn ${order.orderNumber}`);
+    } catch (error) {
+      toast.error(error.friendlyMessage || error.message);
+    } finally {
+      setMutatingOrderId(null);
+    }
   };
   const openOrder = (order) => {
     setSelectedOrder(order);
@@ -66,7 +78,26 @@ export default function OrderManagement() {
     { key: 'items', label: 'Sản phẩm', render: (order) => `${order.items.reduce((sum, item) => sum + item.quantity, 0)} sản phẩm` },
     { key: 'total', label: 'Tổng tiền', render: (order) => <strong>{formatCurrency(order.total)}</strong> },
     { key: 'paymentMethod', label: 'Thanh toán', render: (order) => <span className="payment-method-badge">{paymentMethodLabel(order.paymentMethod)}</span> },
-    { key: 'status', label: 'Trạng thái', render: (order) => <select className={`status-select ${getOrderStatus(order.status).className}`} value={order.status} onChange={(event) => updateStatus(order, event.target.value)}>{ORDER_STATUSES.map((status) => <option value={status} key={status}>{getOrderStatus(status).label}</option>)}</select> },
+    {
+      key: 'status',
+      label: 'Trạng thái',
+      render: (order) => {
+        const choices = [order.status, ...getNextOrderStatuses(order.status)];
+        return (
+          <select
+            aria-label={`Trạng thái đơn ${order.orderNumber}`}
+            className={`status-select ${getOrderStatus(order.status).className}`}
+            value={order.status}
+            disabled={mutatingOrderId === order.id}
+            onChange={(event) => updateStatus(order, event.target.value)}
+          >
+            {choices.map((status) => (
+              <option value={status} key={status}>{getOrderStatus(status).label}</option>
+            ))}
+          </select>
+        );
+      },
+    },
     { key: 'actions', label: '', render: (order) => <button className="table-view-button" aria-label={`Xem đơn ${order.orderNumber}`} onClick={() => openOrder(order)}><FiEye /></button> },
   ];
   if (loading) return <Loading />;

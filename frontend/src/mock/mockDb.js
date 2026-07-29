@@ -2,6 +2,7 @@ import { STORAGE_KEYS } from '../utils/constants';
 import { calculateVoucherDiscount } from '../utils/checkoutPricing';
 import { getShippingQuote } from '../utils/shipping';
 import { storage } from '../utils/storage';
+import { getNextOrderStatuses } from '../utils/orderStatus';
 import { mockAccessories } from './mockAccessories';
 import { mockBanners } from './mockBanners';
 import { mockOrders } from './mockOrders';
@@ -354,6 +355,9 @@ export const mockDb = {
     const orders = read('orders');
     const order = orders.find((item) => item.id === id);
     if (!order) fail('Không tìm thấy đơn hàng', 404);
+    if (status !== order.status && !getNextOrderStatuses(order.status).includes(status)) {
+      fail(`Không thể chuyển đơn từ ${order.status} sang ${status}`, 400);
+    }
     if (status === 'cancelled' && order.status !== 'cancelled') {
       if (['paid', 'refund_required', 'refunded'].includes(order.paymentStatus)) {
         fail('Paid orders cannot be cancelled automatically', 400);

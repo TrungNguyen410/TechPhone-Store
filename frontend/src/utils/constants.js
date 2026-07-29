@@ -32,4 +32,4 @@ export const PAYMENT_METHODS = [
   { value: 'card', label: 'Thẻ/QR qua VNPay' },
 ];
 
-export const ORDER_STATUSES = ['pending', 'confirmed', 'shipping', 'completed', 'cancelled'];
+export const ORDER_STATUSES = ['pending', 'confirmed', 'shipping', 'delivered', 'completed', 'cancelled'];

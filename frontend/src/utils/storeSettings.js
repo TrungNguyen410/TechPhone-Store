@@ -15,12 +15,29 @@ export const DEFAULT_STORE_SETTINGS = {
 
 export const STORE_SETTINGS_EVENT = 'store-settings-updated';
 
+export const normalizeSettings = (settings) => {
+  const values = Array.isArray(settings)
+    ? Object.fromEntries(
+        settings
+          .filter((setting) => setting?.key)
+          .map((setting) => [setting.key, setting.value]),
+      )
+    : settings || {};
+  return {
+    ...DEFAULT_STORE_SETTINGS,
+    ...values,
+  };
+};
+
 export const getStoreSettings = () => ({
-  ...DEFAULT_STORE_SETTINGS,
-  ...storage.get(STORAGE_KEYS.mockSettings, {}),
+  ...normalizeSettings(storage.get(STORAGE_KEYS.mockSettings, {})),
 });
 
 export const saveStoreSettings = (settings) => {
-  storage.set(STORAGE_KEYS.mockSettings, settings);
-  window.dispatchEvent(new CustomEvent(STORE_SETTINGS_EVENT, { detail: settings }));
+  const normalized = normalizeSettings(settings);
+  storage.set(STORAGE_KEYS.mockSettings, normalized);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(STORE_SETTINGS_EVENT, { detail: normalized }));
+  }
+  return normalized;
 };
