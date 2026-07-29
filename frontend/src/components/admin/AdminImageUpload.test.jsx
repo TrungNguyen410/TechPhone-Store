@@ -4,7 +4,7 @@ import { uploadApi } from '../../api/uploadApi';
 import AdminImageUpload from './AdminImageUpload';
 
 vi.mock('../../api/uploadApi', () => ({
-  uploadApi: { adminImage: vi.fn() },
+  uploadApi: { adminImage: vi.fn(), supportsDeviceUpload: true },
 }));
 vi.mock('react-toastify', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
@@ -13,6 +13,7 @@ vi.mock('react-toastify', () => ({
 describe('AdminImageUpload', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    uploadApi.supportsDeviceUpload = true;
   });
   afterEach(cleanup);
 
@@ -54,5 +55,26 @@ describe('AdminImageUpload', () => {
       ...existing,
       'http://localhost/uploads/admin/five.png',
     ]);
+  });
+
+  it('accepts only a durable HTTPS URL when device upload is not configured', async () => {
+    uploadApi.supportsDeviceUpload = false;
+    const onChange = vi.fn();
+    render(<AdminImageUpload label="Ảnh sản phẩm" onChange={onChange} />);
+
+    expect(screen.queryByLabelText('Ảnh sản phẩm')).not.toBeInTheDocument();
+    const urlInput = screen.getByRole('textbox', { name: 'URL HTTPS cho Ảnh sản phẩm' });
+
+    fireEvent.change(urlInput, { target: { value: 'http://example.com/phone.png' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Dùng URL ảnh' }));
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent('https://');
+
+    fireEvent.change(urlInput, { target: { value: 'https://cdn.example.com/phone.png' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Dùng URL ảnh' }));
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith(
+      'https://cdn.example.com/phone.png',
+    ));
+    expect(uploadApi.adminImage).not.toHaveBeenCalled();
   });
 });

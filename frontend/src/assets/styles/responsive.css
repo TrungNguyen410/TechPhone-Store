@@ -86,7 +86,7 @@
     place-items: center;
     color: var(--text);
     border-radius: 9px;
-    background: #f1f5f9;
+    background: var(--color-paper-sunken);
     font-size: 21px;
   }
 
@@ -108,7 +108,7 @@
     height: 38px;
     place-items: center;
     border-radius: 9px;
-    background: #f1f5f9;
+    background: var(--color-paper-sunken);
   }
 
   .header-action > svg:first-child {
@@ -117,7 +117,7 @@
 
   .mobile-drawer {
     position: fixed;
-    z-index: 1500;
+    z-index: var(--z-drawer-backdrop);
     top: 0;
     bottom: 0;
     left: 0;
@@ -128,9 +128,9 @@
     width: min(340px, 88vw);
     padding: 18px;
     transform: translateX(-105%);
-    background: #fff;
+    background: var(--color-static-white);
     box-shadow: var(--shadow);
-    transition: transform 0.25s ease;
+    transition: transform var(--dur-short) var(--ease-out);
   }
 
   .mobile-drawer.open {
@@ -139,10 +139,10 @@
 
   .drawer-overlay {
     position: fixed;
-    z-index: 1400;
+    z-index: var(--z-drawer-underlay);
     inset: 0;
     display: block;
-    background: rgba(15, 23, 42, 0.55);
+    background: var(--color-overlay-ink-55);
   }
 
   .mobile-drawer-header {
@@ -160,7 +160,7 @@
     place-items: center;
     color: var(--muted);
     border-radius: 9px;
-    background: #f1f5f9;
+    background: var(--color-paper-sunken);
     font-size: 20px;
   }
 
@@ -183,7 +183,7 @@
 
   .mobile-search button {
     width: 43px;
-    color: #fff;
+    color: var(--color-static-white);
     background: var(--primary);
   }
 
@@ -194,8 +194,8 @@
 
   .mobile-drawer nav a {
     padding: 12px 5px;
-    color: #475569;
-    border-bottom: 1px solid #f1f5f9;
+    color: var(--color-ink-muted);
+    border-bottom: 1px solid var(--color-paper-sunken);
     font-size: 13px;
     font-weight: 700;
   }
@@ -223,7 +223,7 @@
 
   .filter-mobile-wrap {
     position: fixed;
-    z-index: 1600;
+    z-index: var(--z-drawer);
     top: 0;
     bottom: 0;
     left: 0;
@@ -231,8 +231,8 @@
     padding: 50px 16px 16px;
     overflow-y: auto;
     transform: translateX(-105%);
-    background: #fff;
-    transition: 0.25s;
+    background: var(--color-static-white);
+    transition: transform var(--dur-short) var(--ease-out);
   }
 
   .filter-mobile-wrap.open {
@@ -254,7 +254,7 @@
     height: 32px;
     place-items: center;
     border-radius: 8px;
-    background: #f1f5f9;
+    background: var(--color-paper-sunken);
   }
 
   .mobile-filter-button {
@@ -264,7 +264,7 @@
     gap: 6px;
     padding: 0 13px;
     color: var(--primary);
-    border: 1px solid #bfdbfe;
+    border: 1px solid var(--color-cobalt-rule);
     border-radius: 10px;
     background: var(--primary-soft);
     font-size: 12px;
@@ -317,7 +317,7 @@
   }
 
   .auth-panel {
-    min-height: 100vh;
+    min-height: 100dvh;
     padding: 95px 24px 45px;
   }
 
@@ -358,10 +358,10 @@
   }
 
   .admin-sidebar {
-    z-index: 1600;
+    z-index: var(--z-drawer);
     width: 252px;
     transform: translateX(-105%);
-    transition: transform 0.25s;
+    transition: transform var(--dur-short) var(--ease-out);
   }
 
   .admin-sidebar.open {
@@ -370,10 +370,10 @@
 
   .admin-sidebar-overlay {
     position: fixed;
-    z-index: 1500;
+    z-index: var(--z-drawer-backdrop);
     inset: 0;
     display: block;
-    background: rgba(15, 23, 42, 0.5);
+    background: var(--color-overlay-ink-50);
   }
 
   .admin-brand > button,
@@ -553,7 +553,7 @@
 
   .admin-content {
     padding: 20px 16px 40px;
-    overflow-x: hidden;
+    overflow-x: clip;
   }
 
   .admin-profile span {

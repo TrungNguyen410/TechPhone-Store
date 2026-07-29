@@ -15,7 +15,7 @@ button,
 input,
 select,
 textarea {
-  font-family: inherit;
+  font-family: var(--font-body);
 }
 
 h1,

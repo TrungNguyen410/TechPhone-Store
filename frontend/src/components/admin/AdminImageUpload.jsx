@@ -15,7 +15,10 @@ export default function AdminImageUpload({
   maxImages = 5,
 }) {
   const inputId = useId();
+  const urlInputId = useId();
   const [uploading, setUploading] = useState(false);
+  const [urlDraft, setUrlDraft] = useState('');
+  const [urlError, setUrlError] = useState('');
   const images = multiple
     ? [...new Set((Array.isArray(value) ? value : [value]).filter(Boolean))].slice(0, maxImages)
     : [];
@@ -70,6 +73,26 @@ export default function AdminImageUpload({
   };
 
   const hasValue = multiple ? images.length > 0 : Boolean(value);
+  const useExternalUrl = !uploadApi.supportsDeviceUpload;
+
+  const applyExternalUrl = () => {
+    const candidate = urlDraft.trim();
+    try {
+      const parsed = new URL(candidate);
+      if (parsed.protocol !== 'https:') throw new Error();
+    } catch {
+      setUrlError('URL ảnh phải hợp lệ và bắt đầu bằng https://');
+      return;
+    }
+
+    if (multiple && images.length >= maxImages) {
+      setUrlError(`Chỉ được chọn tối đa ${maxImages} ảnh`);
+      return;
+    }
+    onChange(multiple ? [...images, candidate].slice(0, maxImages) : candidate);
+    setUrlDraft('');
+    setUrlError('');
+  };
 
   return (
     <div className="form-field full admin-image-field" data-uploading={uploading}>
@@ -102,23 +125,52 @@ export default function AdminImageUpload({
           </div>
         )}
         <div className="admin-image-actions">
-          <label htmlFor={inputId} className="btn btn-light">
-            <FiUploadCloud />
-            {uploading
-              ? 'Đang tải ảnh...'
-              : multiple
-                ? `Thêm ảnh (${images.length}/${maxImages})`
-                : value ? 'Chọn ảnh khác' : 'Chọn ảnh từ máy'}
-          </label>
-          <input
-            id={inputId}
-            type="file"
-            accept=".jpg,.jpeg,.png,.webp,.gif,image/jpeg,image/png,image/webp,image/gif"
-            aria-label={label}
-            multiple={multiple}
-            disabled={uploading || (multiple && images.length >= maxImages)}
-            onChange={selectImage}
-          />
+          {useExternalUrl ? (
+            <div className="admin-image-url-input">
+              <label htmlFor={urlInputId}>URL HTTPS cho {label}</label>
+              <div>
+                <input
+                  id={urlInputId}
+                  type="url"
+                  inputMode="url"
+                  placeholder="https://cdn.example.com/image.jpg"
+                  value={urlDraft}
+                  required={required && !hasValue}
+                  aria-invalid={Boolean(urlError)}
+                  aria-describedby={urlError ? `${urlInputId}-error` : undefined}
+                  onChange={(event) => {
+                    setUrlDraft(event.target.value);
+                    setUrlError('');
+                  }}
+                />
+                <button type="button" className="btn btn-light" onClick={applyExternalUrl}>
+                  Dùng URL ảnh
+                </button>
+              </div>
+              {urlError && <small id={`${urlInputId}-error`} role="alert">{urlError}</small>}
+              <small>Chưa cấu hình Cloudinary nên ảnh phải dùng một URL HTTPS công khai, lâu dài.</small>
+            </div>
+          ) : (
+            <>
+              <label htmlFor={inputId} className="btn btn-light">
+                <FiUploadCloud />
+                {uploading
+                  ? 'Đang tải ảnh...'
+                  : multiple
+                    ? `Thêm ảnh (${images.length}/${maxImages})`
+                    : value ? 'Chọn ảnh khác' : 'Chọn ảnh từ máy'}
+              </label>
+              <input
+                id={inputId}
+                type="file"
+                accept=".jpg,.jpeg,.png,.webp,.gif,image/jpeg,image/png,image/webp,image/gif"
+                aria-label={label}
+                multiple={multiple}
+                disabled={uploading || (multiple && images.length >= maxImages)}
+                onChange={selectImage}
+              />
+            </>
+          )}
           {!multiple && value && (
             <button
               type="button"
@@ -129,11 +181,13 @@ export default function AdminImageUpload({
               <FiTrash2 /> Xóa ảnh
             </button>
           )}
-          <small>
-            {multiple
-              ? `Tối đa ${maxImages} ảnh · ảnh đầu tiên là ảnh đại diện · mỗi ảnh tối đa 5MB`
-              : 'JPG, PNG, WEBP hoặc GIF · tối đa 5MB'}
-          </small>
+          {!useExternalUrl && (
+            <small>
+              {multiple
+                ? `Tối đa ${maxImages} ảnh · ảnh đầu tiên là ảnh đại diện · mỗi ảnh tối đa 5MB`
+                : 'JPG, PNG, WEBP hoặc GIF · tối đa 5MB'}
+            </small>
+          )}
         </div>
       </div>
     </div>
