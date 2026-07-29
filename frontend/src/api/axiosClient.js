@@ -1,6 +1,10 @@
 import axios from 'axios';
 import { API_URL, STORAGE_KEYS } from '../utils/constants';
-import { clearAuthSession, persistAuthSession } from '../utils/authSession';
+import {
+  clearAuthSession,
+  getAuthSessionRevision,
+  persistAuthSession,
+} from '../utils/authSession';
 import { storage } from '../utils/storage';
 import { authApi } from './authApi';
 
@@ -12,6 +16,11 @@ const axiosClient = axios.create({
 
 let refreshPromise = null;
 
+const refreshCancelled = () => Object.assign(
+  new Error('Session refresh was cancelled'),
+  { code: 'AUTH_REFRESH_CANCELLED' },
+);
+
 const isRefreshRequest = (config) => {
   try {
     return new URL(config?.url || '', API_URL).pathname.endsWith('/auth/refresh');
@@ -21,16 +30,24 @@ const isRefreshRequest = (config) => {
 };
 
 const redirectToLogin = () => {
-  if (window.location.pathname.includes('/login')) return;
+  const currentPath = window.location.pathname.replace(/\/+$/, '') || '/';
+  if (currentPath === '/login') return;
   const intended = `${window.location.pathname}${window.location.search}${window.location.hash}`;
   window.location.assign(`/login?redirect=${encodeURIComponent(intended)}`);
 };
 
 const refreshSessionOnce = (refreshToken) => {
   if (!refreshPromise) {
+    const sessionRevision = getAuthSessionRevision();
     refreshPromise = authApi.refresh(refreshToken)
-      .then(persistAuthSession)
+      .then((session) => {
+        const persistedSession = persistAuthSession(session, sessionRevision);
+        if (!persistedSession) throw refreshCancelled();
+        return persistedSession;
+      })
       .catch((error) => {
+        if (error.code === 'AUTH_REFRESH_CANCELLED') throw error;
+        if (getAuthSessionRevision() !== sessionRevision) throw refreshCancelled();
         clearAuthSession();
         redirectToLogin();
         throw error;
@@ -69,7 +86,13 @@ axiosClient.interceptors.response.use(
     const status = error.response?.status;
     const isAuthRefreshRequest = isRefreshRequest(originalRequest);
 
-    if (status === 401 && !originalRequest._retry && refreshToken && !isAuthRefreshRequest) {
+    if (
+      status === 401
+      && !originalRequest._retry
+      && !originalRequest.skipAuthRefresh
+      && refreshToken
+      && !isAuthRefreshRequest
+    ) {
       originalRequest._retry = true;
       try {
         const session = await refreshSessionOnce(refreshToken);
@@ -81,7 +104,13 @@ axiosClient.interceptors.response.use(
       }
     }
 
-    if (status === 401 && !originalRequest._retry && !refreshToken && !isAuthRefreshRequest) {
+    if (
+      status === 401
+      && !originalRequest._retry
+      && !originalRequest.skipAuthRefresh
+      && !refreshToken
+      && !isAuthRefreshRequest
+    ) {
       clearAuthSession();
       redirectToLogin();
     }

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { authApi } from './authApi';
 import axiosClient from './axiosClient';
-import { persistAuthSession } from '../utils/authSession';
+import { clearAuthSession, persistAuthSession } from '../utils/authSession';
 import { STORAGE_KEYS } from '../utils/constants';
 import { storage } from '../utils/storage';
 
@@ -136,6 +136,32 @@ describe('axiosClient session refresh', () => {
     );
   });
 
+  it('redirects from paths that merely contain the login route name', async () => {
+    persistAuthSession({
+      token: 'expired-access',
+      refreshToken: 'invalid-refresh',
+      user: { id: 'u1' },
+    });
+    const assign = vi.fn();
+    vi.stubGlobal('window', {
+      location: {
+        assign,
+        hash: '',
+        pathname: '/products/login-help',
+        search: '?topic=session',
+      },
+    });
+    axiosClient.defaults.adapter = (config) => rejectUnauthorized(config);
+
+    await expect(axiosClient.get('/orders')).rejects.toMatchObject({
+      friendlyMessage: 'expired',
+    });
+
+    expect(assign).toHaveBeenCalledWith(
+      '/login?redirect=%2Fproducts%2Flogin-help%3Ftopic%3Dsession',
+    );
+  });
+
   it('does not try to refresh a rejected refresh request again', async () => {
     persistAuthSession({
       token: 'expired-access',
@@ -152,6 +178,194 @@ describe('axiosClient session refresh', () => {
       friendlyMessage: 'expired',
     });
     expect(refreshRequests).toBe(1);
+  });
+
+  it('does not refresh or overwrite a stale session after a public login 401', async () => {
+    persistAuthSession({
+      token: 'stale-access',
+      refreshToken: 'stale-refresh',
+      user: { id: 'old-user' },
+    });
+    let refreshRequests = 0;
+
+    axiosClient.defaults.adapter = (config) => {
+      if (config.url === '/auth/refresh') {
+        refreshRequests += 1;
+        return Promise.resolve(responseFor(config, {
+          token: 'rotated-access',
+          refreshToken: 'rotated-refresh',
+          user: { id: 'old-user' },
+        }));
+      }
+      return rejectUnauthorized(config);
+    };
+
+    await expect(authApi.login({
+      identifier: 'new-user@test.com',
+      password: 'wrong-password',
+    })).rejects.toMatchObject({ friendlyMessage: 'expired' });
+
+    expect(refreshRequests).toBe(0);
+    expect(storage.get(STORAGE_KEYS.token)).toBe('stale-access');
+    expect(storage.get(STORAGE_KEYS.refreshToken)).toBe('stale-refresh');
+    expect(storage.get(STORAGE_KEYS.currentUser)).toEqual({ id: 'old-user' });
+  });
+
+  it('opts every public auth request out of automatic refresh', async () => {
+    const requests = [];
+    axiosClient.defaults.adapter = (config) => {
+      requests.push({ skipAuthRefresh: config.skipAuthRefresh, url: config.url });
+      return Promise.resolve(responseFor(config, {
+        token: 'access',
+        refreshToken: 'refresh',
+        user: { id: 'u1' },
+      }));
+    };
+
+    await authApi.login({ identifier: 'user@test.com', password: '123456' });
+    await authApi.requestRegistrationOtp({
+      email: 'user@test.com',
+      fullName: 'Test User',
+      password: '123456',
+      phone: '0912345678',
+    });
+    await authApi.verifyRegistrationOtp({ email: 'user@test.com', otp: '123456' });
+    await authApi.requestPasswordReset({ identifier: 'user@test.com', channel: 'email' });
+    await authApi.resetPassword({
+      channel: 'email',
+      identifier: 'user@test.com',
+      newPassword: 'new-password',
+      otp: '123456',
+    });
+    await authApi.refresh('refresh');
+    await authApi.logout('refresh');
+
+    expect(requests).toEqual([
+      { skipAuthRefresh: true, url: '/auth/login' },
+      { skipAuthRefresh: true, url: '/auth/register/request-otp' },
+      { skipAuthRefresh: true, url: '/auth/register/verify-otp' },
+      { skipAuthRefresh: true, url: '/auth/forgot-password/request-otp' },
+      { skipAuthRefresh: true, url: '/auth/forgot-password/reset' },
+      { skipAuthRefresh: true, url: '/auth/refresh' },
+      { skipAuthRefresh: true, url: '/auth/logout' },
+    ]);
+  });
+
+  it('still refreshes protected auth requests', async () => {
+    persistAuthSession({
+      token: 'expired-access',
+      refreshToken: 'refresh',
+      user: { id: 'u1' },
+    });
+    let refreshRequests = 0;
+
+    axiosClient.defaults.adapter = (config) => {
+      if (config.url === '/auth/refresh') {
+        refreshRequests += 1;
+        return Promise.resolve(responseFor(config, {
+          token: 'new-access',
+          refreshToken: 'new-refresh',
+          user: { id: 'u1' },
+        }));
+      }
+      if (config.headers.Authorization !== 'Bearer new-access') return rejectUnauthorized(config);
+      return Promise.resolve(responseFor(config, { id: 'u1' }));
+    };
+
+    await expect(authApi.me({ id: 'u1' })).resolves.toEqual({ id: 'u1' });
+    expect(refreshRequests).toBe(1);
+  });
+
+  it('does not restore or redirect a session cleared while refresh is pending', async () => {
+    persistAuthSession({
+      token: 'expired-access',
+      refreshToken: 'refresh',
+      user: { id: 'u1' },
+    });
+    const assign = vi.fn();
+    vi.stubGlobal('window', {
+      location: {
+        assign,
+        hash: '',
+        pathname: '/account',
+        search: '',
+      },
+    });
+    let refreshRequests = 0;
+    let releaseRefresh;
+    const refreshGate = new Promise((resolve) => {
+      releaseRefresh = resolve;
+    });
+
+    axiosClient.defaults.adapter = async (config) => {
+      if (config.url === '/auth/refresh') {
+        refreshRequests += 1;
+        await refreshGate;
+        return responseFor(config, {
+          token: 'new-access',
+          refreshToken: 'new-refresh',
+          user: { id: 'u1' },
+        });
+      }
+      if (config.headers.Authorization !== 'Bearer new-access') return rejectUnauthorized(config);
+      return responseFor(config, { ok: true });
+    };
+
+    const pendingRequest = axiosClient.get('/orders');
+    await vi.waitFor(() => expect(refreshRequests).toBe(1));
+    clearAuthSession();
+    releaseRefresh();
+
+    await expect(pendingRequest).rejects.toMatchObject({
+      code: 'AUTH_REFRESH_CANCELLED',
+    });
+    expect(storage.get(STORAGE_KEYS.token)).toBeNull();
+    expect(storage.get(STORAGE_KEYS.refreshToken)).toBeNull();
+    expect(storage.get(STORAGE_KEYS.currentUser)).toBeNull();
+    expect(assign).not.toHaveBeenCalled();
+  });
+
+  it('does not redirect when a pending refresh fails after the session was cleared', async () => {
+    persistAuthSession({
+      token: 'expired-access',
+      refreshToken: 'refresh',
+      user: { id: 'u1' },
+    });
+    const assign = vi.fn();
+    vi.stubGlobal('window', {
+      location: {
+        assign,
+        hash: '',
+        pathname: '/account',
+        search: '',
+      },
+    });
+    let refreshRequests = 0;
+    let releaseRefresh;
+    const refreshGate = new Promise((resolve) => {
+      releaseRefresh = resolve;
+    });
+
+    axiosClient.defaults.adapter = async (config) => {
+      if (config.url === '/auth/refresh') {
+        refreshRequests += 1;
+        await refreshGate;
+      }
+      return rejectUnauthorized(config);
+    };
+
+    const pendingRequest = axiosClient.get('/orders');
+    await vi.waitFor(() => expect(refreshRequests).toBe(1));
+    clearAuthSession();
+    releaseRefresh();
+
+    await expect(pendingRequest).rejects.toMatchObject({
+      code: 'AUTH_REFRESH_CANCELLED',
+    });
+    expect(storage.get(STORAGE_KEYS.token)).toBeNull();
+    expect(storage.get(STORAGE_KEYS.refreshToken)).toBeNull();
+    expect(storage.get(STORAGE_KEYS.currentUser)).toBeNull();
+    expect(assign).not.toHaveBeenCalled();
   });
 
   it('sends the refresh token when revoking the backend session', async () => {
