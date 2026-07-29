@@ -1,25 +1,39 @@
 const mockConnectDB = jest.fn().mockResolvedValue();
 const mockDisconnectDB = jest.fn().mockResolvedValue();
 const mockHash = jest.fn().mockResolvedValue('hashed-password');
-const mockAccessory = { deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() };
-const mockUser = { deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() };
+const mockModels = {
+  accessory: { deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() },
+  banner: { deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() },
+  brand: { deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() },
+  category: { deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() },
+  contact: { deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() },
+  order: { deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() },
+  orderItem: { deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() },
+  product: { deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() },
+  refreshToken: { deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() },
+  review: { deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() },
+  setting: { deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() },
+  user: { deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() },
+  voucher: { deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() },
+  verificationCode: { deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() },
+};
 
 jest.mock('../src/config/database', () => ({ connectDB: mockConnectDB, disconnectDB: mockDisconnectDB }));
 jest.mock('bcrypt', () => ({ hash: mockHash }));
-jest.mock('../src/models/Accessory', () => mockAccessory);
-jest.mock('../src/models/Banner', () => ({ deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() }));
-jest.mock('../src/models/Brand', () => ({ deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() }));
-jest.mock('../src/models/Category', () => ({ deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() }));
-jest.mock('../src/models/Contact', () => ({ deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() }));
-jest.mock('../src/models/Order', () => ({ deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() }));
-jest.mock('../src/models/OrderItem', () => ({ deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() }));
-jest.mock('../src/models/Product', () => ({ deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() }));
-jest.mock('../src/models/RefreshToken', () => ({ deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() }));
-jest.mock('../src/models/Review', () => ({ deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() }));
-jest.mock('../src/models/Setting', () => ({ deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() }));
-jest.mock('../src/models/User', () => mockUser);
-jest.mock('../src/models/Voucher', () => ({ deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() }));
-jest.mock('../src/models/VerificationCode', () => ({ deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() }));
+jest.mock('../src/models/Accessory', () => mockModels.accessory);
+jest.mock('../src/models/Banner', () => mockModels.banner);
+jest.mock('../src/models/Brand', () => mockModels.brand);
+jest.mock('../src/models/Category', () => mockModels.category);
+jest.mock('../src/models/Contact', () => mockModels.contact);
+jest.mock('../src/models/Order', () => mockModels.order);
+jest.mock('../src/models/OrderItem', () => mockModels.orderItem);
+jest.mock('../src/models/Product', () => mockModels.product);
+jest.mock('../src/models/RefreshToken', () => mockModels.refreshToken);
+jest.mock('../src/models/Review', () => mockModels.review);
+jest.mock('../src/models/Setting', () => mockModels.setting);
+jest.mock('../src/models/User', () => mockModels.user);
+jest.mock('../src/models/Voucher', () => mockModels.voucher);
+jest.mock('../src/models/VerificationCode', () => mockModels.verificationCode);
 
 describe('seed startup safety', () => {
   const originalNodeEnv = process.env.NODE_ENV;
@@ -49,8 +63,10 @@ describe('seed startup safety', () => {
     await expect(exited).resolves.toBe(1);
 
     expect(mockConnectDB).not.toHaveBeenCalled();
-    expect(mockAccessory.deleteMany).not.toHaveBeenCalled();
-    expect(mockUser.insertMany).not.toHaveBeenCalled();
+    for (const model of Object.values(mockModels)) {
+      expect(model.deleteMany).not.toHaveBeenCalled();
+      expect(model.insertMany).not.toHaveBeenCalled();
+    }
     expect(mockHash).not.toHaveBeenCalled();
   });
 });
