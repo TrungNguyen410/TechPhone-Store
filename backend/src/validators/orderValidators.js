@@ -28,7 +28,20 @@ const create = [
 ];
 
 const update = [
-  body('status').optional().isIn(statuses).withMessage('status is invalid'),
+  body().custom((payload) => {
+    const safeFields = [
+      'customer',
+      'note',
+      'shippingProvider',
+      'trackingNumber',
+      'estimatedDelivery',
+    ];
+    const fields = Object.keys(payload || {});
+    if (!fields.length || fields.some((field) => !safeFields.includes(field))) {
+      throw new Error('only customer and shipping details can be updated here');
+    }
+    return true;
+  }),
   body('customer').optional().isObject().withMessage('customer must be an object'),
   body('note').optional().trim(),
   body('shippingProvider').optional().trim().isLength({ max: 100 }),

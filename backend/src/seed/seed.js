@@ -6,6 +6,7 @@ const Brand = require('../models/Brand');
 const Category = require('../models/Category');
 const Contact = require('../models/Contact');
 const Order = require('../models/Order');
+const OrderCounter = require('../models/OrderCounter');
 const OrderItem = require('../models/OrderItem');
 const Product = require('../models/Product');
 const RefreshToken = require('../models/RefreshToken');
@@ -109,6 +110,7 @@ const run = async () => {
     Category.deleteMany({}),
     Contact.deleteMany({}),
     Order.deleteMany({}),
+    OrderCounter.deleteMany({}),
     OrderItem.deleteMany({}),
     Product.deleteMany({}),
     RefreshToken.deleteMany({}),

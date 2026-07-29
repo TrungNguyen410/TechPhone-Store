@@ -1,5 +1,6 @@
 const BaseRepository = require('./baseRepository');
 const Order = require('../models/Order');
+const OrderCounter = require('../models/OrderCounter');
 
 class OrderRepository extends BaseRepository {
   constructor() {
@@ -31,6 +32,20 @@ class OrderRepository extends BaseRepository {
     await this.ensureIndexes();
     const order = await Order.findOne({ isDeleted: false, idempotencyKey }).session(session || null);
     return order?.toJSON() || null;
+  }
+
+  async nextSequence(datePart, session) {
+    const counter = await OrderCounter.findOneAndUpdate(
+      { _id: datePart },
+      { $inc: { value: 1 } },
+      {
+        upsert: true,
+        returnDocument: 'after',
+        setDefaultsOnInsert: true,
+        session,
+      },
+    );
+    return counter.value;
   }
 
   async transitionToCancelled(id, statuses, session) {

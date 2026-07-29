@@ -355,6 +355,12 @@ export const mockDb = {
     const order = orders.find((item) => item.id === id);
     if (!order) fail('Không tìm thấy đơn hàng', 404);
     if (status === 'cancelled' && order.status !== 'cancelled') {
+      if (['paid', 'refund_required', 'refunded'].includes(order.paymentStatus)) {
+        fail('Paid orders cannot be cancelled automatically', 400);
+      }
+      if (['shipping', 'delivered', 'completed'].includes(order.status)) {
+        fail('This order can no longer be cancelled', 400);
+      }
       const products = read('products');
       const accessories = read('accessories');
       (order.items || []).forEach((item) => {

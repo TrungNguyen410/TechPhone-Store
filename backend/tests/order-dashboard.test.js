@@ -3,12 +3,15 @@ const jwt = require('jsonwebtoken');
 const Order = require('../src/models/Order');
 const OrderItem = require('../src/models/OrderItem');
 const Product = require('../src/models/Product');
+const Accessory = require('../src/models/Accessory');
 const Brand = require('../src/models/Brand');
 const Category = require('../src/models/Category');
 const Voucher = require('../src/models/Voucher');
 const env = require('../src/config/env');
 const orderItemRepository = require('../src/repositories/orderItemRepository');
 const orderRepository = require('../src/repositories/orderRepository');
+const accessoryRepository = require('../src/repositories/accessoryRepository');
+const productRepository = require('../src/repositories/productRepository');
 const voucherService = require('../src/services/voucherService');
 const { app, createUser, login } = require('./helpers');
 
@@ -634,6 +637,190 @@ describe('Orders and dashboard APIs', () => {
 
     expect((await Product.findById(product.id)).stock).toBe(3);
     expect((await Voucher.findOne({ code: 'RELEASEFAIL' })).used).toBe(0);
+  });
+
+  it('processes mixed product and accessory transaction operations sequentially', async () => {
+    await createUser({ email: 'mixed@test.com', phone: '0904141414' });
+    const token = await login('mixed@test.com');
+    const taxonomy = await seedTaxonomy();
+    const product = await Product.create({
+      _id: 'mixed-phone',
+      name: 'Mixed Phone',
+      ...taxonomy,
+      price: 2000000,
+      stock: 3,
+      status: 'active',
+    });
+    const accessory = await Accessory.create({
+      _id: 'mixed-accessory',
+      name: 'Mixed Accessory',
+      ...taxonomy,
+      price: 500000,
+      stock: 3,
+      status: 'active',
+    });
+    let activeReads = 0;
+    let maxConcurrentReads = 0;
+    const originalProductFind = productRepository.findById.bind(productRepository);
+    const originalAccessoryFind = accessoryRepository.findById.bind(accessoryRepository);
+    const trackRead = (original) => async (...args) => {
+      activeReads += 1;
+      maxConcurrentReads = Math.max(maxConcurrentReads, activeReads);
+      await new Promise((resolve) => setImmediate(resolve));
+      try {
+        return await original(...args);
+      } finally {
+        activeReads -= 1;
+      }
+    };
+    const productFindSpy = jest
+      .spyOn(productRepository, 'findById')
+      .mockImplementation(trackRead(originalProductFind));
+    const accessoryFindSpy = jest
+      .spyOn(accessoryRepository, 'findById')
+      .mockImplementation(trackRead(originalAccessoryFind));
+
+    let created;
+    try {
+      created = await request(app)
+        .post('/api/orders')
+        .set('Authorization', `Bearer ${token}`)
+        .set('Idempotency-Key', 'mixed-transaction')
+        .send({
+          items: [
+            { productId: product.id, type: 'product', quantity: 1 },
+            { accessoryId: accessory.id, type: 'accessory', quantity: 1 },
+          ],
+          customer: {
+            fullName: 'Mixed Customer',
+            email: 'mixed@test.com',
+            phone: '0904141414',
+            address: 'Test address',
+          },
+        });
+    } finally {
+      productFindSpy.mockRestore();
+      accessoryFindSpy.mockRestore();
+    }
+
+    expect(created.status).toBe(201);
+    expect(maxConcurrentReads).toBe(1);
+    expect(created.body.data.items).toHaveLength(2);
+
+    let activeRestores = 0;
+    let maxConcurrentRestores = 0;
+    const originalProductUpdate = Product.updateOne.bind(Product);
+    const originalAccessoryUpdate = Accessory.updateOne.bind(Accessory);
+    const trackRestore = (original) => async (...args) => {
+      activeRestores += 1;
+      maxConcurrentRestores = Math.max(maxConcurrentRestores, activeRestores);
+      await new Promise((resolve) => setImmediate(resolve));
+      try {
+        return await original(...args);
+      } finally {
+        activeRestores -= 1;
+      }
+    };
+    const productUpdateSpy = jest
+      .spyOn(Product, 'updateOne')
+      .mockImplementation(trackRestore(originalProductUpdate));
+    const accessoryUpdateSpy = jest
+      .spyOn(Accessory, 'updateOne')
+      .mockImplementation(trackRestore(originalAccessoryUpdate));
+
+    try {
+      await request(app)
+        .put(`/api/orders/${created.body.data.id}/cancel`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+    } finally {
+      productUpdateSpy.mockRestore();
+      accessoryUpdateSpy.mockRestore();
+    }
+
+    expect(maxConcurrentRestores).toBe(1);
+    expect((await Product.findById(product.id)).stock).toBe(3);
+    expect((await Accessory.findById(accessory.id)).stock).toBe(3);
+  });
+
+  it('rejects generic admin state mutations while allowing safe shipping edits', async () => {
+    await createUser({ email: 'safe-admin@test.com', phone: '0904242424', role: 'admin' });
+    const adminToken = await login('safe-admin@test.com');
+    const order = await Order.create({
+      orderNumber: 'TP260729SAFE',
+      userId: 'customer-id',
+      status: 'pending',
+      paymentStatus: 'pending',
+      items: [{ id: 'phone-safe', productId: 'phone-safe', name: 'Phone', price: 1000000, quantity: 1 }],
+      subtotal: 1000000,
+      shippingFee: 30000,
+      discount: 0,
+      total: 1030000,
+      customer: {
+        fullName: 'Safe Update Customer',
+        email: 'safe-update@test.com',
+        phone: '0904343434',
+        address: 'Test address',
+      },
+    });
+
+    await request(app)
+      .put(`/api/admin/orders/${order.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'cancelled', paymentStatus: 'paid' })
+      .expect(422);
+
+    const unchanged = await Order.findById(order.id);
+    expect(unchanged.status).toBe('pending');
+    expect(unchanged.paymentStatus).toBe('pending');
+
+    const safe = await request(app)
+      .put(`/api/admin/orders/${order.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ shippingProvider: 'Safe Express', trackingNumber: 'SAFE-001' })
+      .expect(200);
+
+    expect(safe.body.data).toEqual(expect.objectContaining({
+      status: 'pending',
+      paymentStatus: 'pending',
+      shippingProvider: 'Safe Express',
+      trackingNumber: 'SAFE-001',
+    }));
+  });
+
+  it('allocates unique order numbers for concurrent different checkout keys', async () => {
+    const taxonomy = await seedTaxonomy();
+    const product = await Product.create({
+      _id: 'sequence-phone',
+      name: 'Sequence Phone',
+      ...taxonomy,
+      price: 2500000,
+      stock: 4,
+      status: 'active',
+    });
+    const payload = {
+      items: [{ productId: product.id, quantity: 1 }],
+      customer: {
+        fullName: 'Sequence Customer',
+        email: 'sequence@test.com',
+        phone: '0904444444',
+        address: 'Test address',
+      },
+    };
+    const post = (key) => request(app)
+      .post('/api/orders')
+      .set('Idempotency-Key', key)
+      .send(payload);
+
+    const [first, second] = await Promise.all([
+      post('sequence-attempt-1'),
+      post('sequence-attempt-2'),
+    ]);
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
+    expect(second.body.data.orderNumber).not.toBe(first.body.data.orderNumber);
+    expect((await Product.findById(product.id)).stock).toBe(2);
   });
 
   it('enforces valid admin order status transitions', async () => {

@@ -277,4 +277,40 @@ describe('mock checkout invariants', () => {
     );
     expect(storage.get(STORAGE_KEYS.mockVouchers)[0].used).toBe(0);
   });
+
+  it('rejects mock cancellation for paid, shipping, and completed orders', async () => {
+    storage.set(STORAGE_KEYS.mockOrders, [
+      {
+        id: 'paid-order',
+        status: 'confirmed',
+        paymentStatus: 'paid',
+        items: [{ id: 'current-phone', productId: 'current-phone', type: 'product', quantity: 1 }],
+      },
+      {
+        id: 'shipping-order',
+        status: 'shipping',
+        paymentStatus: 'pending',
+        items: [{ id: 'current-phone', productId: 'current-phone', type: 'product', quantity: 1 }],
+      },
+      {
+        id: 'completed-order',
+        status: 'completed',
+        paymentStatus: 'paid',
+        items: [{ id: 'current-phone', productId: 'current-phone', type: 'product', quantity: 1 }],
+      },
+    ]);
+
+    await expect(mockDb.updateOrderStatus('paid-order', 'cancelled')).rejects.toThrow();
+    await expect(mockDb.updateOrderStatus('shipping-order', 'cancelled')).rejects.toThrow();
+    await expect(mockDb.updateOrderStatus('completed-order', 'cancelled')).rejects.toThrow();
+
+    expect(storage.get(STORAGE_KEYS.mockProducts)[0]).toEqual(
+      expect.objectContaining({ stock: 2, sold: 0 }),
+    );
+    expect(storage.get(STORAGE_KEYS.mockOrders)).toEqual([
+      expect.objectContaining({ id: 'paid-order', status: 'confirmed' }),
+      expect.objectContaining({ id: 'shipping-order', status: 'shipping' }),
+      expect.objectContaining({ id: 'completed-order', status: 'completed' }),
+    ]);
+  });
 });

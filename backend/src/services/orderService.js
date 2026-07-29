@@ -17,6 +17,13 @@ const statusTransitions = {
   completed: [],
   cancelled: [],
 };
+const safeUpdateFields = [
+  'customer',
+  'note',
+  'shippingProvider',
+  'trackingNumber',
+  'estimatedDelivery',
+];
 
 class OrderService {
   buildIdempotencyKey(rawKey, user, customer = {}) {
@@ -26,6 +33,54 @@ class OrderService {
       ? `user:${user.id}`
       : `guest:${String(customer.email || '').trim().toLowerCase()}:${String(customer.phone || '').trim()}`;
     return crypto.createHash('sha256').update(`${principal}:${key}`).digest('hex');
+  }
+
+  buildRequestFingerprint(payload = {}) {
+    const customer = payload.customer || {};
+    const items = (payload.items || [])
+      .map((item) => {
+        const type = item.type === 'accessory' || item.accessoryId ? 'accessory' : 'product';
+        const id = type === 'accessory'
+          ? item.accessoryId || item.productId || item.id
+          : item.productId || item.id;
+        return {
+          id: String(id || ''),
+          quantity: Number(item.quantity),
+          type,
+        };
+      })
+      .sort((left, right) => (
+        `${left.type}:${left.id}:${left.quantity}`
+          .localeCompare(`${right.type}:${right.id}:${right.quantity}`)
+      ));
+    const intent = {
+      items,
+      customer: {
+        fullName: String(customer.fullName || '').trim(),
+        email: String(customer.email || '').trim().toLowerCase(),
+        phone: String(customer.phone || '').trim(),
+        address: String(customer.address || '').trim(),
+        province: String(customer.province || '').trim(),
+        district: String(customer.district || '').trim(),
+        ward: String(customer.ward || '').trim(),
+      },
+      paymentMethod: payload.paymentMethod || 'cod',
+      voucherCode: String(payload.voucherCode || '').trim().toUpperCase(),
+      note: String(payload.note || '').trim(),
+    };
+    return crypto.createHash('sha256').update(JSON.stringify(intent)).digest('hex');
+  }
+
+  assertMatchingIntent(existing, requestFingerprint, paymentMethod) {
+    const matches = existing.requestFingerprint
+      ? existing.requestFingerprint === requestFingerprint
+      : existing.paymentMethod === paymentMethod;
+    if (!matches) {
+      throw new AppError(
+        'This idempotency key was already used for a different checkout request',
+        409,
+      );
+    }
   }
 
   shippingQuote(customer = {}, subtotal = 0) {
@@ -43,40 +98,41 @@ class OrderService {
   async generateOrderNumber(session) {
     const now = new Date();
     const datePart = now.toISOString().slice(2, 10).replaceAll('-', '');
-    const count = await orderRepository.count({}, { session });
-    return `TP${datePart}${String(count + 1).padStart(2, '0')}`;
+    const sequence = await orderRepository.nextSequence(datePart, session);
+    return `TP${datePart}${String(sequence).padStart(4, '0')}`;
   }
 
   async normalizeItems(items = [], session) {
-    return Promise.all(
-      items.map(async (item) => {
-        const type = item.type === 'accessory' || item.accessoryId ? 'accessory' : 'product';
-        const itemId = type === 'accessory' ? item.accessoryId || item.productId || item.id : item.productId || item.id;
-        const quantity = Number(item.quantity);
-        const catalogItem =
-          type === 'accessory'
-            ? await accessoryRepository.findById(itemId, { session })
-            : await productRepository.findById(itemId, { session });
+    const normalized = [];
+    for (const item of items) {
+      const type = item.type === 'accessory' || item.accessoryId ? 'accessory' : 'product';
+      const itemId = type === 'accessory'
+        ? item.accessoryId || item.productId || item.id
+        : item.productId || item.id;
+      const quantity = Number(item.quantity);
+      const catalogItem = type === 'accessory'
+        ? await accessoryRepository.findById(itemId, { session })
+        : await productRepository.findById(itemId, { session });
 
-        if (!catalogItem || catalogItem.status !== 'active') {
-          throw new AppError(`${type === 'accessory' ? 'Accessory' : 'Product'} is unavailable`, 400);
-        }
-        if (catalogItem.stock < quantity) {
-          throw new AppError(`${catalogItem.name} does not have enough stock`, 400);
-        }
+      if (!catalogItem || catalogItem.status !== 'active') {
+        throw new AppError(`${type === 'accessory' ? 'Accessory' : 'Product'} is unavailable`, 400);
+      }
+      if (catalogItem.stock < quantity) {
+        throw new AppError(`${catalogItem.name} does not have enough stock`, 400);
+      }
 
-        return {
-          id: catalogItem.id,
-          productId: type === 'product' ? catalogItem.id : null,
-          accessoryId: type === 'accessory' ? catalogItem.id : null,
-          name: catalogItem.name,
-          image: catalogItem.image || '',
-          price: Number(catalogItem.price),
-          quantity,
-          type,
-        };
-      }),
-    );
+      normalized.push({
+        id: catalogItem.id,
+        productId: type === 'product' ? catalogItem.id : null,
+        accessoryId: type === 'accessory' ? catalogItem.id : null,
+        name: catalogItem.name,
+        image: catalogItem.image || '',
+        price: Number(catalogItem.price),
+        quantity,
+        type,
+      });
+    }
+    return normalized;
   }
 
   calculateDiscount(voucher, subtotal, shippingFee) {
@@ -90,15 +146,13 @@ class OrderService {
   }
 
   async rollbackInventory(decrements, session) {
-    await Promise.all(
-      decrements.map(({ Model, id, quantity }) =>
-        Model.updateOne(
-          { _id: id },
-          { $inc: { stock: quantity, sold: -quantity } },
-          { session },
-        ),
-      ),
-    );
+    for (const { Model, id, quantity } of decrements) {
+      await Model.updateOne(
+        { _id: id },
+        { $inc: { stock: quantity, sold: -quantity } },
+        { session },
+      );
+    }
   }
 
   async decrementInventory(items, session) {
@@ -123,21 +177,24 @@ class OrderService {
   }
 
   async restoreInventory(items = [], session) {
-    await Promise.all(
-      items.map((item) => {
-        const type = item.type === 'accessory' || item.accessoryId ? 'accessory' : 'product';
-        const Model = type === 'accessory' ? Accessory : Product;
-        const id = type === 'accessory' ? item.accessoryId || item.id : item.productId || item.id;
-        return Model.updateOne(
-          { _id: id },
-          { $inc: { stock: item.quantity, sold: -item.quantity } },
-          { session },
-        );
-      }),
-    );
+    for (const item of items) {
+      const type = item.type === 'accessory' || item.accessoryId ? 'accessory' : 'product';
+      const Model = type === 'accessory' ? Accessory : Product;
+      const id = type === 'accessory' ? item.accessoryId || item.id : item.productId || item.id;
+      await Model.updateOne(
+        { _id: id },
+        { $inc: { stock: item.quantity, sold: -item.quantity } },
+        { session },
+      );
+    }
   }
 
   async create(payload, user, metadata = {}) {
+    const paymentMethod = payload.paymentMethod || 'cod';
+    const requestFingerprint = this.buildRequestFingerprint({
+      ...payload,
+      paymentMethod,
+    });
     const idempotencyKey = this.buildIdempotencyKey(
       metadata.idempotencyKey,
       user,
@@ -151,7 +208,10 @@ class OrderService {
             idempotencyKey,
             session,
           );
-          if (existing) return existing;
+          if (existing) {
+            this.assertMatchingIntent(existing, requestFingerprint, paymentMethod);
+            return existing;
+          }
         }
 
         const items = await this.normalizeItems(payload.items, session);
@@ -169,6 +229,7 @@ class OrderService {
         return orderRepository.create({
           orderNumber: await this.generateOrderNumber(session),
           idempotencyKey: idempotencyKey || undefined,
+          requestFingerprint,
           userId: user?.id || null,
           items,
           subtotal,
@@ -176,7 +237,7 @@ class OrderService {
           discount,
           total,
           customer: payload.customer,
-          paymentMethod: payload.paymentMethod || 'cod',
+          paymentMethod,
           paymentStatus: 'pending',
           paymentReference: payload.paymentReference || '',
           shippingProvider: 'TechPhone Express',
@@ -190,7 +251,10 @@ class OrderService {
     } catch (error) {
       if (idempotencyKey && error?.code === 11000) {
         const existing = await orderRepository.findByIdempotencyKey(idempotencyKey);
-        if (existing) return existing;
+        if (existing) {
+          this.assertMatchingIntent(existing, requestFingerprint, paymentMethod);
+          return existing;
+        }
       }
       throw error;
     }
@@ -221,7 +285,14 @@ class OrderService {
   }
 
   async update(id, payload) {
-    return orderRepository.update(id, payload);
+    const fields = Object.keys(payload || {});
+    if (!fields.length || fields.some((field) => !safeUpdateFields.includes(field))) {
+      throw new AppError('Only customer and shipping details can be updated here', 422);
+    }
+    const safePayload = Object.fromEntries(
+      fields.map((field) => [field, payload[field]]),
+    );
+    return orderRepository.update(id, safePayload);
   }
 
   async updateStatus(id, status) {

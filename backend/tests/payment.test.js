@@ -233,6 +233,52 @@ describe('VNPay checkout and IPN', () => {
     expect(activeKeyIndex).toEqual(expect.objectContaining({ unique: true, sparse: true }));
   });
 
+  it('rejects reusing an idempotency key with a different payment intent', async () => {
+    const product = await Product.create({
+      name: 'Payment Intent Phone',
+      slug: 'payment-intent-phone',
+      categoryId: 'category-test',
+      brandId: 'brand-test',
+      price: 3200000,
+      stock: 4,
+      status: 'active',
+    });
+    const basePayload = {
+      items: [{ id: product.id, type: 'product', quantity: 1 }],
+      customer,
+    };
+
+    const codFirst = await request(app)
+      .post('/api/orders')
+      .set('Idempotency-Key', 'cod-then-vnpay')
+      .send({ ...basePayload, paymentMethod: 'cod' })
+      .expect(201);
+    await request(app)
+      .post('/api/payments/vnpay/checkout')
+      .set('Idempotency-Key', 'cod-then-vnpay')
+      .send({ ...basePayload, paymentMethod: 'card' })
+      .expect(409);
+
+    expect(await PaymentTransaction.countDocuments()).toBe(0);
+    expect((await Order.findById(codFirst.body.data.id)).paymentMethod).toBe('cod');
+
+    const vnpayFirst = await request(app)
+      .post('/api/payments/vnpay/checkout')
+      .set('Idempotency-Key', 'vnpay-then-cod')
+      .send({ ...basePayload, paymentMethod: 'card' })
+      .expect(201);
+    await request(app)
+      .post('/api/orders')
+      .set('Idempotency-Key', 'vnpay-then-cod')
+      .send({ ...basePayload, paymentMethod: 'cod' })
+      .expect(409);
+
+    expect((await Order.findById(vnpayFirst.body.data.order.id)).paymentMethod).toBe('card');
+    expect(await Order.countDocuments()).toBe(2);
+    expect(await PaymentTransaction.countDocuments()).toBe(1);
+    expect((await Product.findById(product.id)).stock).toBe(2);
+  });
+
   it('issues one fresh attempt when concurrent retries follow a failed transaction', async () => {
     const product = await Product.create({
       name: 'Failed Retry Phone',

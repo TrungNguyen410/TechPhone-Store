@@ -9,12 +9,17 @@ const assertTransactionTopology = (hello) => {
   }
 };
 
-const connectDB = async (uri = env.mongoUri) => {
-  mongoose.set('strictQuery', true);
-  await mongoose.connect(uri);
-  const hello = await mongoose.connection.db.admin().command({ hello: 1 });
-  assertTransactionTopology(hello);
-  return mongoose.connection;
+const connectDB = async (uri = env.mongoUri, client = mongoose) => {
+  client.set('strictQuery', true);
+  await client.connect(uri);
+  try {
+    const hello = await client.connection.db.admin().command({ hello: 1 });
+    assertTransactionTopology(hello);
+    return client.connection;
+  } catch (error) {
+    await client.disconnect().catch(() => {});
+    throw error;
+  }
 };
 
 const disconnectDB = async () => {

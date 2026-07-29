@@ -8,6 +8,7 @@ const mockModels = {
   category: { deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() },
   contact: { deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() },
   order: { deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() },
+  orderCounter: { deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() },
   orderItem: { deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() },
   product: { deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() },
   refreshToken: { deleteMany: jest.fn().mockResolvedValue(), insertMany: jest.fn().mockResolvedValue() },
@@ -26,6 +27,7 @@ jest.mock('../src/models/Brand', () => mockModels.brand);
 jest.mock('../src/models/Category', () => mockModels.category);
 jest.mock('../src/models/Contact', () => mockModels.contact);
 jest.mock('../src/models/Order', () => mockModels.order);
+jest.mock('../src/models/OrderCounter', () => mockModels.orderCounter);
 jest.mock('../src/models/OrderItem', () => mockModels.orderItem);
 jest.mock('../src/models/Product', () => mockModels.product);
 jest.mock('../src/models/RefreshToken', () => mockModels.refreshToken);
