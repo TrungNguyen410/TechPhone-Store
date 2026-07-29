@@ -15,12 +15,29 @@ class VerificationCodeRepository {
     }).select('+codeHash').sort({ createdAt: -1 });
   }
 
-  async incrementAttempts(id) {
-    return VerificationCode.updateOne({ _id: id }, { $inc: { attempts: 1 } });
+  async incrementAttempts(id, now = new Date()) {
+    return VerificationCode.updateOne(
+      {
+        _id: id,
+        consumedAt: null,
+        expiresAt: { $gt: now },
+        attempts: { $lt: 5 },
+      },
+      { $inc: { attempts: 1 } },
+    );
   }
 
-  async consume(id) {
-    return VerificationCode.updateOne({ _id: id }, { consumedAt: new Date() });
+  async consume(id, now = new Date()) {
+    const result = await VerificationCode.updateOne(
+      {
+        _id: id,
+        consumedAt: null,
+        expiresAt: { $gt: now },
+        attempts: { $lt: 5 },
+      },
+      { $set: { consumedAt: now } },
+    );
+    return result.modifiedCount === 1;
   }
 }
 

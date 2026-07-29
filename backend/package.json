@@ -46,14 +46,16 @@
       "<rootDir>/tests/setup.js"
     ],
     "collectCoverageFrom": [
-      "src/utils/**/*.js",
-      "src/services/voucherService.js"
+      "src/**/*.js",
+      "!src/config/swagger.js",
+      "!src/seed/**",
+      "!src/scripts/**"
     ],
     "coverageThreshold": {
       "global": {
-        "branches": 80,
-        "functions": 80,
-        "lines": 80,
+        "branches": 65,
+        "functions": 70,
+        "lines": 85,
         "statements": 80
       }
     }

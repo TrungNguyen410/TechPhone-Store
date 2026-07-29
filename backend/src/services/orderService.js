@@ -307,39 +307,41 @@ class OrderService {
     return orderRepository.update(id, { status });
   }
 
+  async cancelOrderInSession(id, user, session) {
+    const order = await orderRepository.findById(id, { session });
+    if (!order) throw new AppError('Order not found', 404);
+    if (user && user.role !== 'admin' && order.userId !== user.id) {
+      throw new AppError('Order access denied', 403);
+    }
+    if (order.status === 'cancelled') return order;
+    if (['paid', 'refund_required', 'refunded'].includes(order.paymentStatus)) {
+      throw new AppError('A paid order cannot be cancelled automatically', 400);
+    }
+    if (['shipping', 'delivered', 'completed'].includes(order.status)) {
+      throw new AppError('Order can no longer be cancelled', 400);
+    }
+
+    const previous = await orderRepository.transitionToCancelled(
+      id,
+      ['pending', 'confirmed'],
+      session,
+    );
+    if (!previous) {
+      const current = await orderRepository.findById(id, { session });
+      if (current?.status === 'cancelled') return current;
+      throw new AppError('Order can no longer be cancelled', 400);
+    }
+
+    await this.restoreInventory(previous.items, session);
+    if (previous.voucherCode && !previous.voucherUsageReleased) {
+      await voucherService.release(previous.voucherCode, session);
+      await orderRepository.claimVoucherUsageRelease(id, session);
+    }
+    return orderRepository.findById(id, { session });
+  }
+
   async cancelOrder(id, user) {
-    return withTransaction(async (session) => {
-      const order = await orderRepository.findById(id, { session });
-      if (!order) throw new AppError('Order not found', 404);
-      if (user && user.role !== 'admin' && order.userId !== user.id) {
-        throw new AppError('Order access denied', 403);
-      }
-      if (order.status === 'cancelled') return order;
-      if (['paid', 'refund_required', 'refunded'].includes(order.paymentStatus)) {
-        throw new AppError('A paid order cannot be cancelled automatically', 400);
-      }
-      if (['shipping', 'delivered', 'completed'].includes(order.status)) {
-        throw new AppError('Order can no longer be cancelled', 400);
-      }
-
-      const previous = await orderRepository.transitionToCancelled(
-        id,
-        ['pending', 'confirmed'],
-        session,
-      );
-      if (!previous) {
-        const current = await orderRepository.findById(id, { session });
-        if (current?.status === 'cancelled') return current;
-        throw new AppError('Order can no longer be cancelled', 400);
-      }
-
-      await this.restoreInventory(previous.items, session);
-      if (previous.voucherCode && !previous.voucherUsageReleased) {
-        await voucherService.release(previous.voucherCode, session);
-        await orderRepository.claimVoucherUsageRelease(id, session);
-      }
-      return orderRepository.findById(id, { session });
-    });
+    return withTransaction((session) => this.cancelOrderInSession(id, user, session));
   }
 
   async cancel(id, user) {
@@ -347,7 +349,21 @@ class OrderService {
   }
 
   async remove(id) {
-    return orderRepository.softDelete(id);
+    return withTransaction(async (session) => {
+      let order = await orderRepository.findById(id, { session });
+      if (!order) throw new AppError('Order not found', 404);
+
+      if (['pending', 'confirmed'].includes(order.status)) {
+        order = await this.cancelOrderInSession(id, { role: 'admin' }, session);
+      }
+      if (!['cancelled', 'completed'].includes(order.status)) {
+        throw new AppError('Only cancelled or completed orders can be archived', 400);
+      }
+
+      const result = await orderRepository.softDelete(id, session);
+      if (!result) throw new AppError('Order not found', 404);
+      return result;
+    });
   }
 }
 

@@ -49,7 +49,8 @@ class AuthService {
       await verificationCodeRepository.incrementAttempts(verification.id);
       throw new AppError('OTP is invalid or expired', 400);
     }
-    await verificationCodeRepository.consume(verification.id);
+    const consumed = await verificationCodeRepository.consume(verification.id);
+    if (!consumed) throw new AppError('OTP is invalid or expired', 400);
     return verification;
   }
 
@@ -203,12 +204,12 @@ class AuthService {
   async refresh(refreshToken) {
     if (!refreshToken) throw new AppError('Refresh token is required', 401);
     const payload = jwt.verify(refreshToken, env.jwtRefreshSecret);
-    const storedToken = await refreshTokenRepository.findByHash(hashToken(refreshToken));
-    if (!storedToken || storedToken.expiresAt < new Date()) {
+    if (payload.type !== 'refresh') throw new AppError('Refresh token is invalid', 401);
+    const storedToken = await refreshTokenRepository.consume(hashToken(refreshToken));
+    if (!storedToken) {
       throw new AppError('Refresh token is invalid', 401);
     }
 
-    await refreshTokenRepository.revoke(hashToken(refreshToken));
     const user = await userRepository.findById(payload.sub);
     if (!user) throw new AppError('User not found', 404);
     if (user.status === 'locked') throw new AppError('Account is locked', 403);

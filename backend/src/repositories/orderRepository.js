@@ -85,6 +85,15 @@ class OrderRepository extends BaseRepository {
     return order?.toJSON() || null;
   }
 
+  async softDelete(id, session) {
+    const order = await Order.findOneAndUpdate(
+      { _id: id, isDeleted: false },
+      { $set: { isDeleted: true, deletedAt: new Date() } },
+      { returnDocument: 'after', runValidators: true, session },
+    );
+    return order ? { id, deleted: true } : null;
+  }
+
   async findRecent(limit = 5) {
     const docs = await Order.find({ isDeleted: false }).sort({ createdAt: -1 }).limit(limit);
     return docs.map((doc) => doc.toJSON());

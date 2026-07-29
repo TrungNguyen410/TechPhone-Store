@@ -11,11 +11,17 @@ const errorHandler = (error, _req, res, _next) => {
   const statusCode =
     error.statusCode
     || (isJwtError ? 401 : error.name === 'ValidationError' || isUploadLimit ? 422 : 500);
-  const message = isJwtError
-    ? 'Authentication token is invalid or expired'
-    : isUploadLimit
-      ? 'Image must not exceed 5MB'
-      : error.message || 'Internal server error';
+  const hideUnexpectedError =
+    process.env.NODE_ENV === 'production'
+    && statusCode >= 500
+    && !(error instanceof AppError);
+  const message = hideUnexpectedError
+    ? 'Internal server error'
+    : isJwtError
+      ? 'Authentication token is invalid or expired'
+      : isUploadLimit
+        ? 'Image must not exceed 5MB'
+        : error.message || 'Internal server error';
   const errors =
     error.errors && typeof error.errors === 'object'
       ? Object.values(error.errors).map((item) => item.message || item)

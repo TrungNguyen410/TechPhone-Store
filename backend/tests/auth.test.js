@@ -102,6 +102,46 @@ describe('Auth API', () => {
     expect(response.body.success).toBe(false);
   });
 
+  it('allows a refresh token to be consumed only once under concurrent requests', async () => {
+    await createUser({ email: 'refresh-race@test.com', phone: '0988888887' });
+    const loginResponse = await request(app).post('/api/auth/login').send({
+      identifier: 'refresh-race@test.com',
+      password: '123456',
+    });
+
+    const attempts = await Promise.all([
+      request(app).post('/api/auth/refresh').send({
+        refreshToken: loginResponse.body.data.refreshToken,
+      }),
+      request(app).post('/api/auth/refresh').send({
+        refreshToken: loginResponse.body.data.refreshToken,
+      }),
+    ]);
+
+    expect(attempts.map((response) => response.status).sort()).toEqual([200, 401]);
+  });
+
+  it('allows a password-reset OTP to be consumed only once under concurrent requests', async () => {
+    await createUser({ email: 'otp-race@test.com', phone: '0977777776' });
+    const requested = await request(app).post('/api/auth/forgot-password/request-otp').send({
+      identifier: 'otp-race@test.com',
+      channel: 'email',
+    });
+
+    const payload = {
+      identifier: 'otp-race@test.com',
+      channel: 'email',
+      otp: requested.body.data.debugOtp,
+      newPassword: 'one-time-password',
+    };
+    const attempts = await Promise.all([
+      request(app).post('/api/auth/forgot-password/reset').send(payload),
+      request(app).post('/api/auth/forgot-password/reset').send(payload),
+    ]);
+
+    expect(attempts.map((response) => response.status).sort()).toEqual([200, 400]);
+  });
+
   it('returns 401 instead of 500 for an invalid access token', async () => {
     const response = await request(app)
       .get('/api/auth/me')

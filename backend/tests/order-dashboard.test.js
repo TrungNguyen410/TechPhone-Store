@@ -859,9 +859,87 @@ describe('Orders and dashboard APIs', () => {
     expect(valid.body.data.status).toBe('confirmed');
   });
 
+  it('restores inventory and voucher usage before an admin archives an active order', async () => {
+    await createUser({ email: 'archive-admin@test.com', phone: '0904545454', role: 'admin' });
+    const adminToken = await login('archive-admin@test.com');
+    const taxonomy = await seedTaxonomy();
+    const product = await Product.create({
+      _id: 'archive-phone',
+      name: 'Archive Phone',
+      ...taxonomy,
+      price: 3000000,
+      stock: 3,
+      status: 'active',
+    });
+    const voucher = await seedVoucher({ code: 'ARCHIVE', quantity: 2 });
+
+    const created = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ productId: product.id, quantity: 1 }],
+        customer: {
+          fullName: 'Archive Customer',
+          email: 'archive-customer@test.com',
+          phone: '0904646464',
+          address: 'Test address',
+        },
+        voucherCode: voucher.code,
+      })
+      .expect(201);
+
+    expect((await Product.findById(product.id)).stock).toBe(2);
+    expect((await Voucher.findById(voucher.id)).used).toBe(1);
+
+    await request(app)
+      .delete(`/api/admin/orders/${created.body.data.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    const archivedOrder = await Order.findById(created.body.data.id);
+    expect(archivedOrder.status).toBe('cancelled');
+    expect(archivedOrder.isDeleted).toBe(true);
+    expect((await Product.findById(product.id)).toObject()).toEqual(
+      expect.objectContaining({ stock: 3, sold: 0 }),
+    );
+    expect((await Voucher.findById(voucher.id)).used).toBe(0);
+
+    const paidOrder = await Order.create({
+      orderNumber: 'TP260729PAID',
+      status: 'confirmed',
+      paymentStatus: 'paid',
+      items: [{
+        id: product.id,
+        productId: product.id,
+        name: product.name,
+        price: product.price,
+        quantity: 1,
+      }],
+      subtotal: product.price,
+      total: product.price,
+      customer: {
+        fullName: 'Paid Customer',
+        email: 'paid-archive@test.com',
+        phone: '0904747474',
+        address: 'Test address',
+      },
+    });
+
+    await request(app)
+      .delete(`/api/admin/orders/${paidOrder.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(400);
+    expect((await Order.findById(paidOrder.id)).isDeleted).toBe(false);
+  });
+
   it('returns admin dashboard statistics', async () => {
-    await createUser({ email: 'admin@test.com', phone: '0900000000', role: 'admin' });
-    const token = await login('admin@test.com');
+    const admin = await createUser({
+      email: 'admin@test.com',
+      phone: '0900000000',
+      role: 'admin',
+    });
+    const token = jwt.sign({ sub: admin.id, role: 'admin' }, env.jwtAccessSecret, {
+      expiresIn: '15m',
+    });
 
     const response = await request(app)
       .get('/api/admin/dashboard')
