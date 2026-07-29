@@ -33,6 +33,7 @@ const orderSchema = new mongoose.Schema(
   {
     _id: stringId,
     orderNumber: { type: String, required: true, unique: true, index: true },
+    idempotencyKey: { type: String, unique: true, sparse: true, index: true },
     userId: { type: String, ref: 'User', default: null, index: true },
     status: {
       type: String,

@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const AppError = require('../utils/AppError');
 const accessoryRepository = require('../repositories/accessoryRepository');
 const orderItemRepository = require('../repositories/orderItemRepository');
@@ -18,6 +19,15 @@ const statusTransitions = {
 };
 
 class OrderService {
+  buildIdempotencyKey(rawKey, user, customer = {}) {
+    const key = String(rawKey || '').trim().slice(0, 120);
+    if (!key) return '';
+    const principal = user?.id
+      ? `user:${user.id}`
+      : `guest:${String(customer.email || '').trim().toLowerCase()}:${String(customer.phone || '').trim()}`;
+    return crypto.createHash('sha256').update(`${principal}:${key}`).digest('hex');
+  }
+
   shippingQuote(customer = {}, subtotal = 0) {
     if (subtotal >= 10000000) return { fee: 0, days: 1 };
     const province = String(customer.province || customer.address || '').toLowerCase();
@@ -119,7 +129,17 @@ class OrderService {
     );
   }
 
-  async create(payload, user) {
+  async create(payload, user, metadata = {}) {
+    const idempotencyKey = this.buildIdempotencyKey(
+      metadata.idempotencyKey,
+      user,
+      payload.customer,
+    );
+    if (idempotencyKey) {
+      const existing = await orderRepository.findByIdempotencyKey(idempotencyKey);
+      if (existing) return existing;
+    }
+
     const items = await this.normalizeItems(payload.items);
     if (!items.length) throw new AppError('Order must contain at least one item', 422);
 
@@ -137,7 +157,8 @@ class OrderService {
 
       const order = await orderRepository.create({
         orderNumber: await this.generateOrderNumber(),
-        userId: user?.id || payload.userId || null,
+        idempotencyKey: idempotencyKey || undefined,
+        userId: user?.id || null,
         items,
         subtotal,
         shippingFee,
@@ -175,6 +196,10 @@ class OrderService {
       return order;
     } catch (error) {
       if (decrements.length && !orderCreated) await this.rollbackInventory(decrements);
+      if (idempotencyKey && error?.code === 11000) {
+        const existing = await orderRepository.findByIdempotencyKey(idempotencyKey);
+        if (existing) return existing;
+      }
       throw error;
     }
   }

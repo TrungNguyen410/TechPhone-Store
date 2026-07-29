@@ -3,6 +3,7 @@ import { voucherApi } from '../api/voucherApi';
 import { STORAGE_KEYS } from '../utils/constants';
 import { storage } from '../utils/storage';
 import { trackEvent } from '../utils/analytics';
+import { calculateVoucherDiscount } from '../utils/checkoutPricing';
 
 export const CartContext = createContext(null);
 
@@ -94,15 +95,10 @@ export function CartProvider({ children }) {
     [cartItems],
   );
   const shippingFee = cartItems.length === 0 || subtotal >= 10000000 ? 0 : 30000;
-  const discount = useMemo(() => {
-    if (!voucher) return 0;
-    if (voucher.type === 'percent') {
-      return Math.min((subtotal * voucher.value) / 100, voucher.maxDiscount || Infinity);
-    }
-    if (voucher.type === 'fixed') return Math.min(voucher.value, subtotal);
-    if (voucher.type === 'shipping') return Math.min(voucher.value, shippingFee);
-    return 0;
-  }, [shippingFee, subtotal, voucher]);
+  const discount = useMemo(
+    () => calculateVoucherDiscount(voucher, subtotal, shippingFee),
+    [shippingFee, subtotal, voucher],
+  );
   const total = Math.max(0, subtotal + shippingFee - discount);
   const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 

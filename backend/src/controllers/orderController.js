@@ -3,7 +3,9 @@ const asyncHandler = require('../utils/asyncHandler');
 const { successResponse } = require('../utils/apiResponse');
 
 const create = asyncHandler(async (req, res) => {
-  const order = await orderService.create(req.body, req.user);
+  const order = await orderService.create(req.body, req.user, {
+    idempotencyKey: req.get('Idempotency-Key'),
+  });
   successResponse(res, order, 'Order created', 201);
 });
 

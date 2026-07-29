@@ -36,6 +36,16 @@ const env = {
     authToken: process.env.TWILIO_AUTH_TOKEN || '',
     from: process.env.TWILIO_FROM || '',
   },
+  bank: {
+    name: process.env.BANK_NAME || '',
+    bin: process.env.BANK_BIN || '',
+    accountNumber: process.env.BANK_ACCOUNT_NUMBER || '',
+    accountName: process.env.BANK_ACCOUNT_NAME || '',
+  },
+  momo: {
+    phone: process.env.MOMO_PHONE || '',
+    accountName: process.env.MOMO_ACCOUNT_NAME || '',
+  },
   vnpay: {
     tmnCode: process.env.VNPAY_TMN_CODE || '',
     hashSecret: process.env.VNPAY_HASH_SECRET || '',

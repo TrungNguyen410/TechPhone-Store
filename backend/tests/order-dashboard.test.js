@@ -87,6 +87,159 @@ describe('Orders and dashboard APIs', () => {
     expect(response.body.success).toBe(false);
   });
 
+  it('returns the same order and decrements stock once for a repeated idempotency key', async () => {
+    await createUser({ email: 'idempotent@test.com', phone: '0944444444' });
+    const token = await login('idempotent@test.com');
+    const taxonomy = await seedTaxonomy();
+    const product = await Product.create({
+      _id: 'idempotent-phone',
+      name: 'Idempotent Phone',
+      ...taxonomy,
+      price: 2000000,
+      stock: 3,
+      status: 'active',
+    });
+    const payload = {
+      items: [{ productId: product.id, price: 1, quantity: 1 }],
+      customer: {
+        fullName: 'Idempotent Customer',
+        email: 'idempotent@test.com',
+        phone: '0944444444',
+        address: 'Test address',
+      },
+      subtotal: 1,
+      shippingFee: 0,
+      discount: 999999,
+      total: 1,
+    };
+
+    const first = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .set('Idempotency-Key', 'checkout-attempt-1')
+      .send(payload);
+    const second = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .set('Idempotency-Key', 'checkout-attempt-1')
+      .send(payload);
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
+    expect(second.body.data.id).toBe(first.body.data.id);
+    expect(first.body.data.subtotal).toBe(product.price);
+    expect(first.body.data.total).toBe(product.price + 40000);
+    const productAfter = await Product.findById(product.id);
+    expect(productAfter.stock).toBe(2);
+  });
+
+  it('handles concurrent requests with one idempotency key without double-decrementing stock', async () => {
+    await createUser({ email: 'race@test.com', phone: '0955555555' });
+    const token = await login('race@test.com');
+    const taxonomy = await seedTaxonomy();
+    const product = await Product.create({
+      _id: 'race-phone',
+      name: 'Race Phone',
+      ...taxonomy,
+      price: 3000000,
+      stock: 3,
+      status: 'active',
+    });
+    const payload = {
+      items: [{ productId: product.id, quantity: 1 }],
+      customer: {
+        fullName: 'Race Customer',
+        email: 'race@test.com',
+        phone: '0955555555',
+        address: 'Test address',
+      },
+    };
+    const post = () => request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .set('Idempotency-Key', 'checkout-race')
+      .send(payload);
+
+    const [first, second] = await Promise.all([post(), post()]);
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
+    expect(second.body.data.id).toBe(first.body.data.id);
+    const productAfter = await Product.findById(product.id);
+    expect(productAfter.stock).toBe(2);
+  });
+
+  it('does not expose another user order when they reuse the same raw idempotency key', async () => {
+    await createUser({ email: 'first@test.com', phone: '0966666666' });
+    await createUser({ email: 'second@test.com', phone: '0977777777' });
+    const firstToken = await login('first@test.com');
+    const secondToken = await login('second@test.com');
+    const taxonomy = await seedTaxonomy();
+    const product = await Product.create({
+      _id: 'scoped-phone',
+      name: 'Scoped Phone',
+      ...taxonomy,
+      price: 4000000,
+      stock: 3,
+      status: 'active',
+    });
+    const payloadFor = (email, phone) => ({
+      items: [{ productId: product.id, quantity: 1 }],
+      customer: { fullName: 'Customer', email, phone, address: 'Test address' },
+    });
+
+    const first = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${firstToken}`)
+      .set('Idempotency-Key', 'same-browser-key')
+      .send(payloadFor('first@test.com', '0966666666'));
+    const second = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${secondToken}`)
+      .set('Idempotency-Key', 'same-browser-key')
+      .send(payloadFor('second@test.com', '0977777777'));
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
+    expect(second.body.data.id).not.toBe(first.body.data.id);
+    expect(second.body.data.userId).not.toBe(first.body.data.userId);
+  });
+
+  it('scopes guest keys by email and phone and ignores payload userId', async () => {
+    const taxonomy = await seedTaxonomy();
+    const product = await Product.create({
+      _id: 'guest-scoped-phone',
+      name: 'Guest Scoped Phone',
+      ...taxonomy,
+      price: 5000000,
+      stock: 4,
+      status: 'active',
+    });
+    const payloadFor = (email, phone, userId) => ({
+      userId,
+      items: [{ productId: product.id, quantity: 1 }],
+      customer: { fullName: 'Guest', email, phone, address: 'Test address' },
+    });
+    const post = (payload) => request(app)
+      .post('/api/orders')
+      .set('Idempotency-Key', 'guest-shared-key')
+      .send(payload);
+
+    const first = await post(payloadFor('guest-one@test.com', '0988888888', 'victim-user'));
+    const repeated = await post(payloadFor('guest-one@test.com', '0988888888', 'another-user'));
+    const otherGuest = await post(payloadFor('guest-two@test.com', '0999999999', 'victim-user'));
+
+    expect(first.status).toBe(201);
+    expect(repeated.status).toBe(201);
+    expect(otherGuest.status).toBe(201);
+    expect(repeated.body.data.id).toBe(first.body.data.id);
+    expect(otherGuest.body.data.id).not.toBe(first.body.data.id);
+    expect(first.body.data.userId).toBeNull();
+    expect(otherGuest.body.data.userId).toBeNull();
+    const productAfter = await Product.findById(product.id);
+    expect(productAfter.stock).toBe(2);
+  });
+
   it('enforces valid admin order status transitions', async () => {
     await createUser({ email: 'admin@test.com', phone: '0900000000', role: 'admin' });
     const adminToken = await login('admin@test.com');

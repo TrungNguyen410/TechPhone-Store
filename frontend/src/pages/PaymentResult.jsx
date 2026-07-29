@@ -1,14 +1,49 @@
 import { FiAlertCircle, FiCheckCircle, FiClock, FiSearch } from 'react-icons/fi';
+import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { useCart } from '../hooks/useCart';
+
+const PENDING_PAYMENT_KEY = 'techphone_pending_payment';
+const PENDING_PAYMENT_MAX_AGE = 2 * 60 * 60 * 1000;
+
+const readPendingPayment = () => {
+  try {
+    const value = JSON.parse(sessionStorage.getItem(PENDING_PAYMENT_KEY) || 'null');
+    return value && typeof value === 'object' ? value : null;
+  } catch {
+    return null;
+  }
+};
 
 export default function PaymentResult() {
+  const { clearCart } = useCart();
   const [searchParams] = useSearchParams();
   const valid = searchParams.get('valid') === 'true';
   const responseCode = searchParams.get('code');
   const mock = searchParams.get('mock') === 'true';
   const reference = searchParams.get('reference') || '';
-  const pending = JSON.parse(sessionStorage.getItem('techphone_pending_payment') || 'null');
+  const [renderedAt] = useState(Date.now);
+  const pending = readPendingPayment();
   const accepted = valid && responseCode === '00';
+  const pendingAge = renderedAt - Number(pending?.createdAt);
+  const pendingIsFresh = Boolean(
+    pending?.orderId
+      && pending.reference === reference
+      && Number.isFinite(Number(pending.createdAt))
+      && pendingAge >= 0
+      && pendingAge <= PENDING_PAYMENT_MAX_AGE,
+  );
+  const completedCheckout = accepted && pendingIsFresh;
+
+  useEffect(() => {
+    if (!completedCheckout) return;
+    clearCart();
+    try {
+      sessionStorage.removeItem(PENDING_PAYMENT_KEY);
+    } catch {
+      // The verified result remains usable when browser storage is unavailable.
+    }
+  }, [clearCart, completedCheckout]);
 
   const icon = accepted ? (mock ? <FiCheckCircle /> : <FiClock />) : <FiAlertCircle />;
   const title = accepted
@@ -38,7 +73,9 @@ export default function PaymentResult() {
           </dl>
           <div className="success-actions">
             <Link className="btn btn-primary" to="/order-lookup"><FiSearch /> Tra cứu đơn</Link>
-            <Link className="btn btn-light" to="/products">Tiếp tục mua sắm</Link>
+            <Link className="btn btn-light" to={completedCheckout ? '/products' : '/checkout'}>
+              {completedCheckout ? 'Tiếp tục mua sắm' : 'Thử lại thanh toán'}
+            </Link>
           </div>
           <p className="payment-result-help">
             Nếu tài khoản đã bị trừ tiền nhưng đơn chưa cập nhật, hãy giữ lại mã giao dịch và liên hệ TechPhone.

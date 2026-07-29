@@ -3,7 +3,12 @@ import { mockDb } from '../mock/mockDb';
 import axiosClient from './axiosClient';
 
 export const orderApi = {
-  create: (payload) => (USE_MOCK ? mockDb.createOrder(payload) : axiosClient.post('/orders', payload)),
+  create: (payload, idempotencyKey) =>
+    USE_MOCK
+      ? mockDb.createOrder(payload, idempotencyKey)
+      : axiosClient.post('/orders', payload, {
+          headers: { 'Idempotency-Key': idempotencyKey },
+        }),
   getMyOrders: (userId) =>
     USE_MOCK ? mockDb.ordersForUser(userId) : axiosClient.get('/orders/my-orders'),
   getById: (id) => (USE_MOCK ? mockDb.get('orders', id) : axiosClient.get(`/orders/${id}`)),

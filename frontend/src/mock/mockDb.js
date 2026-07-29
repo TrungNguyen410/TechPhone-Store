@@ -1,4 +1,6 @@
 import { STORAGE_KEYS } from '../utils/constants';
+import { calculateVoucherDiscount } from '../utils/checkoutPricing';
+import { getShippingQuote } from '../utils/shipping';
 import { storage } from '../utils/storage';
 import { mockAccessories } from './mockAccessories';
 import { mockBanners } from './mockBanners';
@@ -51,6 +53,16 @@ const createId = (prefix) => `${prefix}-${Date.now()}-${Math.random().toString(3
 const readOtpRequests = () => storage.get(STORAGE_KEYS.mockOtpRequests, []);
 const writeOtpRequests = (items) => storage.set(STORAGE_KEYS.mockOtpRequests, items);
 const mockOtp = '123456';
+const scopedCheckoutKey = (payload, idempotencyKey) => {
+  const key = String(idempotencyKey || '').trim().slice(0, 120);
+  if (!key) return '';
+  const currentUser = storage.get(STORAGE_KEYS.currentUser);
+  const hasSession = Boolean(currentUser?.id && storage.get(STORAGE_KEYS.token));
+  const customerScope = hasSession
+    ? `user:${currentUser.id}`
+    : `guest:${String(payload.customer?.email || '').trim().toLowerCase()}:${String(payload.customer?.phone || '').trim()}`;
+  return `${customerScope}:${key}`;
+};
 
 export const mockDb = {
   async login(identifier, password) {
@@ -216,28 +228,90 @@ export const mockDb = {
     return wait({ success: true });
   },
 
-  async createOrder(payload) {
+  async createOrder(payload, idempotencyKey) {
     const orders = read('orders');
+    const scopedKey = scopedCheckoutKey(payload, idempotencyKey);
+    const existing = scopedKey
+      ? orders.find((order) => order.idempotencyKey === scopedKey)
+      : null;
+    if (existing) return wait(clone(existing));
+
+    const products = read('products');
+    const accessories = read('accessories');
+    const items = (payload.items || []).map((item) => {
+      const type = item.type === 'accessory' || item.accessoryId ? 'accessory' : 'product';
+      const catalog = type === 'accessory' ? accessories : products;
+      const itemId = type === 'accessory'
+        ? item.accessoryId || item.productId || item.id
+        : item.productId || item.id;
+      const current = catalog.find((entry) => entry.id === itemId);
+      const quantity = Number(item.quantity);
+      if (!current || current.status !== 'active') fail(`${type === 'accessory' ? 'Accessory' : 'Product'} is unavailable`);
+      if (!Number.isInteger(quantity) || quantity < 1 || current.stock < quantity) {
+        fail(`${current.name} does not have enough stock`);
+      }
+      current.stock -= quantity;
+      current.sold = Number(current.sold || 0) + quantity;
+      return {
+        id: current.id,
+        productId: type === 'product' ? current.id : null,
+        accessoryId: type === 'accessory' ? current.id : null,
+        name: current.name,
+        image: current.image || '',
+        price: Number(current.price),
+        quantity,
+        type,
+      };
+    });
+    if (!items.length) fail('Order must contain at least one item', 422);
+
+    const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const shipping = getShippingQuote({ province: payload.customer?.province, subtotal });
+    const voucher = payload.voucherCode
+      ? read('vouchers').find(
+          (item) => item.code.toLowerCase() === String(payload.voucherCode).trim().toLowerCase(),
+        )
+      : null;
+    if (payload.voucherCode) {
+      const now = new Date();
+      const usable = voucher
+        && voucher.active
+        && subtotal >= Number(voucher.minOrder || 0)
+        && now >= new Date(voucher.startDate)
+        && now <= new Date(`${voucher.endDate}T23:59:59`);
+      if (!usable) fail('MÃ£ giáº£m giÃ¡ khÃ´ng há»£p lá»‡');
+    }
+    const discount = calculateVoucherDiscount(voucher, subtotal, shipping.fee);
     const now = new Date();
     const order = {
       ...payload,
+      items,
+      subtotal,
+      shippingFee: shipping.fee,
+      discount,
+      total: Math.max(0, subtotal + shipping.fee - discount),
+      voucherCode: voucher?.code || null,
+      idempotencyKey: scopedKey || undefined,
       id: createId('order'),
       orderNumber: `TP${now.toISOString().slice(2, 10).replaceAll('-', '')}${String(orders.length + 1).padStart(2, '0')}`,
       status: 'pending',
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
     };
+    write('products', products);
+    write('accessories', accessories);
     write('orders', [order, ...orders]);
     return wait(clone(order));
   },
 
-  async createVnpayCheckout(payload) {
+  async createVnpayCheckout(payload, idempotencyKey) {
+    const paymentReference = createId('vnpay');
     const order = await this.createOrder({
       ...payload,
       paymentMethod: 'card',
       paymentStatus: 'pending',
-      paymentReference: createId('vnpay'),
-    });
+      paymentReference,
+    }, idempotencyKey);
     return wait({
       order,
       transaction: {

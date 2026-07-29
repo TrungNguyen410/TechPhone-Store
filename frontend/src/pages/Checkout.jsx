@@ -8,18 +8,11 @@ import EmptyState from '../components/common/EmptyState';
 import { useAuth } from '../hooks/useAuth';
 import { useCart } from '../hooks/useCart';
 import { PAYMENT_METHODS } from '../utils/constants';
+import { calculateVoucherDiscount } from '../utils/checkoutPricing';
 import { formatCurrency } from '../utils/formatCurrency';
 import { getShippingQuote, SHIPPING_PROVINCES } from '../utils/shipping';
 import { isValidEmail, isValidVietnamesePhone, validateRequired } from '../utils/validators';
 import { trackEvent } from '../utils/analytics';
-
-const BANK_TRANSFER = {
-  bankName: 'Vietcombank Demo',
-  bankBin: '970436',
-  accountNumber: '0000000000',
-  accountName: 'TECHPHONE STORE DEMO',
-  branch: 'Tai khoan demo de test',
-};
 
 const paymentHint = (method) => {
   if (method === 'cod') return 'Thanh toán trực tiếp cho nhân viên giao hàng';
@@ -28,6 +21,9 @@ const paymentHint = (method) => {
   return 'Thanh toán an toàn trên cổng VNPay; TechPhone không thu thập thông tin thẻ';
 };
 const PAYMENT_CONFIRM_METHODS = ['bank', 'momo'];
+const providerNameFor = (method) => (method === 'card' ? 'vnpay' : method);
+const createCheckoutKey = () =>
+  `checkout-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
 
 export default function Checkout() {
   const navigate = useNavigate();
@@ -47,19 +43,23 @@ export default function Checkout() {
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [paymentConfirmStep, setPaymentConfirmStep] = useState(false);
-  const [vnpayEnabled, setVnpayEnabled] = useState(false);
+  const [paymentConfig, setPaymentConfig] = useState({
+    providers: { cod: { enabled: true } },
+  });
   const [paymentReference] = useState(() => `TP${Date.now().toString().slice(-8)}`);
   const paymentConfirmRef = useRef(null);
   const checkoutTrackedRef = useRef(false);
+  const idempotencyKeyRef = useRef(createCheckoutKey());
+  const submissionInFlightRef = useRef(false);
 
   useEffect(() => {
     let active = true;
     paymentApi.getConfig()
       .then((config) => {
-        if (active) setVnpayEnabled(Boolean(config.providers?.vnpay?.enabled));
+        if (active) setPaymentConfig(config);
       })
       .catch(() => {
-        if (active) setVnpayEnabled(false);
+        if (active) setPaymentConfig({ providers: { cod: { enabled: true } } });
       });
     return () => { active = false; };
   }, []);
@@ -72,7 +72,13 @@ export default function Checkout() {
     () => getShippingQuote({ province: form.province, subtotal: cart.subtotal }),
     [cart.subtotal, form.province],
   );
-  const orderTotal = Math.max(0, cart.subtotal + shipping.fee - cart.discount);
+  const checkoutDiscount = useMemo(
+    () => calculateVoucherDiscount(cart.voucher, cart.subtotal, shipping.fee),
+    [cart.subtotal, cart.voucher, shipping.fee],
+  );
+  const orderTotal = Math.max(0, cart.subtotal + shipping.fee - checkoutDiscount);
+  const bankDisplay = paymentConfig.providers?.bank?.display || {};
+  const momoDisplay = paymentConfig.providers?.momo?.display || {};
 
   useEffect(() => {
     if (checkoutTrackedRef.current || !cart.cartItems.length) return;
@@ -88,11 +94,14 @@ export default function Checkout() {
     const params = new URLSearchParams({
       amount: String(orderTotal),
       addInfo: transferContent,
-      accountName: BANK_TRANSFER.accountName,
+      accountName: bankDisplay.accountName || '',
     });
-    return `https://img.vietqr.io/image/${BANK_TRANSFER.bankBin}-${BANK_TRANSFER.accountNumber}-compact2.png?${params.toString()}`;
-  }, [orderTotal, transferContent]);
-  const momoQrUrl = useMemo(() => `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(`MOMO|0900000000|${orderTotal}|${transferContent}`)}`, [orderTotal, transferContent]);
+    return `https://img.vietqr.io/image/${bankDisplay.bankBin}-${bankDisplay.accountNumber}-compact2.png?${params.toString()}`;
+  }, [bankDisplay.accountName, bankDisplay.accountNumber, bankDisplay.bankBin, orderTotal, transferContent]);
+  const momoQrUrl = useMemo(
+    () => `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(`MOMO|${momoDisplay.phone || ''}|${orderTotal}|${transferContent}`)}`,
+    [momoDisplay.phone, orderTotal, transferContent],
+  );
 
   if (cart.cartItems.length === 0) {
     return (
@@ -152,44 +161,52 @@ export default function Checkout() {
     paymentReference,
     subtotal: cart.subtotal,
     shippingFee: shipping.fee,
-    discount: cart.discount,
+    discount: checkoutDiscount,
     total: orderTotal,
     voucherCode: cart.voucher?.code || null,
   });
 
   const createOrder = async () => {
+    if (submissionInFlightRef.current) return;
+    submissionInFlightRef.current = true;
     setSubmitting(true);
     try {
-      const order = await orderApi.create(orderPayload());
+      const order = await orderApi.create(orderPayload(), idempotencyKeyRef.current);
       cart.clearCart();
       navigate(`/order-success/${order.id}`, { state: { order }, replace: true });
     } catch (error) {
       toast.error(error.friendlyMessage || error.message);
     } finally {
+      submissionInFlightRef.current = false;
       setSubmitting(false);
     }
   };
 
   const startVnpayCheckout = async () => {
+    if (submissionInFlightRef.current) return;
+    submissionInFlightRef.current = true;
     setSubmitting(true);
     try {
       const result = await paymentApi.createVnpayCheckout(
         { ...orderPayload(), paymentMethod: 'card' },
-        `vnpay-${paymentReference}`,
+        idempotencyKeyRef.current,
       );
-      sessionStorage.setItem(
-        'techphone_pending_payment',
-        JSON.stringify({
+      try {
+        sessionStorage.setItem('techphone_pending_payment', JSON.stringify({
+          orderId: result.order.id,
           orderNumber: result.order.orderNumber,
           phone: result.order.customer.phone,
           reference: result.transaction.reference,
-        }),
-      );
-      cart.clearCart();
+          createdAt: Date.now(),
+        }));
+      } catch {
+        // Payment can continue when browser storage is unavailable.
+      }
       if (result.paymentUrl.startsWith('/')) navigate(result.paymentUrl);
       else window.location.assign(result.paymentUrl);
     } catch (error) {
       toast.error(error.friendlyMessage || error.message);
+      submissionInFlightRef.current = false;
       setSubmitting(false);
     }
   };
@@ -277,7 +294,9 @@ export default function Checkout() {
             <section className="panel checkout-section">
               <h2><FiCreditCard /> Phương thức thanh toán</h2>
               <div className="payment-options">
-                {PAYMENT_METHODS.filter((method) => method.value !== 'card' || vnpayEnabled).map((method) => (
+                {PAYMENT_METHODS.filter(
+                  (method) => paymentConfig.providers?.[providerNameFor(method.value)]?.enabled,
+                ).map((method) => (
                   <label className={form.paymentMethod === method.value ? 'active' : ''} key={method.value}>
                     <input
                       type="radio"
@@ -301,10 +320,9 @@ export default function Checkout() {
                   </div>
                   <div className="bank-transfer-info">
                     <span>Quét QR hoặc chuyển khoản thủ công</span>
-                    <h3>{BANK_TRANSFER.bankName}</h3>
-                    <div><small>Số tài khoản</small><strong>{BANK_TRANSFER.accountNumber}</strong></div>
-                    <div><small>Chủ tài khoản</small><strong>{BANK_TRANSFER.accountName}</strong></div>
-                    <div><small>Chi nhánh</small><strong>{BANK_TRANSFER.branch}</strong></div>
+                    <h3>{bankDisplay.bankName}</h3>
+                    <div><small>Số tài khoản</small><strong>{bankDisplay.accountNumber}</strong></div>
+                    <div><small>Chủ tài khoản</small><strong>{bankDisplay.accountName}</strong></div>
                     <div><small>Số tiền</small><strong>{formatCurrency(orderTotal)}</strong></div>
                     <div><small>Nội dung chuyển khoản</small><strong>{transferContent}</strong></div>
                   </div>
@@ -315,7 +333,7 @@ export default function Checkout() {
                 </p>
               </section>
             )}
-            {paymentConfirmStep && form.paymentMethod === 'momo' && <section className="panel checkout-section bank-transfer-section" ref={paymentConfirmRef}><h2><FiCreditCard /> Thanh toán qua MoMo</h2><div className="bank-transfer-grid"><div className="bank-qr-card"><img src={momoQrUrl} alt="Mã QR thanh toán MoMo" /></div><div className="bank-transfer-info"><span>Quét mã trong ứng dụng MoMo</span><div><small>Số điện thoại nhận</small><strong>0900 000 000</strong></div><div><small>Số tiền</small><strong>{formatCurrency(orderTotal)}</strong></div><div><small>Nội dung</small><strong>{transferContent}</strong></div></div></div><p className="bank-transfer-note">Sau khi thanh toán qua MoMo, bấm <strong>Tôi đã thanh toán</strong> để hoàn tất đơn hàng.</p></section>}
+            {paymentConfirmStep && form.paymentMethod === 'momo' && <section className="panel checkout-section bank-transfer-section" ref={paymentConfirmRef}><h2><FiCreditCard /> Thanh toán qua MoMo</h2><div className="bank-transfer-grid"><div className="bank-qr-card"><img src={momoQrUrl} alt="Mã QR thanh toán MoMo" /></div><div className="bank-transfer-info"><span>Quét mã trong ứng dụng MoMo</span><div><small>Số điện thoại nhận</small><strong>{momoDisplay.phone}</strong></div><div><small>Chủ tài khoản</small><strong>{momoDisplay.accountName}</strong></div><div><small>Số tiền</small><strong>{formatCurrency(orderTotal)}</strong></div><div><small>Nội dung</small><strong>{transferContent}</strong></div></div></div><p className="bank-transfer-note">Sau khi thanh toán qua MoMo, bấm <strong>Tôi đã thanh toán</strong> để hoàn tất đơn hàng.</p></section>}
           </div>
 
           <aside className="panel checkout-order">
@@ -333,7 +351,7 @@ export default function Checkout() {
               <div><span>Tạm tính</span><strong>{formatCurrency(cart.subtotal)}</strong></div>
               <div><span>Phí vận chuyển</span><strong>{shipping.fee ? formatCurrency(shipping.fee) : 'Miễn phí'}</strong></div>
               <div><span>Dự kiến giao</span><strong>{shipping.eta}</strong></div>
-              <div className="discount-line"><span>Giảm giá</span><strong>-{formatCurrency(cart.discount)}</strong></div>
+              <div className="discount-line"><span>Giảm giá</span><strong>-{formatCurrency(checkoutDiscount)}</strong></div>
             </div>
             <div className="summary-total"><span>Tổng thanh toán</span><strong>{formatCurrency(orderTotal)}</strong></div>
             <button className="btn btn-primary checkout-button" disabled={submitting}>
