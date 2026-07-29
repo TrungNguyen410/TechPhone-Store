@@ -99,6 +99,7 @@ const accessories = [
 });
 
 const run = async () => {
+  const password = await bcrypt.hash(resolveSeedPassword(), 12);
   await connectDB();
 
   await Promise.all([
@@ -118,7 +119,6 @@ const run = async () => {
     VerificationCode.deleteMany({}),
   ]);
 
-  const password = await bcrypt.hash(resolveSeedPassword(), 12);
   await User.insertMany([
     {
       _id: 'user-admin',
