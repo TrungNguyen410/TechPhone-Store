@@ -1,4 +1,4 @@
-/* Hallmark · genre: modern-minimal · macrostructure: Asymmetric Commerce · theme: Cobalt · nav: N2 · footer: Ft1 · pre-emit critique: P4 H4 E4 S5 R4 V4 · contrast: pass (40–41) · slop: pass (42–45) · honest: pass (46) · chrome: pass (47) · tokens: pass (48) · responsive/mobile: pass (34, 49–57) */
+/* Hallmark · genre: modern-minimal · macrostructure: Asymmetric Commerce · theme: Cobalt · nav: N2 · footer: Ft1 · pre-emit critique: P4 H4 E5 S5 R4 V4 · contrast: pass (40–41) · slop: pass (42–45) · honest: pass (46) · chrome: pass (47) · tokens: pass (48) · responsive/mobile: pass (34, 49–57) */
 html,
 body {
   overflow-x: clip;
@@ -27,6 +27,11 @@ h4,
 .dashboard-welcome h2 {
   font-family: var(--font-display);
   font-style: normal;
+}
+
+:where(h1, h2, .section-heading h2, .page-title-row h1, .dashboard-welcome h2) {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 :where(a, button, input, select, textarea):focus-visible {
@@ -255,10 +260,52 @@ h4,
 
 .hero-slide::after {
   position: absolute;
+  z-index: var(--z-base);
   inset: 0;
   content: '';
-  background: color-mix(in oklch, var(--color-graphite) 16%, transparent);
+  background: color-mix(in oklch, var(--color-graphite) 58%, transparent);
   pointer-events: none;
+}
+
+.hero-mobile-copy {
+  position: absolute;
+  z-index: var(--z-local-control);
+  inset: 0;
+  display: flex;
+  max-width: 19rem;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: center;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-lg);
+  color: var(--color-on-dark);
+  pointer-events: none;
+}
+
+.hero-mobile-copy strong {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.hero-mobile-copy small {
+  max-width: 32ch;
+  color: var(--color-on-dark);
+  font-size: var(--text-sm);
+}
+
+.hero-mobile-copy b {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  padding-inline: var(--space-md);
+  color: var(--color-accent-ink);
+  border-radius: var(--radius-control);
+  background: var(--color-accent);
+  font-size: var(--text-sm);
+  white-space: nowrap;
 }
 
 .slider-dots button {
@@ -669,7 +716,12 @@ h4,
 }
 
 .hero-slide img {
-  object-position: left center;
+  position: absolute;
+  z-index: var(--z-underlay);
+  inset: 0;
+  object-position: right center;
+  filter: brightness(0.62) saturate(0.8);
+  opacity: 0.5;
 }
 
 /* Commerce extensions: comparison stays readable without distorting the catalog grid. */
@@ -1139,8 +1191,19 @@ h4,
 }
 
 @media (min-width: 48rem) {
+  .hero-slide::after {
+    background: color-mix(in oklch, var(--color-graphite) 16%, transparent);
+  }
+
   .hero-slide img {
+    position: static;
     object-position: center;
+    filter: none;
+    opacity: 1;
+  }
+
+  .hero-mobile-copy {
+    display: none;
   }
 
   .policy-layout {

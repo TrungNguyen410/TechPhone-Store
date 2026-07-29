@@ -57,4 +57,24 @@ describe('Home', () => {
     expect(second).toHaveStyle({ visibility: 'hidden', pointerEvents: 'none' });
     expect(screen.getByRole('button', { name: /tạm dừng banner/i })).toBeInTheDocument();
   });
+
+  it('provides responsive text instead of relying on copy baked into a wide banner image', async () => {
+    productApi.getAll.mockResolvedValue([]);
+    accessoryApi.getAll.mockResolvedValue([]);
+    bannerApi.getAll.mockResolvedValue([
+      {
+        id: 'b1',
+        title: 'Lên đời flagship',
+        description: 'Thu cũ đổi mới, trợ giá tốt',
+        image: 'wide-banner.png',
+        link: '/products',
+        active: true,
+      },
+    ]);
+
+    render(<MemoryRouter><Home /></MemoryRouter>);
+
+    expect(await screen.findByText('Thu cũ đổi mới, trợ giá tốt')).toBeInTheDocument();
+    expect(screen.getByText('Khám phá ngay')).toBeInTheDocument();
+  });
 });

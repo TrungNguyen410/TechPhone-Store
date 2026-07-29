@@ -1,6 +1,6 @@
 # Frontend Review Remediation Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. All implementation steps below are checked after verification.
 
 **Goal:** Resolve the reviewed deployment, security, checkout, data-contract, accessibility, design-system, and performance defects so the TechPhone course demo behaves reliably in both mock mode and API mode.
 
@@ -47,7 +47,7 @@
 - Produces: `resolveSeedPassword(env)` returning the local demo password or a validated production password.
 - Consumers: all frontend API adapters continue importing `USE_MOCK` and `API_URL` from `constants.js`.
 
-- [ ] **Step 1: Write failing runtime configuration tests**
+- [x] **Step 1: Write failing runtime configuration tests**
 
 ```js
 import { describe, expect, it } from 'vitest';
@@ -67,13 +67,13 @@ describe('createRuntimeConfig', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test and confirm RED**
+- [x] **Step 2: Run the test and confirm RED**
 
 Run: `cd frontend && npm run test:run -- src/utils/runtimeConfig.test.js`
 
 Expected: FAIL because `runtimeConfig.js` does not exist.
 
-- [ ] **Step 3: Implement strict runtime configuration**
+- [x] **Step 3: Implement strict runtime configuration**
 
 ```js
 export const createRuntimeConfig = (env = {}) => {
@@ -98,7 +98,7 @@ export const runtimeConfig = createRuntimeConfig(import.meta.env);
 
 Update `constants.js` to export values from `runtimeConfig`.
 
-- [ ] **Step 4: Add the Netlify fallback and login regression test**
+- [x] **Step 4: Add the Netlify fallback and login regression test**
 
 `frontend/public/_redirects` must contain exactly:
 
@@ -108,7 +108,7 @@ Update `constants.js` to export values from `runtimeConfig`.
 
 The Login test mounts with mock mode disabled and asserts that `admin@gmail.com` and `123456` are absent. `Login.jsx` renders `.mock-accounts` only when `USE_MOCK` is true.
 
-- [ ] **Step 5: Generate deployment-aware SEO metadata**
+- [x] **Step 5: Generate deployment-aware SEO metadata**
 
 Add a `prebuild` script that runs `node scripts/generate-site-metadata.mjs`. The script normalizes `VITE_SITE_URL`, then writes `robots.txt` and `sitemap.xml` with that origin and the known static routes. `index.html` uses Vite’s `%VITE_SITE_URL%` replacement for canonical and structured-data URLs.
 
@@ -124,7 +124,7 @@ export const staticRoutes = [
 
 The generator test uses a temporary directory and asserts every emitted absolute URL uses the supplied Netlify origin.
 
-- [ ] **Step 6: Protect production seeding**
+- [x] **Step 6: Protect production seeding**
 
 ```js
 const isStrong = (value = '') => value.length >= 12 && !['123456', 'password'].includes(value);
@@ -142,7 +142,7 @@ module.exports = { resolveSeedPassword };
 
 Use the returned password in `seed.js`. Document `SEED_DEMO_PASSWORD` in `backend/.env.example` and deployment-facing frontend variables in `frontend/.env.example`.
 
-- [ ] **Step 7: Verify GREEN**
+- [x] **Step 7: Verify GREEN**
 
 Run:
 
@@ -153,7 +153,7 @@ cd backend && npx jest tests/seed-credentials.test.js --runInBand
 
 Expected: all focused tests PASS.
 
-- [ ] **Step 8: Commit Task 1**
+- [x] **Step 8: Commit Task 1**
 
 ```bash
 git add docs/superpowers/plans/2026-07-29-frontend-review-remediation.md frontend/public/_redirects frontend/src/utils/runtimeConfig.js frontend/src/utils/runtimeConfig.test.js frontend/src/utils/constants.js frontend/src/pages/Login.jsx frontend/src/pages/Login.test.jsx frontend/scripts/generate-site-metadata.mjs frontend/scripts/generate-site-metadata.test.js frontend/package.json frontend/index.html frontend/public/robots.txt frontend/public/sitemap.xml frontend/.env.example backend/src/utils/seedCredentials.js backend/src/seed/seed.js backend/tests/seed-credentials.test.js backend/.env.example
@@ -181,7 +181,7 @@ git commit -m "fix: secure demo deployment defaults"
 - `authApi.logout(refreshToken)` revokes the backend refresh token.
 - Axios retries one original request after a successful token refresh and redirects only after refresh failure.
 
-- [ ] **Step 1: Write failing pure-session tests**
+- [x] **Step 1: Write failing pure-session tests**
 
 ```js
 it('accepts only same-origin application paths', () => {
@@ -197,13 +197,13 @@ it('stores both access and refresh tokens', () => {
 });
 ```
 
-- [ ] **Step 2: Run and confirm RED**
+- [x] **Step 2: Run and confirm RED**
 
 Run: `cd frontend && npm run test:run -- src/utils/authSession.test.js`
 
 Expected: FAIL because the helper and refresh-token storage key do not exist.
 
-- [ ] **Step 3: Implement session persistence and interceptor refresh**
+- [x] **Step 3: Implement session persistence and interceptor refresh**
 
 Add `refreshToken` to `STORAGE_KEYS`. The interceptor must:
 
@@ -223,13 +223,13 @@ const intended = `${window.location.pathname}${window.location.search}${window.l
 window.location.assign(`/login?redirect=${encodeURIComponent(intended)}`);
 ```
 
-- [ ] **Step 4: Connect AuthContext and Login**
+- [x] **Step 4: Connect AuthContext and Login**
 
 `AuthContext.persistSession` stores both tokens. `logout` clears local state immediately and invokes `authApi.logout(refreshToken)` best-effort. Login resolves either router state or the `redirect` query with `safeInternalRedirect`.
 
 Make the Account email input read-only and omit `email` from the update payload because the backend intentionally does not support unverified email changes.
 
-- [ ] **Step 5: Verify GREEN**
+- [x] **Step 5: Verify GREEN**
 
 Run:
 
@@ -239,7 +239,7 @@ cd frontend && npm run test:run -- src/utils/authSession.test.js src/api/axiosCl
 
 Expected: safe redirects, refresh retry, refresh failure, and token persistence tests PASS.
 
-- [ ] **Step 6: Commit Task 2**
+- [x] **Step 6: Commit Task 2**
 
 ```bash
 git add frontend/src/utils/authSession.js frontend/src/utils/authSession.test.js frontend/src/utils/constants.js frontend/src/api/authApi.js frontend/src/api/axiosClient.js frontend/src/api/axiosClient.test.js frontend/src/context/AuthContext.jsx frontend/src/pages/Login.jsx frontend/src/pages/Account.jsx frontend/src/pages/Login.test.jsx
@@ -277,7 +277,7 @@ git commit -m "fix: refresh expired frontend sessions"
 - `Order.idempotencyKey` is sparse and unique; duplicate requests return the existing order without decrementing inventory twice.
 - `/payments/config` returns enabled providers and only public merchant display data.
 
-- [ ] **Step 1: Write failing pricing tests**
+- [x] **Step 1: Write failing pricing tests**
 
 ```js
 it('caps a shipping voucher at the province-specific fee', () => {
@@ -291,13 +291,13 @@ it('invalidates a voucher after subtotal drops below its minimum', () => {
 });
 ```
 
-- [ ] **Step 2: Run and confirm RED**
+- [x] **Step 2: Run and confirm RED**
 
 Run: `cd frontend && npm run test:run -- src/utils/checkoutPricing.test.js`
 
 Expected: FAIL because the pricing helper does not exist.
 
-- [ ] **Step 3: Implement shared checkout pricing**
+- [x] **Step 3: Implement shared checkout pricing**
 
 ```js
 export const calculateVoucherDiscount = (voucher, subtotal, shippingFee) => {
@@ -313,7 +313,7 @@ export const calculateVoucherDiscount = (voucher, subtotal, shippingFee) => {
 
 Use it in both CartContext and Checkout. Checkout recalculates against `shipping.fee`; it does not reuse a discount calculated against the cart’s default shipping fee.
 
-- [ ] **Step 4: Add idempotent order creation RED tests**
+- [x] **Step 4: Add idempotent order creation RED tests**
 
 The backend test sends two `POST /api/orders` requests with the same `Idempotency-Key` and asserts:
 
@@ -326,7 +326,7 @@ Run: `cd backend && npx jest tests/order-dashboard.test.js --runInBand`
 
 Expected: FAIL because the second request creates another order.
 
-- [ ] **Step 5: Implement backend idempotency**
+- [x] **Step 5: Implement backend idempotency**
 
 Add `idempotencyKey` to `Order`, add `findByIdempotencyKey`, pass request metadata from controller to service, and check before item normalization/inventory decrement:
 
@@ -340,11 +340,11 @@ if (key) {
 
 Persist `idempotencyKey: key || undefined` on the created order. Checkout keeps a stable key in a ref and uses a synchronous in-flight ref guard.
 
-- [ ] **Step 6: Preserve cart through VNPay failure**
+- [x] **Step 6: Preserve cart through VNPay failure**
 
 Do not clear the cart in `startVnpayCheckout`. Store pending payment metadata plus the order ID. `PaymentResult` parses storage through the existing safe storage helper, clears the cart and pending key only when the callback is valid and has success code `00`; cancelled, invalid, stale, or malformed returns leave the cart intact and expose a retry link.
 
-- [ ] **Step 7: Hide unconfigured bank and MoMo**
+- [x] **Step 7: Hide unconfigured bank and MoMo**
 
 Add backend env keys:
 
@@ -359,11 +359,11 @@ MOMO_ACCOUNT_NAME=
 
 `paymentService.getConfig()` marks `bank` and `momo` enabled only when all required fields exist. Checkout renders only enabled providers and uses returned public display values; no demo account or phone is hardcoded in API mode.
 
-- [ ] **Step 8: Preserve production invariants in mock checkout**
+- [x] **Step 8: Preserve production invariants in mock checkout**
 
 `mockDb.createOrder` resolves each submitted item from the current mock catalog, rejects inactive/insufficient-stock lines, uses current prices, computes shipping and voucher discount with the same pure rules, and decrements stock only once per idempotency key.
 
-- [ ] **Step 9: Verify GREEN**
+- [x] **Step 9: Verify GREEN**
 
 Run:
 
@@ -374,7 +374,7 @@ cd backend && npx jest tests/order-dashboard.test.js tests/payment.test.js --run
 
 Expected: all focused tests PASS, duplicate requests return one order, and failed VNPay paths retain the cart.
 
-- [ ] **Step 10: Commit Task 3**
+- [x] **Step 10: Commit Task 3**
 
 ```bash
 git add frontend/src/utils/checkoutPricing.js frontend/src/utils/checkoutPricing.test.js frontend/src/context/CartContext.jsx frontend/src/pages/Checkout.jsx frontend/src/pages/Checkout.test.jsx frontend/src/pages/PaymentResult.jsx frontend/src/pages/PaymentResult.test.jsx frontend/src/api/orderApi.js frontend/src/api/paymentApi.js frontend/src/mock/mockDb.js backend/src/models/Order.js backend/src/repositories/orderRepository.js backend/src/services/orderService.js backend/src/controllers/orderController.js backend/src/services/paymentService.js backend/src/config/env.js backend/.env.example backend/tests/order-dashboard.test.js backend/tests/payment.test.js
@@ -406,7 +406,7 @@ git commit -m "fix: make checkout totals and orders reliable"
 - `ORDER_STATUS_TRANSITIONS[current]` lists only legal next states.
 - `getOrderStatus('delivered')` returns a delivered label instead of falling back to pending.
 
-- [ ] **Step 1: Write failing settings normalization and order-state tests**
+- [x] **Step 1: Write failing settings normalization and order-state tests**
 
 ```js
 expect(normalizeSettings([
@@ -418,19 +418,19 @@ expect(getOrderStatus('delivered').label).toBe('Đã giao hàng');
 expect(getNextOrderStatuses('pending')).toEqual(['confirmed', 'cancelled']);
 ```
 
-- [ ] **Step 2: Run and confirm RED**
+- [x] **Step 2: Run and confirm RED**
 
 Run: `cd frontend && npm run test:run -- src/utils/storeSettings.test.js src/utils/orderStatus.test.js`
 
 Expected: settings normalizer and delivered transition helper are missing.
 
-- [ ] **Step 3: Implement API-backed settings**
+- [x] **Step 3: Implement API-backed settings**
 
 In API mode, `settingsApi.getPublic()` calls `/settings`. In mock mode, it returns local settings. `saveAll` fetches `/admin/settings`, updates matching IDs, and creates missing keys. `useStoreSettings` first renders cached/default values, then refreshes from API and publishes a window event after successful saves.
 
 `SettingManagement` owns loading/saving/error states, awaits writes, disables duplicate submits, and reports errors.
 
-- [ ] **Step 4: Implement one shared order-status contract**
+- [x] **Step 4: Implement one shared order-status contract**
 
 ```js
 export const ORDER_STATUS_TRANSITIONS = {
@@ -445,11 +445,11 @@ export const ORDER_STATUS_TRANSITIONS = {
 
 OrderManagement renders the current status plus only legal next options, disables the select during mutation, restores the previous value on failure, and shows the backend error.
 
-- [ ] **Step 5: Guard core admin mutations**
+- [x] **Step 5: Guard core admin mutations**
 
 SimpleCrudPage and CatalogManagement keep an in-flight mutation key, disable the affected action, catch validation/network failures, retain the current row/form on failure, and reload only after a confirmed write. Add focused assertions to the closest existing component tests.
 
-- [ ] **Step 6: Verify GREEN**
+- [x] **Step 6: Verify GREEN**
 
 Run:
 
@@ -459,7 +459,7 @@ cd frontend && npm run test:run -- src/utils/storeSettings.test.js src/utils/ord
 
 Expected: all focused tests PASS.
 
-- [ ] **Step 7: Commit Task 4**
+- [x] **Step 7: Commit Task 4**
 
 ```bash
 git add frontend/src/api/settingsApi.js frontend/src/utils/storeSettings.js frontend/src/utils/storeSettings.test.js frontend/src/hooks/useStoreSettings.js frontend/src/pages/admin/SettingManagement.jsx frontend/src/utils/constants.js frontend/src/utils/orderStatus.js frontend/src/utils/orderStatus.test.js frontend/src/pages/admin/OrderManagement.jsx frontend/src/pages/admin/OrderManagement.test.jsx frontend/src/components/admin/SimpleCrudPage.jsx frontend/src/components/admin/CatalogManagement.jsx frontend/src/mock/mockDb.js
@@ -491,21 +491,21 @@ git commit -m "fix: persist settings and align order states"
 - Backend keyword search matches product/accessory name, denormalized brand, and denormalized category.
 - Reorder resolves each historical line through the current product/accessory API before adding available inventory.
 
-- [ ] **Step 1: Write failing URL synchronization tests**
+- [x] **Step 1: Write failing URL synchronization tests**
 
 The Products test navigates from `/products?q=iphone` to `/products?q=samsung` without remounting and asserts the search input changes to `samsung`. The Accessories test covers `brand` and `category`.
 
-- [ ] **Step 2: Run and confirm RED**
+- [x] **Step 2: Run and confirm RED**
 
 Run: `cd frontend && npm run test:run -- src/pages/Products.test.jsx src/pages/Accessories.test.jsx`
 
 Expected: FAIL because component state is initialized from the URL only once.
 
-- [ ] **Step 3: Make URL parameters authoritative**
+- [x] **Step 3: Make URL parameters authoritative**
 
 Derive filter state from `searchParams`, or add a guarded synchronization effect that updates local input/filter values when navigation changes. User edits update the URL after debounce without overwriting browser back/forward changes.
 
-- [ ] **Step 4: Add backend cross-field search test and implementation**
+- [x] **Step 4: Add backend cross-field search test and implementation**
 
 Test:
 
@@ -516,15 +516,15 @@ expect(response.body.data.some((item) => item.brand === 'Apple')).toBe(true);
 
 `CatalogService.buildFilter` builds an `$or` filter containing name regex and taxonomy IDs matched by brand/category names.
 
-- [ ] **Step 5: Distinguish errors from empty states**
+- [x] **Step 5: Distinguish errors from empty states**
 
 Products, Accessories, Favorites, Account orders, and ProductCompare track `{ loading, error }`. A rejected request renders `LoadError` with a retry button; `EmptyState` is rendered only after a successful empty response.
 
-- [ ] **Step 6: Refresh historical reorder data**
+- [x] **Step 6: Refresh historical reorder data**
 
 For every order line, call `productApi.getById` or `accessoryApi.getById`. Add only items where `status === 'active'` and `stock > 0`, using current price/stock. Show one error toast listing unavailable item names.
 
-- [ ] **Step 7: Verify GREEN**
+- [x] **Step 7: Verify GREEN**
 
 Run:
 
@@ -535,7 +535,7 @@ cd backend && npx jest tests/catalog.test.js --runInBand
 
 Expected: all focused tests PASS.
 
-- [ ] **Step 8: Commit Task 5**
+- [x] **Step 8: Commit Task 5**
 
 ```bash
 git add frontend/src/components/common/LoadError.jsx frontend/src/pages/Products.jsx frontend/src/pages/Products.test.jsx frontend/src/pages/Accessories.jsx frontend/src/pages/Accessories.test.jsx frontend/src/pages/Favorites.jsx frontend/src/pages/Account.jsx frontend/src/pages/Account.test.jsx frontend/src/pages/ProductCompare.jsx frontend/src/components/common/Header.jsx frontend/src/components/common/HeaderSearch.test.jsx backend/src/services/catalogService.js backend/tests/catalog.test.js
@@ -570,7 +570,7 @@ git commit -m "fix: keep catalog state and failures truthful"
 - Product card action buttons are siblings of the product-detail link.
 - Inactive hero slides have `aria-hidden`, `tabIndex=-1`, `visibility:hidden`, and `pointer-events:none`.
 
-- [ ] **Step 1: Write failing accessibility tests**
+- [x] **Step 1: Write failing accessibility tests**
 
 ```jsx
 expect(screen.queryByRole('dialog', { name: /menu/i })).not.toBeInTheDocument();
@@ -582,7 +582,7 @@ expect(screen.queryByRole('dialog', { name: /menu/i })).not.toBeInTheDocument();
 
 ProductCard test asserts no button has an anchor ancestor. Home test asserts every inactive banner link has `tabindex="-1"` and `aria-hidden="true"`.
 
-- [ ] **Step 2: Run and confirm RED**
+- [x] **Step 2: Run and confirm RED**
 
 Run:
 
@@ -592,19 +592,19 @@ cd frontend && npm run test:run -- src/components/common/AccessibleDialog.test.j
 
 Expected: tests FAIL on the current mounted drawer, nested actions, and focusable hidden slides.
 
-- [ ] **Step 3: Implement reusable accessible overlays**
+- [x] **Step 3: Implement reusable accessible overlays**
 
 Use native `<dialog>` when available, with a fallback for jsdom. On open call `showModal()`, focus the first meaningful control, close on native cancel/backdrop click, and restore focus to the trigger. Migrate ConfirmModal, product form, order details, and SimpleCrudPage overlays.
 
-- [ ] **Step 4: Fix drawer and search semantics**
+- [x] **Step 4: Fix drawer and search semantics**
 
 Conditionally mount the mobile drawer, set `role="dialog"`, `aria-modal="true"`, `aria-labelledby`, `aria-expanded` and `aria-controls` on the trigger, close on Escape, and restore trigger focus. Header search becomes a labelled combobox/listbox with `aria-expanded`, keyboard ArrowUp/ArrowDown selection, Enter, and Escape.
 
-- [ ] **Step 5: Fix cards, hero, pagination, and form errors**
+- [x] **Step 5: Fix cards, hero, pagination, and form errors**
 
 Split ProductCard markup so image/title are the link and actions are sibling buttons. Add inactive slide semantics and CSS visibility/pointer-event rules. Give homepage and category autoplay a persistent pause/resume control, pause on hover/focus, and disable spatial autoplay for reduced-motion users. Add `aria-current="page"` to Pagination. Checkout/profile fields set `aria-invalid` and `aria-describedby` for inline errors.
 
-- [ ] **Step 6: Verify GREEN**
+- [x] **Step 6: Verify GREEN**
 
 Run:
 
@@ -614,7 +614,7 @@ cd frontend && npm run test:run -- src/components/common/AccessibleDialog.test.j
 
 Expected: all keyboard and semantic regression tests PASS.
 
-- [ ] **Step 7: Commit Task 6**
+- [x] **Step 7: Commit Task 6**
 
 ```bash
 git add frontend/src/components/common/AccessibleDialog.jsx frontend/src/components/common/AccessibleDialog.test.jsx frontend/src/components/common/ConfirmModal.jsx frontend/src/components/common/Header.jsx frontend/src/components/common/Header.test.jsx frontend/src/components/common/HeaderSearch.test.jsx frontend/src/components/common/Pagination.jsx frontend/src/components/product/ProductCard.jsx frontend/src/components/product/ProductCard.test.jsx frontend/src/pages/Home.jsx frontend/src/pages/Home.test.jsx frontend/src/components/home/CategoryCarousel.jsx frontend/src/components/home/CategoryCarousel.test.jsx frontend/src/pages/Account.jsx frontend/src/components/admin/ProductFormModal.jsx frontend/src/components/admin/ProductFormModal.test.jsx frontend/src/components/admin/SimpleCrudPage.jsx frontend/src/pages/Checkout.jsx frontend/src/pages/Checkout.test.jsx
@@ -645,7 +645,7 @@ git commit -m "fix: make storefront interactions keyboard safe"
 - Every page route is loaded with `React.lazy`; shared chrome and route guards remain eager.
 - API-mode image upload uses configured Cloudinary unsigned upload, or accepts a durable external URL; it never silently stores Vercel-local URLs.
 
-- [ ] **Step 1: Write failing static design-system tests**
+- [x] **Step 1: Write failing static design-system tests**
 
 ```js
 it('keeps raw color values inside tokens.css only', () => {
@@ -663,17 +663,17 @@ it('clips horizontal overflow without creating a scroll container', () => {
 });
 ```
 
-- [ ] **Step 2: Run and confirm RED**
+- [x] **Step 2: Run and confirm RED**
 
 Run: `cd frontend && npm run test:run -- src/assets/styles/designSystem.test.js`
 
 Expected: FAIL on legacy hex/rgb values, Inter, and `overflow-x:hidden`.
 
-- [ ] **Step 3: Consolidate tokens**
+- [x] **Step 3: Consolidate tokens**
 
 Add semantic Cobalt tokens for every currently used surface, ink, status, overlay, and shadow. Convert `main.css`, `admin.css`, `responsive.css`, and `redesign.css` to `var(--token)` references. Replace `font-family: Inter` with `var(--font-body)`, replace freestyle z-index values with named z tokens, specify transition properties, and preserve the existing Hallmark macrostructure stamp.
 
-- [ ] **Step 4: Add route-level lazy loading**
+- [x] **Step 4: Add route-level lazy loading**
 
 Keep `Header`, `Footer`, guards, and layouts eager. Replace page imports with:
 
@@ -684,7 +684,7 @@ const Dashboard = lazy(() => import('../pages/admin/Dashboard'));
 
 Wrap route output in one accessible `Suspense` fallback using the existing `Loading` component. Verify the built `index.html` no longer module-preloads Chart.js for storefront routes.
 
-- [ ] **Step 5: Prevent ephemeral image URLs**
+- [x] **Step 5: Prevent ephemeral image URLs**
 
 If both Cloudinary variables exist, post the file directly to:
 
@@ -694,7 +694,7 @@ If both Cloudinary variables exist, post the file directly to:
 
 with `upload_preset`. In mock mode retain FileReader behavior. In API mode without Cloudinary, hide the file picker and render a labelled URL input; validate `https://` URLs before `onChange`. Do not call the Vercel filesystem endpoint in that state.
 
-- [ ] **Step 6: Verify GREEN**
+- [x] **Step 6: Verify GREEN**
 
 Run:
 
@@ -705,7 +705,7 @@ cd frontend && npm run build
 
 Expected: design-system tests PASS, lazy-route tests PASS, build exits 0, and the HTML entry does not preload the admin chart vendor.
 
-- [ ] **Step 7: Commit Task 7**
+- [x] **Step 7: Commit Task 7**
 
 ```bash
 git add frontend/src/assets/styles/tokens.css frontend/src/assets/styles/main.css frontend/src/assets/styles/admin.css frontend/src/assets/styles/responsive.css frontend/src/assets/styles/redesign.css frontend/src/assets/styles/designSystem.test.js frontend/src/routes/AppRoutes.jsx frontend/src/routes/LazyRoutes.test.jsx frontend/src/api/uploadApi.js frontend/src/components/admin/AdminImageUpload.jsx frontend/src/components/admin/AdminImageUpload.test.jsx frontend/.env.example
@@ -722,19 +722,19 @@ git commit -m "fix: align frontend with the locked design system"
 **Interfaces:**
 - Produces fresh evidence for lint, frontend tests, frontend build, backend tests, Netlify rewrite, and final code review.
 
-- [ ] **Step 1: Run frontend lint**
+- [x] **Step 1: Run frontend lint**
 
 Run: `cd frontend && npm run lint`
 
 Expected: exit 0 with no ESLint errors.
 
-- [ ] **Step 2: Run all frontend tests**
+- [x] **Step 2: Run all frontend tests**
 
 Run: `cd frontend && npm run test:run`
 
 Expected: all test files PASS with zero failures.
 
-- [ ] **Step 3: Run production frontend build**
+- [x] **Step 3: Run production frontend build**
 
 Run:
 
@@ -747,21 +747,21 @@ npm run build
 
 Expected: exit 0; `dist/_redirects` exists; storefront entry does not preload Chart.js.
 
-- [ ] **Step 4: Run all backend tests**
+- [x] **Step 4: Run all backend tests**
 
 Run: `cd backend && npm test -- --runInBand`
 
 Expected: all Jest suites PASS with zero failures.
 
-- [ ] **Step 5: Run final code review**
+- [x] **Step 5: Run final code review**
 
 Review the complete branch diff against this plan. Critical and Important findings must be fixed with a new failing regression test and the relevant focused suite rerun. Minor findings are reported explicitly.
 
-- [ ] **Step 6: Run Hallmark handoff checks**
+- [x] **Step 6: Run Hallmark handoff checks**
 
 Load `references/slop-test.md` and `references/contract.md`. Verify token-only colors/fonts, responsive widths 320/375/414/768, keyboard navigation, reduced motion, contrast pair usage, and the existing `design.md` contract.
 
-- [ ] **Step 7: Record final repository state**
+- [x] **Step 7: Record final repository state**
 
 Run:
 

@@ -408,7 +408,7 @@
 
 .stat-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 15px;
   margin-bottom: 18px;
 }
@@ -594,7 +594,7 @@
 
 .top-products > div:not(.card-heading) {
   display: grid;
-  grid-template-columns: 23px 40px 1fr auto;
+  grid-template-columns: 23px 40px minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   padding: 9px 0;
@@ -790,7 +790,7 @@
 
 .admin-order-customer {
   display: grid;
-  grid-template-columns: 0.8fr 1.2fr;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
   gap: 12px;
   margin-bottom: 15px;
 }
@@ -979,7 +979,7 @@
 
 .admin-image-upload {
   display: grid;
-  grid-template-columns: 170px 1fr;
+  grid-template-columns: 170px minmax(0, 1fr);
   gap: 16px;
   padding: 14px;
   border: 1px dashed var(--color-slate-300);
@@ -1209,7 +1209,7 @@
 
 .settings-layout {
   display: grid;
-  grid-template-columns: 1.25fr 0.75fr;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.75fr);
   align-items: start;
   gap: 18px;
 }
@@ -1262,7 +1262,7 @@
 
 @media (max-width: 640px) {
   .admin-image-upload {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .admin-image-grid {

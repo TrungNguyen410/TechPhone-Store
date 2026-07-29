@@ -20,10 +20,24 @@ import { getOrderStatus } from '../../utils/orderStatus';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
 
+const readChartColors = () => {
+  const styles = getComputedStyle(document.documentElement);
+  const token = (name) => styles.getPropertyValue(name).trim();
+  return {
+    accent: token('--color-accent'),
+    danger: token('--color-danger'),
+    rule: token('--color-rule-soft'),
+    success: token('--color-success'),
+    violet: token('--color-violet'),
+    warning: token('--color-warning'),
+  };
+};
+
 export default function Dashboard() {
   const [data, setData] = useState(null);
   useEffect(() => { adminApi.getDashboard().then(setData); }, []);
   if (!data) return <Loading />;
+  const chartColors = readChartColors();
 
   const orderColumns = [
     { key: 'orderNumber', label: 'Mã đơn', render: (order) => <strong>{order.orderNumber}</strong> },
@@ -34,24 +48,34 @@ export default function Dashboard() {
   ];
   const revenueData = {
     labels: ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12'],
-    datasets: [{ label: 'Doanh thu (triệu đồng)', data: data.monthlyRevenue, backgroundColor: '#2563eb', borderRadius: 7 }],
+    datasets: [{ label: 'Doanh thu (triệu đồng)', data: data.monthlyRevenue, backgroundColor: chartColors.accent, borderRadius: 7 }],
   };
   const statusData = {
     labels: data.orderStatus.map((item) => getOrderStatus(item.status).label),
-    datasets: [{ data: data.orderStatus.map((item) => item.count), backgroundColor: ['#f59e0b', '#3b82f6', '#8b5cf6', '#10b981', '#ef4444'], borderWidth: 0 }],
+    datasets: [{
+      data: data.orderStatus.map((item) => item.count),
+      backgroundColor: [
+        chartColors.warning,
+        chartColors.accent,
+        chartColors.violet,
+        chartColors.success,
+        chartColors.danger,
+      ],
+      borderWidth: 0,
+    }],
   };
 
   return (
     <>
       <div className="dashboard-welcome"><div><span>Cập nhật hôm nay</span><h2>Chào buổi sáng, Admin</h2><p>Đây là tình hình hoạt động mới nhất của cửa hàng.</p></div><Link className="btn btn-primary" to="/admin/products">Quản lý sản phẩm</Link></div>
       <section className="stat-grid">
-        <StatCard label="Tổng sản phẩm" value={data.stats.products} change="+8 sản phẩm tháng này" icon={FiSmartphone} color="blue" />
-        <StatCard label="Tổng đơn hàng" value={data.stats.orders} change="+12,5% so với tháng trước" icon={FiPackage} color="violet" />
-        <StatCard label="Khách hàng" value={data.stats.customers} change="+6 khách hàng mới" icon={FiUsers} color="green" />
-        <StatCard label="Tổng doanh thu" value={formatCurrency(data.stats.revenue)} change="+18,2% so với tháng trước" icon={FiDollarSign} color="orange" />
+        <StatCard label="Tổng sản phẩm" value={data.stats.products} change="Đang được quản lý" icon={FiSmartphone} color="blue" />
+        <StatCard label="Tổng đơn hàng" value={data.stats.orders} change="Đơn hàng trong hệ thống" icon={FiPackage} color="violet" />
+        <StatCard label="Khách hàng" value={data.stats.customers} change="Tài khoản khách hàng" icon={FiUsers} color="green" />
+        <StatCard label="Tổng doanh thu" value={formatCurrency(data.stats.revenue)} change="Theo dữ liệu đơn hàng" icon={FiDollarSign} color="orange" />
       </section>
       <section className="chart-grid">
-        <div className="admin-card chart-card"><div className="card-heading"><div><h2>Doanh thu theo tháng</h2><span>Đơn vị: triệu đồng</span></div></div><Bar data={revenueData} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: '#eef2f7' } }, x: { grid: { display: false } } } }} /></div>
+        <div className="admin-card chart-card"><div className="card-heading"><div><h2>Doanh thu theo tháng</h2><span>Đơn vị: triệu đồng</span></div></div><Bar data={revenueData} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: chartColors.rule } }, x: { grid: { display: false } } } }} /></div>
         <div className="admin-card chart-card"><div className="card-heading"><div><h2>Trạng thái đơn hàng</h2><span>Phân bổ hiện tại</span></div></div><Doughnut data={statusData} options={{ responsive: true, maintainAspectRatio: false, cutout: '68%', plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } } } }} /></div>
       </section>
       <section className="dashboard-bottom-grid">

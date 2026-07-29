@@ -121,6 +121,11 @@ export default function Home() {
                   : { visibility: 'hidden', pointerEvents: 'none' }}
               >
                 <img src={banner.image} alt={banner.title} />
+                <span className="hero-mobile-copy" aria-hidden="true">
+                  <strong>{banner.title}</strong>
+                  {banner.description && <small>{banner.description}</small>}
+                  <b>Khám phá ngay</b>
+                </span>
               </Link>
             ))}
             <div className="slider-dots">
