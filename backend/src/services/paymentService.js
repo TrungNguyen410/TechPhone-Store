@@ -1,3 +1,5 @@
+const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
 const AppError = require('../utils/AppError');
 const env = require('../config/env');
 const orderRepository = require('../repositories/orderRepository');
@@ -5,12 +7,24 @@ const paymentTransactionRepository = require('../repositories/paymentTransaction
 const orderService = require('./orderService');
 const vnpayProvider = require('./paymentProviders/vnpayProvider');
 
+const PAYMENT_URL_TTL_MS = 15 * 60 * 1000;
+
 class PaymentService {
   getConfig() {
+    const bank = {
+      name: String(env.bank.name || '').trim(),
+      bin: String(env.bank.bin || '').trim(),
+      accountNumber: String(env.bank.accountNumber || '').trim(),
+      accountName: String(env.bank.accountName || '').trim(),
+    };
+    const momo = {
+      phone: String(env.momo.phone || '').trim(),
+      accountName: String(env.momo.accountName || '').trim(),
+    };
     const bankEnabled = Boolean(
-      env.bank.name && env.bank.bin && env.bank.accountNumber && env.bank.accountName,
+      bank.name && bank.bin && bank.accountNumber && bank.accountName,
     );
-    const momoEnabled = Boolean(env.momo.phone && env.momo.accountName);
+    const momoEnabled = Boolean(momo.phone && momo.accountName);
     return {
       providers: {
         cod: { enabled: true },
@@ -19,10 +33,10 @@ class PaymentService {
           ...(bankEnabled
             ? {
                 display: {
-                  bankName: env.bank.name,
-                  bankBin: env.bank.bin,
-                  accountNumber: env.bank.accountNumber,
-                  accountName: env.bank.accountName,
+                  bankName: bank.name,
+                  bankBin: bank.bin,
+                  accountNumber: bank.accountNumber,
+                  accountName: bank.accountName,
                 },
               }
             : {}),
@@ -30,7 +44,7 @@ class PaymentService {
         momo: {
           enabled: momoEnabled,
           ...(momoEnabled
-            ? { display: { phone: env.momo.phone, accountName: env.momo.accountName } }
+            ? { display: { phone: momo.phone, accountName: momo.accountName } }
             : {}),
         },
         vnpay: {
@@ -55,10 +69,31 @@ class PaymentService {
       user,
       payload.customer,
     );
-    const existing = await paymentTransactionRepository.findByIdempotencyKey(idempotencyKey);
+    const existing = await paymentTransactionRepository.findPendingByIdempotencyKey(
+      idempotencyKey,
+    );
     if (existing) {
-      const order = await orderRepository.findById(existing.orderId);
-      return { order, paymentUrl: existing.rawResponse?.paymentUrl, transaction: existing };
+      const stale = new Date(existing.createdAt).getTime() <= Date.now() - PAYMENT_URL_TTL_MS;
+      if (!stale) {
+        const order = await orderRepository.findById(existing.orderId);
+        return { order, paymentUrl: existing.rawResponse?.paymentUrl, transaction: existing };
+      }
+      await paymentTransactionRepository.expirePendingBefore(
+        idempotencyKey,
+        new Date(Date.now() - PAYMENT_URL_TTL_MS),
+      );
+
+      const replacement = await paymentTransactionRepository.findPendingByIdempotencyKey(
+        idempotencyKey,
+      );
+      if (replacement) {
+        const order = await orderRepository.findById(replacement.orderId);
+        return {
+          order,
+          paymentUrl: replacement.rawResponse?.paymentUrl,
+          transaction: replacement,
+        };
+      }
     }
 
     const order = await orderService.create(
@@ -66,7 +101,11 @@ class PaymentService {
       user,
       { idempotencyKey: metadata.idempotencyKey },
     );
-    const reference = `${order.orderNumber}${Date.now().toString().slice(-6)}`;
+    if (order.paymentStatus === 'paid') {
+      throw new AppError('This order has already been paid', 409);
+    }
+    const reference =
+      `${order.orderNumber}${Date.now().toString().slice(-6)}${crypto.randomBytes(3).toString('hex')}`;
 
     const paymentUrl = vnpayProvider.createPaymentUrl({
       amount: order.total,
@@ -75,17 +114,42 @@ class PaymentService {
       orderInfo: `Thanh toan don hang ${order.orderNumber}`,
       reference,
     });
-    const transaction = await paymentTransactionRepository.create({
-      orderId: order.id,
-      provider: 'vnpay',
-      method: 'card',
-      amount: order.total,
-      reference,
-      idempotencyKey,
-      rawResponse: { paymentUrl },
-    });
-    await orderRepository.update(order.id, { paymentReference: reference });
-    return { order: { ...order, paymentReference: reference }, paymentUrl, transaction };
+    try {
+      const transaction = await paymentTransactionRepository.create({
+        orderId: order.id,
+        provider: 'vnpay',
+        method: 'card',
+        amount: order.total,
+        reference,
+        idempotencyKey: idempotencyKey || undefined,
+        activeIdempotencyKey: idempotencyKey || undefined,
+        rawResponse: { paymentUrl },
+      });
+      await orderRepository.update(order.id, {
+        paymentReference: reference,
+        paymentStatus: 'pending',
+      });
+      return {
+        order: { ...order, paymentReference: reference, paymentStatus: 'pending' },
+        paymentUrl,
+        transaction,
+      };
+    } catch (error) {
+      if (idempotencyKey && error?.code === 11000) {
+        const winner = await paymentTransactionRepository.findPendingByIdempotencyKey(
+          idempotencyKey,
+        );
+        if (winner) {
+          const winnerOrder = await orderRepository.findById(winner.orderId);
+          return {
+            order: winnerOrder,
+            paymentUrl: winner.rawResponse?.paymentUrl,
+            transaction: winner,
+          };
+        }
+      }
+      throw error;
+    }
   }
 
   async processVnpayIpn(query) {
@@ -104,6 +168,10 @@ class PaymentService {
     if (transaction.status === 'paid') {
       return { RspCode: '02', Message: 'Order already confirmed' };
     }
+    const order = await orderRepository.findById(transaction.orderId);
+    if (order?.paymentStatus === 'paid') {
+      return { RspCode: '02', Message: 'Order already confirmed' };
+    }
 
     const paid = query.vnp_ResponseCode === '00' && query.vnp_TransactionStatus === '00';
     const transactionUpdate = {
@@ -114,17 +182,64 @@ class PaymentService {
       rawResponse: query,
       paidAt: paid ? new Date() : null,
     };
-    await paymentTransactionRepository.update(transaction.id, transactionUpdate);
-    await orderRepository.update(transaction.orderId, {
-      paymentStatus: paid ? 'paid' : 'failed',
-      ...(paid ? { status: 'confirmed' } : {}),
-    });
+    await paymentTransactionRepository.settle(transaction.id, transactionUpdate);
+    if (paid) {
+      await paymentTransactionRepository.expireOtherPending(
+        transaction.orderId,
+        transaction.id,
+      );
+      await orderRepository.update(transaction.orderId, {
+        paymentStatus: 'paid',
+        status: 'confirmed',
+      });
+    } else {
+      const activeAttempt = await paymentTransactionRepository.findPendingByOrderId(
+        transaction.orderId,
+      );
+      if (!activeAttempt) {
+        await orderRepository.update(transaction.orderId, { paymentStatus: 'failed' });
+      }
+    }
 
     return { RspCode: '00', Message: 'Confirm Success' };
   }
 
   verifyVnpayReturn(query) {
     return vnpayProvider.verifyCallback(query, env.vnpay.hashSecret);
+  }
+
+  createResultProof(query) {
+    if (!this.verifyVnpayReturn(query)) return '';
+    return jwt.sign(
+      {
+        provider: 'vnpay',
+        reference: query.vnp_TxnRef || '',
+        code: query.vnp_ResponseCode || '',
+      },
+      env.jwtAccessSecret,
+      {
+        expiresIn: '5m',
+        audience: 'vnpay-result',
+        issuer: 'techphone',
+      },
+    );
+  }
+
+  verifyResultProof(proof) {
+    try {
+      const payload = jwt.verify(proof, env.jwtAccessSecret, {
+        audience: 'vnpay-result',
+        issuer: 'techphone',
+      });
+      if (payload.provider !== 'vnpay') throw new Error('Invalid payment provider');
+      return {
+        valid: true,
+        reference: payload.reference,
+        code: payload.code,
+      };
+    } catch {
+      throw new AppError('Payment result proof is invalid or expired', 400);
+    }
   }
 }
 

@@ -40,6 +40,17 @@ class VoucherService {
 
     return voucher;
   }
+
+  async reserve(code, subtotal) {
+    const voucher = await voucherRepository.reserve(code, subtotal);
+    if (voucher) return voucher;
+    await this.validate(code, subtotal);
+    throw new AppError('Voucher could not be reserved', 409);
+  }
+
+  async release(code) {
+    return voucherRepository.release(code);
+  }
 }
 
 module.exports = new VoucherService();

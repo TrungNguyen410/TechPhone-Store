@@ -1,7 +1,6 @@
 const crypto = require('crypto');
 const AppError = require('../utils/AppError');
 const accessoryRepository = require('../repositories/accessoryRepository');
-const orderItemRepository = require('../repositories/orderItemRepository');
 const orderRepository = require('../repositories/orderRepository');
 const productRepository = require('../repositories/productRepository');
 const Accessory = require('../models/Accessory');
@@ -146,13 +145,18 @@ class OrderService {
     const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const shipping = this.shippingQuote(payload.customer, subtotal);
     const shippingFee = shipping.fee;
-    const voucher = payload.voucherCode ? await voucherService.validate(payload.voucherCode, subtotal) : null;
-    const discount = this.calculateDiscount(voucher, subtotal, shippingFee);
-    const total = Math.max(0, subtotal + shippingFee - discount);
-
     let decrements = [];
+    let voucher = null;
+    let voucherReserved = false;
     let orderCreated = false;
     try {
+      if (payload.voucherCode) {
+        voucher = await voucherService.reserve(payload.voucherCode, subtotal);
+        voucherReserved = true;
+      }
+      const discount = this.calculateDiscount(voucher, subtotal, shippingFee);
+      const total = Math.max(0, subtotal + shippingFee - discount);
+
       decrements = await this.decrementInventory(items);
 
       const order = await orderRepository.create({
@@ -176,26 +180,10 @@ class OrderService {
         status: 'pending',
       });
       orderCreated = true;
-
-      await Promise.all(
-        items.map((item) =>
-          orderItemRepository.create({
-            orderId: order.id,
-            productId: item.productId,
-            accessoryId: item.accessoryId,
-            name: item.name,
-            image: item.image,
-            price: item.price,
-            quantity: item.quantity,
-            type: item.type,
-            total: item.price * item.quantity,
-          }),
-        ),
-      );
-
       return order;
     } catch (error) {
       if (decrements.length && !orderCreated) await this.rollbackInventory(decrements);
+      if (voucherReserved && !orderCreated) await voucherService.release(voucher.code);
       if (idempotencyKey && error?.code === 11000) {
         const existing = await orderRepository.findByIdempotencyKey(idempotencyKey);
         if (existing) return existing;
@@ -240,17 +228,30 @@ class OrderService {
     if (!statusTransitions[order.status].includes(status)) {
       throw new AppError(`Cannot change order status from ${order.status} to ${status}`, 400);
     }
-    if (status === 'cancelled') await this.restoreInventory(order.items);
+    if (status === 'cancelled') return this.cancelOrder(order);
     return orderRepository.update(id, { status });
+  }
+
+  async cancelOrder(order) {
+    const previous = await orderRepository.transitionToCancelled(
+      order.id,
+      ['pending', 'confirmed'],
+    );
+    if (!previous) return orderRepository.findById(order.id);
+
+    await this.restoreInventory(previous.items);
+    const claimedVoucher = await orderRepository.claimVoucherUsageRelease(order.id);
+    if (claimedVoucher?.voucherCode) await voucherService.release(claimedVoucher.voucherCode);
+    return orderRepository.findById(order.id);
   }
 
   async cancel(id, user) {
     const order = await this.getById(id, user);
+    if (order.status === 'cancelled') return order;
     if (['shipping', 'delivered', 'completed'].includes(order.status)) {
       throw new AppError('Order can no longer be cancelled', 400);
     }
-    await this.restoreInventory(order.items);
-    return orderRepository.update(id, { status: 'cancelled' });
+    return this.cancelOrder(order);
   }
 
   async remove(id) {

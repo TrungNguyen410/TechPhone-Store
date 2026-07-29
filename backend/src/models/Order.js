@@ -55,6 +55,7 @@ const orderSchema = new mongoose.Schema(
     customer: { type: customerSchema, required: true },
     note: { type: String, default: '' },
     voucherCode: { type: String, default: null },
+    voucherUsageReleased: { type: Boolean, default: false },
   },
   baseSchemaOptions,
 );

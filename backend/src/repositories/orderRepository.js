@@ -21,6 +21,29 @@ class OrderRepository extends BaseRepository {
     return order?.toJSON() || null;
   }
 
+  async transitionToCancelled(id, statuses) {
+    const order = await Order.findOneAndUpdate(
+      { _id: id, isDeleted: false, status: { $in: statuses } },
+      { status: 'cancelled' },
+      { returnDocument: 'before', runValidators: true },
+    );
+    return order?.toJSON() || null;
+  }
+
+  async claimVoucherUsageRelease(id) {
+    const order = await Order.findOneAndUpdate(
+      {
+        _id: id,
+        isDeleted: false,
+        voucherCode: { $ne: null },
+        voucherUsageReleased: { $ne: true },
+      },
+      { voucherUsageReleased: true },
+      { returnDocument: 'after', runValidators: true },
+    );
+    return order?.toJSON() || null;
+  }
+
   async findRecent(limit = 5) {
     const docs = await Order.find({ isDeleted: false }).sort({ createdAt: -1 }).limit(limit);
     return docs.map((doc) => doc.toJSON());

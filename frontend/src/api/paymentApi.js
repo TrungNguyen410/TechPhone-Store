@@ -31,4 +31,8 @@ export const paymentApi = {
       : axiosClient.post('/payments/vnpay/checkout', payload, {
           headers: { 'Idempotency-Key': idempotencyKey },
         }),
+  verifyVnpayResult: (proof) =>
+    USE_MOCK
+      ? Promise.reject(new Error('Mock payment results are verified locally'))
+      : axiosClient.post('/payments/vnpay/result', { proof }),
 };

@@ -32,6 +32,7 @@ describe('Checkout payment confirmations', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionStorage.clear();
     window.requestAnimationFrame = (callback) => callback();
     Element.prototype.scrollIntoView = vi.fn();
     useAuth.mockReturnValue({
@@ -81,7 +82,8 @@ describe('Checkout payment confirmations', () => {
         customer: { phone: '0911111111' },
       },
       transaction: { reference: 'TP26072801REF' },
-      paymentUrl: '/payment-result?valid=true&code=00&mock=true',
+      resultProof: 'mock-result-proof',
+      paymentUrl: '/payment-result?code=00&mock=true&proof=mock-result-proof',
     });
   });
   afterEach(cleanup);
@@ -111,9 +113,33 @@ describe('Checkout payment confirmations', () => {
     expect(paymentApi.createVnpayCheckout.mock.calls[0][1]).toMatch(/^checkout-/);
     expect(cart.clearCart).not.toHaveBeenCalled();
     expect(JSON.parse(sessionStorage.getItem('techphone_pending_payment'))).toEqual(
-      expect.objectContaining({ orderId: 'order-vnpay', orderNumber: 'TP26072801' }),
+      expect.objectContaining({
+        orderId: 'order-vnpay',
+        orderNumber: 'TP26072801',
+        checkoutKey: expect.stringMatching(/^checkout-/),
+        resultProof: 'mock-result-proof',
+      }),
     );
     expect(orderApi.create).not.toHaveBeenCalled();
+  });
+
+  it('reuses the pending checkout key on the browser-visible retry route', async () => {
+    sessionStorage.setItem('techphone_pending_payment', JSON.stringify({
+      orderId: 'existing-order',
+      orderNumber: 'TP26072800',
+      reference: 'FAILED-REFERENCE',
+      checkoutKey: 'checkout-existing-attempt',
+      createdAt: Date.now(),
+    }));
+    render(<MemoryRouter initialEntries={['/checkout']}><Checkout /></MemoryRouter>);
+    completeCurrentAddress();
+    fireEvent.click(await screen.findByRole('radio', { name: /VNPay/i }));
+    fireEvent.click(screen.getByRole('button', { name: /VNPay/i }));
+
+    await waitFor(() => expect(paymentApi.createVnpayCheckout).toHaveBeenCalledTimes(1));
+    expect(paymentApi.createVnpayCheckout.mock.calls[0][1]).toBe('checkout-existing-attempt');
+    expect(JSON.parse(sessionStorage.getItem('techphone_pending_payment')).checkoutKey)
+      .toBe('checkout-existing-attempt');
   });
 
   it('recalculates a shipping voucher against the selected province fee', async () => {

@@ -24,6 +24,16 @@ const PAYMENT_CONFIRM_METHODS = ['bank', 'momo'];
 const providerNameFor = (method) => (method === 'card' ? 'vnpay' : method);
 const createCheckoutKey = () =>
   `checkout-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
+const readPendingCheckoutKey = () => {
+  try {
+    const pending = JSON.parse(sessionStorage.getItem('techphone_pending_payment') || 'null');
+    return typeof pending?.checkoutKey === 'string' && pending.checkoutKey.startsWith('checkout-')
+      ? pending.checkoutKey
+      : '';
+  } catch {
+    return '';
+  }
+};
 
 export default function Checkout() {
   const navigate = useNavigate();
@@ -49,7 +59,8 @@ export default function Checkout() {
   const [paymentReference] = useState(() => `TP${Date.now().toString().slice(-8)}`);
   const paymentConfirmRef = useRef(null);
   const checkoutTrackedRef = useRef(false);
-  const idempotencyKeyRef = useRef(createCheckoutKey());
+  const [initialCheckoutKey] = useState(() => readPendingCheckoutKey() || createCheckoutKey());
+  const idempotencyKeyRef = useRef(initialCheckoutKey);
   const submissionInFlightRef = useRef(false);
 
   useEffect(() => {
@@ -197,6 +208,8 @@ export default function Checkout() {
           orderNumber: result.order.orderNumber,
           phone: result.order.customer.phone,
           reference: result.transaction.reference,
+          checkoutKey: idempotencyKeyRef.current,
+          ...(result.resultProof ? { resultProof: result.resultProof } : {}),
           createdAt: Date.now(),
         }));
       } catch {

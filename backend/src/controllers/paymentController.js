@@ -27,14 +27,25 @@ const vnpayIpn = asyncHandler(async (req, res) => {
 });
 
 const vnpayReturn = asyncHandler(async (req, res) => {
-  const valid = paymentService.verifyVnpayReturn(req.query);
+  const proof = paymentService.createResultProof(req.query);
   const params = new URLSearchParams({
     provider: 'vnpay',
     reference: req.query.vnp_TxnRef || '',
     code: req.query.vnp_ResponseCode || '',
-    valid: String(valid),
+    ...(proof ? { proof } : {}),
   });
   res.redirect(`${env.frontendUrl}/payment-result?${params.toString()}`);
 });
 
-module.exports = { createVnpayCheckout, getConfig, vnpayIpn, vnpayReturn };
+const verifyVnpayResult = asyncHandler(async (req, res) => {
+  const result = paymentService.verifyResultProof(req.body.proof);
+  successResponse(res, result, 'Payment result verified');
+});
+
+module.exports = {
+  createVnpayCheckout,
+  getConfig,
+  verifyVnpayResult,
+  vnpayIpn,
+  vnpayReturn,
+};

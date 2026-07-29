@@ -1,8 +1,13 @@
 const request = require('supertest');
+const jwt = require('jsonwebtoken');
 const Order = require('../src/models/Order');
+const OrderItem = require('../src/models/OrderItem');
 const Product = require('../src/models/Product');
 const Brand = require('../src/models/Brand');
 const Category = require('../src/models/Category');
+const Voucher = require('../src/models/Voucher');
+const env = require('../src/config/env');
+const orderItemRepository = require('../src/repositories/orderItemRepository');
 const { app, createUser, login } = require('./helpers');
 
 describe('Orders and dashboard APIs', () => {
@@ -11,6 +16,17 @@ describe('Orders and dashboard APIs', () => {
     const category = await Category.create({ name: 'Dien thoai', slug: 'dien-thoai', active: true });
     return { brandId: brand.id, categoryId: category.id };
   };
+  const seedVoucher = (overrides = {}) => Voucher.create({
+    code: overrides.code || 'LASTONE',
+    type: 'fixed',
+    value: 100000,
+    minOrder: 0,
+    quantity: overrides.quantity ?? 1,
+    used: overrides.used ?? 0,
+    startDate: new Date(Date.now() - 24 * 60 * 60 * 1000),
+    endDate: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    active: true,
+  });
   it('creates an order and allows lookup by order number and phone', async () => {
     await createUser({ email: 'customer@test.com', phone: '0911111111' });
     const token = await login('customer@test.com');
@@ -169,6 +185,54 @@ describe('Orders and dashboard APIs', () => {
     expect(productAfter.stock).toBe(2);
   });
 
+  it('returns only fully durable embedded orders when secondary item persistence fails', async () => {
+    await createUser({ email: 'durable@test.com', phone: '0901010101' });
+    const token = await login('durable@test.com');
+    const taxonomy = await seedTaxonomy();
+    const product = await Product.create({
+      _id: 'durable-phone',
+      name: 'Durable Phone',
+      ...taxonomy,
+      price: 3500000,
+      stock: 3,
+      status: 'active',
+    });
+    const payload = {
+      items: [{ productId: product.id, quantity: 1 }],
+      customer: {
+        fullName: 'Durable Customer',
+        email: 'durable@test.com',
+        phone: '0901010101',
+        address: 'Test address',
+      },
+    };
+    const secondaryWrite = jest
+      .spyOn(orderItemRepository, 'create')
+      .mockRejectedValue(new Error('Injected secondary persistence failure'));
+    const post = () => request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .set('Idempotency-Key', 'durable-checkout')
+      .send(payload);
+
+    try {
+      const [first, second] = await Promise.all([post(), post()]);
+
+      expect(first.status).toBe(201);
+      expect(second.status).toBe(201);
+      expect(second.body.data.id).toBe(first.body.data.id);
+      expect(first.body.data.items).toEqual([
+        expect.objectContaining({ productId: product.id, quantity: 1, price: product.price }),
+      ]);
+      expect(await Order.countDocuments()).toBe(1);
+      expect(await OrderItem.countDocuments()).toBe(0);
+      expect((await Product.findById(product.id)).stock).toBe(2);
+      expect(secondaryWrite).not.toHaveBeenCalled();
+    } finally {
+      secondaryWrite.mockRestore();
+    }
+  });
+
   it('does not expose another user order when they reuse the same raw idempotency key', async () => {
     await createUser({ email: 'first@test.com', phone: '0966666666' });
     await createUser({ email: 'second@test.com', phone: '0977777777' });
@@ -238,6 +302,171 @@ describe('Orders and dashboard APIs', () => {
     expect(otherGuest.body.data.userId).toBeNull();
     const productAfter = await Product.findById(product.id);
     expect(productAfter.stock).toBe(2);
+  });
+
+  it('rejects an expired bearer token before refresh and owns the retried order', async () => {
+    const user = await createUser({ email: 'refresh-order@test.com', phone: '0902020202' });
+    const session = await request(app)
+      .post('/api/auth/login')
+      .send({ identifier: 'refresh-order@test.com', password: '123456' })
+      .expect(200);
+    const expiredToken = jwt.sign(
+      { sub: user.id, role: user.role },
+      env.jwtAccessSecret,
+      { expiresIn: -1 },
+    );
+    const taxonomy = await seedTaxonomy();
+    const product = await Product.create({
+      _id: 'refresh-owned-phone',
+      name: 'Refresh Owned Phone',
+      ...taxonomy,
+      price: 4500000,
+      stock: 2,
+      status: 'active',
+    });
+    const payload = {
+      items: [{ productId: product.id, quantity: 1 }],
+      customer: {
+        fullName: 'Refresh Customer',
+        email: 'refresh-order@test.com',
+        phone: '0902020202',
+        address: 'Test address',
+      },
+    };
+
+    await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${expiredToken}`)
+      .set('Idempotency-Key', 'refresh-owned-order')
+      .send(payload)
+      .expect(401);
+    expect(await Order.countDocuments()).toBe(0);
+    expect((await Product.findById(product.id)).stock).toBe(2);
+
+    const refreshed = await request(app)
+      .post('/api/auth/refresh')
+      .send({ refreshToken: session.body.data.refreshToken })
+      .expect(200);
+    const created = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${refreshed.body.data.token}`)
+      .set('Idempotency-Key', 'refresh-owned-order')
+      .send(payload)
+      .expect(201);
+
+    expect(created.body.data.userId).toBe(user.id);
+    expect((await Product.findById(product.id)).stock).toBe(1);
+  });
+
+  it('exhausts a limited voucher sequentially from authoritative usage', async () => {
+    const taxonomy = await seedTaxonomy();
+    const product = await Product.create({
+      _id: 'sequential-voucher-phone',
+      name: 'Sequential Voucher Phone',
+      ...taxonomy,
+      price: 2000000,
+      stock: 3,
+      status: 'active',
+    });
+    await seedVoucher({ code: 'SEQUENTIAL', quantity: 1 });
+    const payloadFor = (email, phone) => ({
+      items: [{ productId: product.id, quantity: 1 }],
+      customer: { fullName: 'Voucher Guest', email, phone, address: 'Test address' },
+      voucherCode: 'SEQUENTIAL',
+    });
+
+    await request(app)
+      .post('/api/orders')
+      .set('Idempotency-Key', 'voucher-sequential-1')
+      .send(payloadFor('voucher-one@test.com', '0903030303'))
+      .expect(201);
+    await request(app)
+      .post('/api/orders')
+      .set('Idempotency-Key', 'voucher-sequential-2')
+      .send(payloadFor('voucher-two@test.com', '0904040404'))
+      .expect(400);
+
+    expect((await Voucher.findOne({ code: 'SEQUENTIAL' })).used).toBe(1);
+    expect((await Product.findById(product.id)).stock).toBe(2);
+  });
+
+  it('allows only one concurrent last-voucher redemption', async () => {
+    const taxonomy = await seedTaxonomy();
+    const product = await Product.create({
+      _id: 'concurrent-voucher-phone',
+      name: 'Concurrent Voucher Phone',
+      ...taxonomy,
+      price: 2500000,
+      stock: 3,
+      status: 'active',
+    });
+    await seedVoucher({ code: 'CONCURRENT', quantity: 1 });
+    const post = (email, phone, key) => request(app)
+      .post('/api/orders')
+      .set('Idempotency-Key', key)
+      .send({
+        items: [{ productId: product.id, quantity: 1 }],
+        customer: { fullName: 'Voucher Guest', email, phone, address: 'Test address' },
+        voucherCode: 'CONCURRENT',
+      });
+
+    const responses = await Promise.all([
+      post('concurrent-one@test.com', '0905050505', 'voucher-concurrent-1'),
+      post('concurrent-two@test.com', '0906060606', 'voucher-concurrent-2'),
+    ]);
+
+    expect(responses.map((response) => response.status).sort()).toEqual([201, 400]);
+    expect((await Voucher.findOne({ code: 'CONCURRENT' })).used).toBe(1);
+    expect(await Order.countDocuments()).toBe(1);
+    expect((await Product.findById(product.id)).stock).toBe(2);
+  });
+
+  it('compensates the duplicate loser and releases voucher usage once on cancellation', async () => {
+    await createUser({ email: 'voucher-cancel@test.com', phone: '0907070707' });
+    const token = await login('voucher-cancel@test.com');
+    const taxonomy = await seedTaxonomy();
+    const product = await Product.create({
+      _id: 'voucher-cancel-phone',
+      name: 'Voucher Cancel Phone',
+      ...taxonomy,
+      price: 3000000,
+      stock: 3,
+      status: 'active',
+    });
+    await seedVoucher({ code: 'CANCELONCE', quantity: 2 });
+    const payload = {
+      items: [{ productId: product.id, quantity: 1 }],
+      customer: {
+        fullName: 'Voucher Customer',
+        email: 'voucher-cancel@test.com',
+        phone: '0907070707',
+        address: 'Test address',
+      },
+      voucherCode: 'CANCELONCE',
+    };
+    const post = () => request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .set('Idempotency-Key', 'voucher-duplicate')
+      .send(payload);
+
+    const [first, second] = await Promise.all([post(), post()]);
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
+    expect(first.body.data.id).toBe(second.body.data.id);
+    expect((await Voucher.findOne({ code: 'CANCELONCE' })).used).toBe(1);
+
+    await request(app)
+      .put(`/api/orders/${first.body.data.id}/cancel`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    await request(app)
+      .put(`/api/orders/${first.body.data.id}/cancel`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    expect((await Voucher.findOne({ code: 'CANCELONCE' })).used).toBe(0);
+    expect((await Product.findById(product.id)).stock).toBe(3);
   });
 
   it('enforces valid admin order status transitions', async () => {

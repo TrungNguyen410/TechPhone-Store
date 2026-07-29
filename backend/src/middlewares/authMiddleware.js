@@ -27,9 +27,10 @@ const optionalProtect = asyncHandler(async (req, _res, next) => {
   try {
     const payload = jwt.verify(token, env.jwtAccessSecret);
     const user = await User.findOne({ _id: payload.sub, isDeleted: false });
-    if (user?.status === 'active') req.user = user.toJSON();
+    if (!user || user.status !== 'active') throw new AppError('User is not authorized', 401);
+    req.user = user.toJSON();
   } catch {
-    // A guest order must not fail just because an old token remains in storage.
+    throw new AppError('Authentication token is invalid or expired', 401);
   }
   return next();
 });

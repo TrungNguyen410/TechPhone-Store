@@ -16,5 +16,6 @@ router.post(
 );
 router.get('/vnpay/ipn', paymentController.vnpayIpn);
 router.get('/vnpay/return', paymentController.vnpayReturn);
+router.post('/vnpay/result', paymentController.verifyVnpayResult);
 
 module.exports = router;

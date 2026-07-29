@@ -53,13 +53,16 @@ const createId = (prefix) => `${prefix}-${Date.now()}-${Math.random().toString(3
 const readOtpRequests = () => storage.get(STORAGE_KEYS.mockOtpRequests, []);
 const writeOtpRequests = (items) => storage.set(STORAGE_KEYS.mockOtpRequests, items);
 const mockOtp = '123456';
+const currentMockUserId = () => {
+  const currentUser = storage.get(STORAGE_KEYS.currentUser);
+  return currentUser?.id && storage.get(STORAGE_KEYS.token) ? currentUser.id : null;
+};
 const scopedCheckoutKey = (payload, idempotencyKey) => {
   const key = String(idempotencyKey || '').trim().slice(0, 120);
   if (!key) return '';
-  const currentUser = storage.get(STORAGE_KEYS.currentUser);
-  const hasSession = Boolean(currentUser?.id && storage.get(STORAGE_KEYS.token));
-  const customerScope = hasSession
-    ? `user:${currentUser.id}`
+  const userId = currentMockUserId();
+  const customerScope = userId
+    ? `user:${userId}`
     : `guest:${String(payload.customer?.email || '').trim().toLowerCase()}:${String(payload.customer?.phone || '').trim()}`;
   return `${customerScope}:${key}`;
 };
@@ -285,6 +288,7 @@ export const mockDb = {
     const now = new Date();
     const order = {
       ...payload,
+      userId: currentMockUserId(),
       items,
       subtotal,
       shippingFee: shipping.fee,
@@ -306,6 +310,7 @@ export const mockDb = {
 
   async createVnpayCheckout(payload, idempotencyKey) {
     const paymentReference = createId('vnpay');
+    const resultProof = createId('proof');
     const order = await this.createOrder({
       ...payload,
       paymentMethod: 'card',
@@ -319,7 +324,8 @@ export const mockDb = {
         provider: 'vnpay',
         status: 'pending',
       },
-      paymentUrl: `/payment-result?provider=vnpay&reference=${encodeURIComponent(order.paymentReference)}&code=00&valid=true&mock=true`,
+      resultProof,
+      paymentUrl: `/payment-result?provider=vnpay&reference=${encodeURIComponent(order.paymentReference)}&code=00&mock=true&proof=${encodeURIComponent(resultProof)}`,
     });
   },
 

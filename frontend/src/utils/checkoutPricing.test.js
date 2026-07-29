@@ -142,6 +142,43 @@ describe('mock checkout invariants', () => {
     expect(storage.get(STORAGE_KEYS.mockProducts)[0].stock).toBe(0);
   });
 
+  it('persists authoritative mock ownership and lists orders for that owner', async () => {
+    storage.set(STORAGE_KEYS.currentUser, { id: 'trusted-owner' });
+    storage.set(STORAGE_KEYS.token, 'trusted-token');
+    const order = await mockDb.createOrder({
+      userId: 'attacker-owner',
+      items: [{ id: 'current-phone', quantity: 1 }],
+      customer: {
+        fullName: 'Owned Customer',
+        email: 'owned@example.com',
+        phone: '0911111111',
+        address: 'Test address',
+      },
+    }, 'owned-key');
+
+    expect(order.userId).toBe('trusted-owner');
+    expect(await mockDb.ordersForUser('trusted-owner')).toEqual([
+      expect.objectContaining({ id: order.id, userId: 'trusted-owner' }),
+    ]);
+    expect(await mockDb.ordersForUser('attacker-owner')).toEqual([]);
+  });
+
+  it('forces guest mock ownership to null', async () => {
+    const order = await mockDb.createOrder({
+      userId: 'attacker-owner',
+      items: [{ id: 'current-phone', quantity: 1 }],
+      customer: {
+        fullName: 'Guest Customer',
+        email: 'guest-owner@example.com',
+        phone: '0911111111',
+        address: 'Test address',
+      },
+    }, 'guest-owned-key');
+
+    expect(order.userId).toBeNull();
+    expect(await mockDb.ordersForUser('attacker-owner')).toEqual([]);
+  });
+
   it('treats a stale mock user without a token as a guest scope', async () => {
     const payload = {
       items: [{ id: 'current-phone', quantity: 1 }],
