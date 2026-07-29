@@ -6,6 +6,7 @@ export const USE_MOCK = runtimeConfig.useMock;
 
 export const STORAGE_KEYS = {
   token: 'token',
+  refreshToken: 'refreshToken',
   currentUser: 'currentUser',
   cart: 'cart_items',
   voucher: 'cart_voucher',

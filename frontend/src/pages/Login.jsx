@@ -3,6 +3,7 @@ import { FiEye, FiEyeOff, FiLock, FiLogIn, FiMail, FiShield } from 'react-icons/
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useAuth } from '../hooks/useAuth';
+import { safeInternalRedirect } from '../utils/authSession';
 import { USE_MOCK } from '../utils/constants';
 
 export default function Login() {
@@ -13,7 +14,9 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const from = location.state?.from;
-  const requestedPath = from ? `${from.pathname}${from.search || ''}${from.hash || ''}` : '/';
+  const statePath = from ? `${from.pathname}${from.search || ''}${from.hash || ''}` : null;
+  const queryPath = new URLSearchParams(location.search).get('redirect');
+  const requestedPath = safeInternalRedirect(statePath || queryPath, '/');
   const customerDestination = requestedPath.startsWith('/admin') ? '/' : requestedPath;
   const adminDestination = requestedPath.startsWith('/admin') ? requestedPath : '/admin/dashboard';
 

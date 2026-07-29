@@ -11,7 +11,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useCart } from '../hooks/useCart';
 import { formatCurrency, formatDate } from '../utils/formatCurrency';
 import { getOrderStatus } from '../utils/orderStatus';
-import { isStrongEnoughPassword, isValidEmail, isValidVietnamesePhone, validateRequired } from '../utils/validators';
+import { isStrongEnoughPassword, isValidVietnamesePhone, validateRequired } from '../utils/validators';
 
 export default function Account() {
   const [searchParams] = useSearchParams();
@@ -41,18 +41,14 @@ export default function Account() {
     event.preventDefault();
     const nextErrors = validateRequired({
       fullName: profile.fullName,
-      email: profile.email,
       phone: profile.phone,
     });
-    if (profile.email && !isValidEmail(profile.email)) nextErrors.email = 'Email không đúng định dạng';
     if (profile.phone && !isValidVietnamesePhone(profile.phone)) nextErrors.phone = 'Số điện thoại Việt Nam phải có 10 số';
     setProfileErrors(nextErrors);
     if (Object.keys(nextErrors).length) return toast.error('Vui lòng kiểm tra lại thông tin cá nhân');
     try {
       await updateProfile({
-        ...profile,
         fullName: profile.fullName.trim(),
-        email: profile.email.trim(),
         phone: profile.phone.trim(),
         address: profile.address.trim(),
       });
@@ -107,7 +103,7 @@ export default function Account() {
                 <div className="form-grid">
                   <label className="form-field"><span>Họ và tên *</span><input value={profile.fullName} onChange={(event) => updateProfileField('fullName', event.target.value)} />{profileErrors.fullName && <small>{profileErrors.fullName}</small>}</label>
                   <label className="form-field"><span>Số điện thoại *</span><input value={profile.phone} onChange={(event) => updateProfileField('phone', event.target.value)} />{profileErrors.phone && <small>{profileErrors.phone}</small>}</label>
-                  <label className="form-field full"><span>Email *</span><input type="email" value={profile.email} onChange={(event) => updateProfileField('email', event.target.value)} />{profileErrors.email && <small>{profileErrors.email}</small>}</label>
+                  <label className="form-field full"><span>Email *</span><input type="email" value={profile.email} readOnly /></label>
                   <label className="form-field full"><span>Địa chỉ</span><textarea rows="3" value={profile.address} onChange={(event) => updateProfileField('address', event.target.value)} /></label>
                 </div>
                 <button className="btn btn-primary">Lưu thay đổi</button>

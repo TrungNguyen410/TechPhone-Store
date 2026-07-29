@@ -5,6 +5,10 @@ import axiosClient from './axiosClient';
 export const authApi = {
   login: (payload) =>
     USE_MOCK ? mockDb.login(payload.identifier, payload.password) : axiosClient.post('/auth/login', payload),
+  refresh: (refreshToken) =>
+    axiosClient.post('/auth/refresh', { refreshToken }),
+  logout: (refreshToken) =>
+    USE_MOCK ? Promise.resolve() : axiosClient.post('/auth/logout', { refreshToken }),
   requestRegistrationOtp: (payload) =>
     USE_MOCK ? mockDb.requestRegistrationOtp(payload) : axiosClient.post('/auth/register/request-otp', payload),
   verifyRegistrationOtp: ({ email, otp }) =>

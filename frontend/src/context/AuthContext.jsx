@@ -1,5 +1,6 @@
 import { createContext, useCallback, useEffect, useMemo, useState } from 'react';
 import { authApi } from '../api/authApi';
+import { clearAuthSession, persistAuthSession } from '../utils/authSession';
 import { STORAGE_KEYS } from '../utils/constants';
 import { storage } from '../utils/storage';
 import { mergeWishlists, normalizeWishlist, wishlistEquals } from '../utils/wishlist';
@@ -14,16 +15,15 @@ export function AuthProvider({ children }) {
   const persistSession = useCallback((session) => {
     setToken(session.token);
     setUser(session.user);
-    storage.set(STORAGE_KEYS.token, session.token);
-    storage.set(STORAGE_KEYS.currentUser, session.user);
-    return session;
+    return persistAuthSession(session);
   }, []);
 
   const logout = useCallback(() => {
+    const refreshToken = storage.get(STORAGE_KEYS.refreshToken);
     setToken(null);
     setUser(null);
-    storage.remove(STORAGE_KEYS.token);
-    storage.remove(STORAGE_KEYS.currentUser);
+    clearAuthSession();
+    if (refreshToken) void authApi.logout(refreshToken).catch(() => {});
   }, []);
 
   const loadCurrentUser = useCallback(async () => {
