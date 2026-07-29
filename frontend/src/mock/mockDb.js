@@ -1,12 +1,17 @@
 import { STORAGE_KEYS } from '../utils/constants';
+import { calculateVoucherDiscount } from '../utils/checkoutPricing';
+import { getShippingQuote } from '../utils/shipping';
 import { storage } from '../utils/storage';
+import { getNextOrderStatuses } from '../utils/orderStatus';
 import { mockAccessories } from './mockAccessories';
 import { mockBanners } from './mockBanners';
 import { mockOrders } from './mockOrders';
+import { mockContacts } from './mockContacts';
 import { mockProducts } from './mockProducts';
 import { mockReviews } from './mockReviews';
 import { mockUsers } from './mockUsers';
 import { mockVouchers } from './mockVouchers';
+import { mockBrands, mockCategories } from './mockTaxonomy';
 
 const wait = (value, delay = 180) => new Promise((resolve) => setTimeout(() => resolve(value), delay));
 const fail = (message, status = 400) => {
@@ -15,6 +20,7 @@ const fail = (message, status = 400) => {
   throw error;
 };
 const clone = (value) => JSON.parse(JSON.stringify(value));
+const slugify = (value = '') => value.toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 
 const collections = {
   users: [STORAGE_KEYS.mockUsers, mockUsers],
@@ -24,22 +30,9 @@ const collections = {
   reviews: [STORAGE_KEYS.mockReviews, mockReviews],
   vouchers: [STORAGE_KEYS.mockVouchers, mockVouchers],
   banners: [STORAGE_KEYS.mockBanners, mockBanners],
-  categories: [
-    STORAGE_KEYS.mockCategories,
-    ['Điện thoại', 'Tai nghe', 'Sạc', 'Đồng hồ', 'Ốp lưng'].map((name, index) => ({
-      id: `category-${index + 1}`,
-      name,
-      active: true,
-    })),
-  ],
-  brands: [
-    STORAGE_KEYS.mockBrands,
-    ['Apple', 'Samsung', 'Xiaomi', 'OPPO', 'Vivo', 'Honor', 'Realme'].map((name, index) => ({
-      id: `brand-${index + 1}`,
-      name,
-      active: true,
-    })),
-  ],
+  categories: [STORAGE_KEYS.mockCategories, mockCategories],
+  brands: [STORAGE_KEYS.mockBrands, mockBrands],
+  contacts: [STORAGE_KEYS.mockContacts, mockContacts],
 };
 
 const read = (name) => {
@@ -58,6 +51,22 @@ const write = (name, value) => {
 const publicUser = ({ password: _password, ...user }) => user;
 const tokenFor = (user) => `mock-jwt-${user.id}-${Date.now()}`;
 const createId = (prefix) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+const readOtpRequests = () => storage.get(STORAGE_KEYS.mockOtpRequests, []);
+const writeOtpRequests = (items) => storage.set(STORAGE_KEYS.mockOtpRequests, items);
+const mockOtp = '123456';
+const currentMockUserId = () => {
+  const currentUser = storage.get(STORAGE_KEYS.currentUser);
+  return currentUser?.id && storage.get(STORAGE_KEYS.token) ? currentUser.id : null;
+};
+const scopedCheckoutKey = (payload, idempotencyKey) => {
+  const key = String(idempotencyKey || '').trim().slice(0, 120);
+  if (!key) return '';
+  const userId = currentMockUserId();
+  const customerScope = userId
+    ? `user:${userId}`
+    : `guest:${String(payload.customer?.email || '').trim().toLowerCase()}:${String(payload.customer?.phone || '').trim()}`;
+  return `${customerScope}:${key}`;
+};
 
 export const mockDb = {
   async login(identifier, password) {
@@ -87,6 +96,77 @@ export const mockDb = {
     return wait({ token: tokenFor(user), user: publicUser(user) });
   },
 
+  async requestRegistrationOtp(payload) {
+    const users = read('users');
+    if (users.some((user) => user.email.toLowerCase() === payload.email.toLowerCase())) {
+      fail('Email đã được sử dụng');
+    }
+    if (users.some((user) => user.phone === payload.phone)) fail('Số điện thoại đã được sử dụng');
+    const request = {
+      id: createId('otp'),
+      purpose: 'register',
+      target: payload.email.toLowerCase(),
+      otp: mockOtp,
+      payload,
+      expiresAt: Date.now() + 10 * 60 * 1000,
+    };
+    writeOtpRequests([
+      request,
+      ...readOtpRequests().filter((item) => !(item.purpose === request.purpose && item.target === request.target)),
+    ]);
+    return wait({ deliveryTarget: payload.email, expiresInSeconds: 600, debugOtp: mockOtp });
+  },
+
+  async verifyRegistrationOtp(email, otp) {
+    const target = email.toLowerCase();
+    const request = readOtpRequests().find(
+      (item) => item.purpose === 'register' && item.target === target && item.expiresAt > Date.now(),
+    );
+    if (!request || request.otp !== otp) fail('Mã OTP không hợp lệ hoặc đã hết hạn');
+    writeOtpRequests(readOtpRequests().filter((item) => item.id !== request.id));
+    return this.register({ ...request.payload, emailVerified: true });
+  },
+
+  async requestPasswordReset(identifier, channel) {
+    const user = read('users').find(
+      (item) => item.email.toLowerCase() === identifier.toLowerCase() || item.phone === identifier,
+    );
+    if (!user) return wait({ message: 'Nếu tài khoản tồn tại, mã OTP đã được gửi.' });
+    const target = channel === 'sms' ? user.phone : user.email;
+    const request = {
+      id: createId('otp'),
+      purpose: 'password-reset',
+      identifier: identifier.toLowerCase(),
+      target,
+      channel,
+      userId: user.id,
+      otp: mockOtp,
+      expiresAt: Date.now() + 10 * 60 * 1000,
+    };
+    writeOtpRequests([
+      request,
+      ...readOtpRequests().filter((item) => !(item.purpose === request.purpose && item.userId === user.id)),
+    ]);
+    return wait({ deliveryTarget: target, expiresInSeconds: 600, debugOtp: mockOtp });
+  },
+
+  async resetPassword(identifier, channel, otp, newPassword) {
+    const request = readOtpRequests().find(
+      (item) =>
+        item.purpose === 'password-reset'
+        && item.identifier === identifier.toLowerCase()
+        && item.channel === channel
+        && item.expiresAt > Date.now(),
+    );
+    if (!request || request.otp !== otp) fail('Mã OTP không hợp lệ hoặc đã hết hạn');
+    const users = read('users');
+    const user = users.find((item) => item.id === request.userId);
+    user.password = newPassword;
+    write('users', users);
+    writeOtpRequests(readOtpRequests().filter((item) => item.id !== request.id));
+    return wait({ message: 'Đặt lại mật khẩu thành công' });
+  },
+
   async updateUser(userId, updates) {
     const users = read('users');
     const updated = users.map((user) => (user.id === userId ? { ...user, ...updates } : user));
@@ -94,6 +174,21 @@ export const mockDb = {
     if (!user) fail('Không tìm thấy người dùng', 404);
     write('users', updated);
     return wait(publicUser(user));
+  },
+
+  async getWishlist(userId) {
+    const user = read('users').find((item) => item.id === userId);
+    if (!user) fail('Không tìm thấy người dùng', 404);
+    return wait([...(user.wishlist || [])]);
+  },
+
+  async updateWishlist(userId, items) {
+    const users = read('users');
+    const user = users.find((item) => item.id === userId);
+    if (!user) fail('Không tìm thấy người dùng', 404);
+    user.wishlist = [...new Set((items || []).filter((item) => typeof item === 'string'))].slice(0, 100);
+    write('users', users);
+    return wait([...user.wishlist]);
   },
 
   async changePassword(userId, currentPassword, newPassword) {
@@ -116,6 +211,7 @@ export const mockDb = {
   },
 
   async save(name, payload) {
+    if ((name === 'categories' || name === 'brands') && payload.name && !payload.slug) payload = { ...payload, slug: slugify(payload.name) };
     const items = read(name);
     const now = new Date().toISOString();
     if (payload.id) {
@@ -136,19 +232,110 @@ export const mockDb = {
     return wait({ success: true });
   },
 
-  async createOrder(payload) {
+  async createOrder(payload, idempotencyKey) {
     const orders = read('orders');
+    const scopedKey = scopedCheckoutKey(payload, idempotencyKey);
+    const existing = scopedKey
+      ? orders.find((order) => order.idempotencyKey === scopedKey)
+      : null;
+    if (existing) return wait(clone(existing));
+
+    const products = read('products');
+    const accessories = read('accessories');
+    const items = (payload.items || []).map((item) => {
+      const type = item.type === 'accessory' || item.accessoryId ? 'accessory' : 'product';
+      const catalog = type === 'accessory' ? accessories : products;
+      const itemId = type === 'accessory'
+        ? item.accessoryId || item.productId || item.id
+        : item.productId || item.id;
+      const current = catalog.find((entry) => entry.id === itemId);
+      const quantity = Number(item.quantity);
+      if (!current || current.status !== 'active') fail(`${type === 'accessory' ? 'Accessory' : 'Product'} is unavailable`);
+      if (!Number.isInteger(quantity) || quantity < 1 || current.stock < quantity) {
+        fail(`${current.name} does not have enough stock`);
+      }
+      current.stock -= quantity;
+      current.sold = Number(current.sold || 0) + quantity;
+      return {
+        id: current.id,
+        productId: type === 'product' ? current.id : null,
+        accessoryId: type === 'accessory' ? current.id : null,
+        name: current.name,
+        image: current.image || '',
+        price: Number(current.price),
+        quantity,
+        type,
+      };
+    });
+    if (!items.length) fail('Order must contain at least one item', 422);
+
+    const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const shipping = getShippingQuote({ province: payload.customer?.province, subtotal });
+    const voucher = payload.voucherCode
+      ? read('vouchers').find(
+          (item) => item.code.toLowerCase() === String(payload.voucherCode).trim().toLowerCase(),
+        )
+      : null;
+    if (payload.voucherCode) {
+      const now = new Date();
+      const usable = voucher
+        && voucher.active
+        && subtotal >= Number(voucher.minOrder || 0)
+        && now >= new Date(voucher.startDate)
+        && now <= new Date(`${voucher.endDate}T23:59:59`)
+        && (!Number(voucher.quantity) || Number(voucher.used || 0) < Number(voucher.quantity));
+      if (!usable) fail('MÃ£ giáº£m giÃ¡ khÃ´ng há»£p lá»‡');
+    }
+    if (voucher) voucher.used = Number(voucher.used || 0) + 1;
+    const discount = calculateVoucherDiscount(voucher, subtotal, shipping.fee);
     const now = new Date();
     const order = {
       ...payload,
+      userId: currentMockUserId(),
+      items,
+      subtotal,
+      shippingFee: shipping.fee,
+      discount,
+      total: Math.max(0, subtotal + shipping.fee - discount),
+      voucherCode: voucher?.code || null,
+      voucherUsageReleased: false,
+      idempotencyKey: scopedKey || undefined,
       id: createId('order'),
       orderNumber: `TP${now.toISOString().slice(2, 10).replaceAll('-', '')}${String(orders.length + 1).padStart(2, '0')}`,
       status: 'pending',
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
     };
+    write('products', products);
+    write('accessories', accessories);
+    if (voucher) {
+      write('vouchers', read('vouchers').map(
+        (item) => (item.code === voucher.code ? voucher : item),
+      ));
+    }
     write('orders', [order, ...orders]);
     return wait(clone(order));
+  },
+
+  async createVnpayCheckout(payload, idempotencyKey) {
+    const paymentReference = createId('vnpay');
+    const resultProof = createId('proof');
+    const order = await this.createOrder({
+      ...payload,
+      paymentMethod: 'card',
+      paymentStatus: 'pending',
+      paymentReference,
+    }, idempotencyKey);
+    return wait({
+      order,
+      transaction: {
+        reference: order.paymentReference,
+        provider: 'vnpay',
+        status: 'pending',
+      },
+      resultProof,
+      paymentUrl: `/payment-result?provider=vnpay&reference=${encodeURIComponent(order.paymentReference)}&code=00&mock=true&proof=${encodeURIComponent(resultProof)}`,
+    });
   },
 
   async ordersForUser(userId) {
@@ -168,8 +355,49 @@ export const mockDb = {
     const orders = read('orders');
     const order = orders.find((item) => item.id === id);
     if (!order) fail('Không tìm thấy đơn hàng', 404);
+    if (status !== order.status && !getNextOrderStatuses(order.status).includes(status)) {
+      fail(`Không thể chuyển đơn từ ${order.status} sang ${status}`, 400);
+    }
+    if (status === 'cancelled' && order.status !== 'cancelled') {
+      if (['paid', 'refund_required', 'refunded'].includes(order.paymentStatus)) {
+        fail('Paid orders cannot be cancelled automatically', 400);
+      }
+      if (['shipping', 'delivered', 'completed'].includes(order.status)) {
+        fail('This order can no longer be cancelled', 400);
+      }
+      const products = read('products');
+      const accessories = read('accessories');
+      (order.items || []).forEach((item) => {
+        const catalog = item.type === 'accessory' ? accessories : products;
+        const current = catalog.find(
+          (entry) => entry.id === (item.accessoryId || item.productId || item.id),
+        );
+        if (current) {
+          current.stock = Number(current.stock || 0) + Number(item.quantity);
+          current.sold = Math.max(0, Number(current.sold || 0) - Number(item.quantity));
+        }
+      });
+      if (order.voucherCode && !order.voucherUsageReleased) {
+        const vouchers = read('vouchers');
+        const voucher = vouchers.find((item) => item.code === order.voucherCode);
+        if (voucher) voucher.used = Math.max(0, Number(voucher.used || 0) - 1);
+        write('vouchers', vouchers);
+        order.voucherUsageReleased = true;
+      }
+      write('products', products);
+      write('accessories', accessories);
+    }
     order.status = status;
     order.updatedAt = new Date().toISOString();
+    write('orders', orders);
+    return wait(clone(order));
+  },
+
+  async updateOrderShipping(id, payload) {
+    const orders = read('orders');
+    const order = orders.find((item) => item.id === id);
+    if (!order) fail('Không tìm thấy đơn hàng', 404);
+    Object.assign(order, payload, { updatedAt: new Date().toISOString() });
     write('orders', orders);
     return wait(clone(order));
   },
@@ -208,5 +436,6 @@ export const mockDb = {
 
   reset() {
     Object.values(collections).forEach(([key]) => storage.remove(key));
+    storage.remove(STORAGE_KEYS.mockOtpRequests);
   },
 };

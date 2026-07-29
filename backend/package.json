@@ -7,6 +7,7 @@
     "dev": "nodemon server.js",
     "start": "node server.js",
     "seed": "node src/seed/seed.js",
+    "migrate:taxonomy": "node src/scripts/migrateCatalogTaxonomy.js",
     "test": "jest --runInBand",
     "test:coverage": "jest --coverage --runInBand"
   },
@@ -27,9 +28,10 @@
     "express-validator": "^7.3.1",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.0.1",
+    "mongoose": "^9.8.1",
     "morgan": "^1.10.1",
     "multer": "^2.0.2",
+    "nodemailer": "^9.0.3",
     "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
@@ -44,14 +46,16 @@
       "<rootDir>/tests/setup.js"
     ],
     "collectCoverageFrom": [
-      "src/utils/**/*.js",
-      "src/services/voucherService.js"
+      "src/**/*.js",
+      "!src/config/swagger.js",
+      "!src/seed/**",
+      "!src/scripts/**"
     ],
     "coverageThreshold": {
       "global": {
-        "branches": 80,
-        "functions": 80,
-        "lines": 80,
+        "branches": 65,
+        "functions": 70,
+        "lines": 85,
         "statements": 80
       }
     }

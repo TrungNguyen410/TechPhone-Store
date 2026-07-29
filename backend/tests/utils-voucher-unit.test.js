@@ -7,6 +7,7 @@ const { createId } = require('../src/utils/id');
 const { buildRegex, parsePagination } = require('../src/utils/query');
 const slugify = require('../src/utils/slugify');
 const { hashToken, signAccessToken, signRefreshToken } = require('../src/utils/token');
+const { errorHandler } = require('../src/middlewares/errorMiddleware');
 
 describe('Utility helpers', () => {
   it('formats success and error API responses', () => {
@@ -54,6 +55,34 @@ describe('Utility helpers', () => {
     expect(parsePagination({ page: 2, pageSize: 500 })).toEqual({ page: 2, limit: 100 });
     expect(slugify('Dien thoai Apple')).toBe('dien-thoai-apple');
     expect(slugify()).toBe('');
+  });
+
+  it('hides unexpected server errors in production while preserving AppError messages', () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    process.env.NODE_ENV = 'production';
+
+    try {
+      const unexpectedRes = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+      errorHandler(new Error('mongodb://private-host/internal'), {}, unexpectedRes, jest.fn());
+      expect(unexpectedRes.status).toHaveBeenCalledWith(500);
+      expect(unexpectedRes.json).toHaveBeenCalledWith({
+        success: false,
+        message: 'Internal server error',
+        data: {},
+      });
+
+      const operationalRes = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+      errorHandler(new AppError('Payment temporarily unavailable', 503), {}, operationalRes, jest.fn());
+      expect(operationalRes.json).toHaveBeenCalledWith({
+        success: false,
+        message: 'Payment temporarily unavailable',
+        data: {},
+      });
+    } finally {
+      process.env.NODE_ENV = originalNodeEnv;
+      consoleSpy.mockRestore();
+    }
   });
 
   it('signs and hashes JWT values', () => {

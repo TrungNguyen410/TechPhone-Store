@@ -16,17 +16,37 @@ const create = [
   body('customer.email').isEmail().normalizeEmail().withMessage('valid customer email is required'),
   body('customer.phone').trim().isLength({ min: 9, max: 15 }).withMessage('valid customer phone is required'),
   body('customer.address').trim().notEmpty().withMessage('customer address is required'),
+  body('customer.province').optional().trim().isLength({ max: 100 }),
+  body('customer.district').optional().trim().isLength({ max: 100 }),
+  body('customer.ward').optional().trim().isLength({ max: 100 }),
   body('paymentMethod').optional().isIn(['cod', 'bank', 'momo', 'card']).withMessage('paymentMethod is invalid'),
   body('subtotal').optional().isFloat({ min: 0 }),
   body('shippingFee').optional().isFloat({ min: 0 }),
   body('discount').optional().isFloat({ min: 0 }),
   body('total').optional().isFloat({ min: 0 }),
+  body('paymentReference').optional().trim().isLength({ max: 100 }),
 ];
 
 const update = [
-  body('status').optional().isIn(statuses).withMessage('status is invalid'),
+  body().custom((payload) => {
+    const safeFields = [
+      'customer',
+      'note',
+      'shippingProvider',
+      'trackingNumber',
+      'estimatedDelivery',
+    ];
+    const fields = Object.keys(payload || {});
+    if (!fields.length || fields.some((field) => !safeFields.includes(field))) {
+      throw new Error('only customer and shipping details can be updated here');
+    }
+    return true;
+  }),
   body('customer').optional().isObject().withMessage('customer must be an object'),
   body('note').optional().trim(),
+  body('shippingProvider').optional().trim().isLength({ max: 100 }),
+  body('trackingNumber').optional().trim().isLength({ max: 100 }),
+  body('estimatedDelivery').optional({ nullable: true }).isISO8601().toDate(),
 ];
 
 const updateStatus = [body('status').isIn(statuses).withMessage('status is invalid')];

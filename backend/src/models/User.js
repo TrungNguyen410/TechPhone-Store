@@ -13,6 +13,9 @@ const userSchema = new mongoose.Schema(
     status: { type: String, enum: ['active', 'locked', 'inactive'], default: 'active', index: true },
     address: { type: String, default: '' },
     avatar: { type: String, default: '' },
+    wishlist: { type: [String], default: [] },
+    emailVerified: { type: Boolean, default: true, index: true },
+    emailVerifiedAt: { type: Date, default: null },
   },
   baseSchemaOptions,
 );

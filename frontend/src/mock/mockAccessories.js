@@ -1,4 +1,5 @@
 import { makeAccessoryImage } from './imageFactory';
+import { brandIdByName, categoryIdByName } from './mockTaxonomy';
 
 const accessoryCatalog = [
   ['AirPods Pro 2 USB-C', 'Apple', 'Tai nghe', 5290000, 5990000, '#2563eb'],
@@ -23,6 +24,8 @@ export const mockAccessories = accessoryCatalog.map(
       name,
       brand,
       category,
+      brandId: brandIdByName[brand],
+      categoryId: categoryIdByName[category],
       price,
       oldPrice,
       discountPercent: Math.round(((oldPrice - price) / oldPrice) * 100),

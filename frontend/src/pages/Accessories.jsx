@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FiFilter, FiHeadphones, FiSearch, FiX } from 'react-icons/fi';
 import { useSearchParams } from 'react-router-dom';
 import { accessoryApi } from '../api/accessoryApi';
 import Loading from '../components/common/Loading';
+import LoadError from '../components/common/LoadError';
 import Pagination from '../components/common/Pagination';
 import SearchBox from '../components/common/SearchBox';
 import ProductGrid from '../components/product/ProductGrid';
@@ -16,6 +17,7 @@ export default function Accessories() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [accessories, setAccessories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [search, setSearch] = useState(searchParams.get('q') || '');
   const [filters, setFilters] = useState({
     ...initialFilters,
@@ -27,18 +29,52 @@ export default function Accessories() {
   const [mobileFilter, setMobileFilter] = useState(false);
   const debouncedSearch = useDebounce(search);
 
-  useEffect(() => {
-    accessoryApi.getAll().then(setAccessories).finally(() => setLoading(false));
+  const load = useCallback(() => {
+    setLoading(true);
+    setError('');
+    return accessoryApi.getAll()
+      .then(setAccessories)
+      .catch((loadError) => setError(loadError.friendlyMessage || loadError.message))
+      .finally(() => setLoading(false));
   }, []);
+  useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    const params = {};
-    if (debouncedSearch) params.q = debouncedSearch;
-    if (filters.brand) params.brand = filters.brand;
-    if (filters.category) params.category = filters.category;
-    setSearchParams(params, { replace: true });
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      if (debouncedSearch) next.set('q', debouncedSearch);
+      else next.delete('q');
+      return next;
+    }, { replace: true });
     setPage(1);
-  }, [debouncedSearch, filters.brand, filters.category, setSearchParams]);
+  }, [debouncedSearch, setSearchParams]);
+
+  const urlSearch = searchParams.get('q') || '';
+  const urlBrand = searchParams.get('brand') || '';
+  const urlCategory = searchParams.get('category') || '';
+  useEffect(() => {
+    setSearch(urlSearch);
+    setFilters((current) => (
+      current.brand === urlBrand && current.category === urlCategory
+        ? current
+        : { ...current, brand: urlBrand, category: urlCategory }
+    ));
+    setPage(1);
+  }, [urlBrand, urlCategory, urlSearch]);
+
+  const updateFilters = (updates) => {
+    const next = { ...filters, ...updates };
+    setFilters(next);
+    setSearchParams((current) => {
+      const params = new URLSearchParams(current);
+      for (const key of ['brand', 'category']) {
+        if (next[key]) params.set(key, next[key]);
+        else params.delete(key);
+      }
+      return params;
+    }, { replace: true });
+    setPage(1);
+  };
 
   const options = useMemo(
     () => ({
@@ -74,6 +110,9 @@ export default function Accessories() {
   const visibleAccessories = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   if (loading) return <Loading />;
+  if (error) {
+    return <main className="page-shell"><div className="container"><LoadError message={error} onRetry={load} /></div></main>;
+  }
 
   return (
     <main className="page-shell">
@@ -95,25 +134,25 @@ export default function Accessories() {
             <aside className="product-filter">
               <div className="filter-heading">
                 <h3>Bộ lọc phụ kiện</h3>
-                <button onClick={() => setFilters(initialFilters)}>Đặt lại</button>
+                <button onClick={() => updateFilters(initialFilters)}>Đặt lại</button>
               </div>
               <div className="filter-group">
                 <label>Thương hiệu</label>
-                <select value={filters.brand} onChange={(event) => { setFilters({ ...filters, brand: event.target.value }); setPage(1); }}>
+                <select aria-label="Thương hiệu phụ kiện" value={filters.brand} onChange={(event) => updateFilters({ brand: event.target.value })}>
                   <option value="">Tất cả thương hiệu</option>
                   {options.brands.map((item) => <option key={item}>{item}</option>)}
                 </select>
               </div>
               <div className="filter-group">
                 <label>Loại phụ kiện</label>
-                <select value={filters.category} onChange={(event) => { setFilters({ ...filters, category: event.target.value }); setPage(1); }}>
+                <select aria-label="Loại phụ kiện" value={filters.category} onChange={(event) => updateFilters({ category: event.target.value })}>
                   <option value="">Tất cả loại phụ kiện</option>
                   {options.categories.map((item) => <option key={item}>{item}</option>)}
                 </select>
               </div>
               <div className="filter-group">
                 <label>Khoảng giá</label>
-                <select value={filters.price} onChange={(event) => { setFilters({ ...filters, price: event.target.value }); setPage(1); }}>
+                <select aria-label="Khoảng giá phụ kiện" value={filters.price} onChange={(event) => updateFilters({ price: event.target.value })}>
                   <option value="">Tất cả mức giá</option>
                   <option value="0-1000000">Dưới 1 triệu</option>
                   <option value="1000000-3000000">1 - 3 triệu</option>

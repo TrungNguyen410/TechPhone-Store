@@ -10,8 +10,8 @@ const productRepository = require('../repositories/productRepository');
 const settingRepository = require('../repositories/settingRepository');
 
 module.exports = {
-  productService: new CatalogService(productRepository),
-  accessoryService: new CatalogService(accessoryRepository),
+  productService: new CatalogService(productRepository, { brandRepository, categoryRepository }),
+  accessoryService: new CatalogService(accessoryRepository, { brandRepository, categoryRepository }),
   categoryService: new TaxonomyService(categoryRepository),
   brandService: new TaxonomyService(brandRepository),
   bannerService: new BaseCrudService(bannerRepository),

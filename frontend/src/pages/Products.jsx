@@ -1,14 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FiFilter, FiSearch, FiX } from 'react-icons/fi';
 import { useSearchParams } from 'react-router-dom';
 import { productApi } from '../api/productApi';
 import Loading from '../components/common/Loading';
+import LoadError from '../components/common/LoadError';
 import Pagination from '../components/common/Pagination';
 import SearchBox from '../components/common/SearchBox';
 import ProductFilter from '../components/product/ProductFilter';
 import ProductGrid from '../components/product/ProductGrid';
 import ProductSort from '../components/product/ProductSort';
 import { useDebounce } from '../hooks/useDebounce';
+import { trackEvent } from '../utils/analytics';
 
 const initialFilters = { brand: '', price: '', ram: '', storage: '', battery: '' };
 const PAGE_SIZE = 9;
@@ -17,6 +19,7 @@ export default function Products() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [search, setSearch] = useState(searchParams.get('q') || '');
   const [filters, setFilters] = useState({ ...initialFilters, brand: searchParams.get('brand') || '' });
   const [sort, setSort] = useState('newest');
@@ -24,17 +27,54 @@ export default function Products() {
   const [mobileFilter, setMobileFilter] = useState(false);
   const debouncedSearch = useDebounce(search);
 
-  useEffect(() => {
-    productApi.getAll().then(setProducts).finally(() => setLoading(false));
+  const load = useCallback(() => {
+    setLoading(true);
+    setError('');
+    return productApi.getAll()
+      .then(setProducts)
+      .catch((loadError) => setError(loadError.friendlyMessage || loadError.message))
+      .finally(() => setLoading(false));
   }, []);
+  useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    const params = {};
-    if (debouncedSearch) params.q = debouncedSearch;
-    if (filters.brand) params.brand = filters.brand;
-    setSearchParams(params, { replace: true });
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      if (debouncedSearch) next.set('q', debouncedSearch);
+      else next.delete('q');
+      return next;
+    }, { replace: true });
     setPage(1);
-  }, [debouncedSearch, filters.brand, setSearchParams]);
+  }, [debouncedSearch, setSearchParams]);
+
+  const urlSearch = searchParams.get('q') || '';
+  const urlBrand = searchParams.get('brand') || '';
+  useEffect(() => {
+    setSearch(urlSearch);
+    setFilters((current) => (
+      current.brand === urlBrand ? current : { ...current, brand: urlBrand }
+    ));
+    setPage(1);
+  }, [urlBrand, urlSearch]);
+
+  const updateFilters = (next) => {
+    setFilters(next);
+    if (next.brand !== filters.brand) {
+      setSearchParams((current) => {
+        const params = new URLSearchParams(current);
+        if (next.brand) params.set('brand', next.brand);
+        else params.delete('brand');
+        return params;
+      }, { replace: true });
+    }
+    setPage(1);
+  };
+
+  const resetFilters = () => updateFilters(initialFilters);
+
+  useEffect(() => {
+    if (debouncedSearch) trackEvent('search', { query_length: debouncedSearch.length });
+  }, [debouncedSearch]);
 
   const options = useMemo(
     () => ({
@@ -73,6 +113,9 @@ export default function Products() {
   const visibleProducts = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   if (loading) return <Loading />;
+  if (error) {
+    return <main className="page-shell"><div className="container"><LoadError message={error} onRetry={load} /></div></main>;
+  }
 
   return (
     <main className="page-shell">
@@ -92,8 +135,8 @@ export default function Products() {
             <ProductFilter
               filters={filters}
               options={options}
-              onChange={(next) => { setFilters(next); setPage(1); }}
-              onReset={() => setFilters(initialFilters)}
+              onChange={updateFilters}
+              onReset={resetFilters}
             />
           </div>
           {mobileFilter && <div className="drawer-overlay" onClick={() => setMobileFilter(false)} />}

@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "prebuild": "node scripts/generate-site-metadata.mjs",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
@@ -23,7 +24,7 @@
     "react-chartjs-2": "^5.3.1",
     "react-dom": "^19.2.7",
     "react-icons": "^5.5.0",
-    "react-router-dom": "^7.17.0",
+    "react-router-dom": "7.18.2",
     "react-toastify": "^11.0.5",
     "vite": "^8.0.16"
   },

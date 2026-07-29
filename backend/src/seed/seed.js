@@ -6,6 +6,7 @@ const Brand = require('../models/Brand');
 const Category = require('../models/Category');
 const Contact = require('../models/Contact');
 const Order = require('../models/Order');
+const OrderCounter = require('../models/OrderCounter');
 const OrderItem = require('../models/OrderItem');
 const Product = require('../models/Product');
 const RefreshToken = require('../models/RefreshToken');
@@ -13,9 +14,22 @@ const Review = require('../models/Review');
 const Setting = require('../models/Setting');
 const User = require('../models/User');
 const Voucher = require('../models/Voucher');
+const VerificationCode = require('../models/VerificationCode');
+const { resolveSeedPassword } = require('../utils/seedCredentials');
 
 const imageFor = (label, color = '2563eb') =>
   `https://placehold.co/800x800/${color}/ffffff?text=${encodeURIComponent(label)}`;
+
+const brandNames = ['Apple', 'Samsung', 'Xiaomi', 'OPPO', 'Vivo', 'Honor', 'Realme', 'Google', 'Anker', 'Baseus', 'TechPhone'];
+const brandIdByName = Object.fromEntries(brandNames.map((name, index) => [name, `brand-${index + 1}`]));
+const categoryIdByName = {
+  'Dien thoai': 'category-1',
+  'Tai nghe': 'category-2',
+  Sac: 'category-3',
+  'Dong ho': 'category-4',
+  'Phu kien': 'category-5',
+  'Pin du phong': 'category-6',
+};
 
 const products = [
   ['phone-1', 'iPhone 16 Pro Max', 'Apple', 33990000, 36990000, '8GB', '256GB', '2563eb'],
@@ -31,8 +45,8 @@ const products = [
   return {
     _id: id,
     name,
-    brand,
-    category: 'Dien thoai',
+    brandId: brandIdByName[brand],
+    categoryId: categoryIdByName['Dien thoai'],
     price,
     oldPrice,
     discountPercent: Math.round(((oldPrice - price) / oldPrice) * 100),
@@ -69,8 +83,8 @@ const accessories = [
   return {
     _id: id,
     name,
-    brand,
-    category,
+    brandId: brandIdByName[brand],
+    categoryId: categoryIdByName[category],
     price,
     oldPrice,
     discountPercent: Math.round(((oldPrice - price) / oldPrice) * 100),
@@ -86,6 +100,7 @@ const accessories = [
 });
 
 const run = async () => {
+  const password = await bcrypt.hash(resolveSeedPassword(), 12);
   await connectDB();
 
   await Promise.all([
@@ -95,6 +110,7 @@ const run = async () => {
     Category.deleteMany({}),
     Contact.deleteMany({}),
     Order.deleteMany({}),
+    OrderCounter.deleteMany({}),
     OrderItem.deleteMany({}),
     Product.deleteMany({}),
     RefreshToken.deleteMany({}),
@@ -102,9 +118,9 @@ const run = async () => {
     Setting.deleteMany({}),
     User.deleteMany({}),
     Voucher.deleteMany({}),
+    VerificationCode.deleteMany({}),
   ]);
 
-  const password = await bcrypt.hash('123456', 12);
   await User.insertMany([
     {
       _id: 'user-admin',
@@ -163,13 +179,30 @@ const run = async () => {
     },
   ]);
 
+  await Category.insertMany([
+    { _id: 'category-1', name: 'Dien thoai', slug: 'dien-thoai', description: 'Smartphones and flagship devices', active: true },
+    { _id: 'category-2', name: 'Tai nghe', slug: 'tai-nghe', description: 'Wireless earbuds and audio gear', active: true },
+    { _id: 'category-3', name: 'Sac', slug: 'sac', description: 'Chargers and cables', active: true },
+    { _id: 'category-4', name: 'Dong ho', slug: 'dong-ho', description: 'Smart watches and wearables', active: true },
+    { _id: 'category-5', name: 'Phu kien', slug: 'phu-kien', description: 'General accessories', active: false },
+    { _id: 'category-6', name: 'Pin du phong', slug: 'pin-du-phong', description: 'Portable power banks', active: true },
+  ]);
+  await Brand.insertMany(brandNames.map((name, index) => ({
+    _id: `brand-${index + 1}`,
+    name,
+    slug: name.toLowerCase(),
+    logo: imageFor(name, index % 2 ? '2563eb' : '0f766e'),
+    description: `${name} products available at TechPhone.`,
+    active: name !== 'TechPhone',
+  })));
+
   await Product.insertMany([
     ...products,
     {
       _id: 'phone-9',
       name: 'iPhone 15',
-      brand: 'Apple',
-      category: 'Dien thoai',
+      brandId: brandIdByName.Apple,
+      categoryId: categoryIdByName['Dien thoai'],
       price: 16990000,
       oldPrice: 19990000,
       discountPercent: 15,
@@ -191,8 +224,8 @@ const run = async () => {
     {
       _id: 'phone-inactive',
       name: 'Demo Hidden Phone',
-      brand: 'TechPhone',
-      category: 'Dien thoai',
+      brandId: brandIdByName.TechPhone,
+      categoryId: categoryIdByName['Dien thoai'],
       price: 9990000,
       oldPrice: 0,
       discountPercent: 0,
@@ -212,8 +245,8 @@ const run = async () => {
     {
       _id: 'accessory-5',
       name: 'Apple Watch Series 10',
-      brand: 'Apple',
-      category: 'Dong ho',
+      brandId: brandIdByName.Apple,
+      categoryId: categoryIdByName['Dong ho'],
       price: 10990000,
       oldPrice: 12990000,
       discountPercent: 15,
@@ -229,8 +262,8 @@ const run = async () => {
     {
       _id: 'accessory-inactive',
       name: 'Demo Hidden Accessory',
-      brand: 'TechPhone',
-      category: 'Phu kien',
+      brandId: brandIdByName.TechPhone,
+      categoryId: categoryIdByName['Phu kien'],
       price: 199000,
       oldPrice: 0,
       discountPercent: 0,
@@ -243,21 +276,6 @@ const run = async () => {
       status: 'inactive',
     },
   ]);
-  await Category.insertMany([
-    { _id: 'category-1', name: 'Dien thoai', slug: 'dien-thoai', description: 'Smartphones and flagship devices', active: true },
-    { _id: 'category-2', name: 'Tai nghe', slug: 'tai-nghe', description: 'Wireless earbuds and audio gear', active: true },
-    { _id: 'category-3', name: 'Sac', slug: 'sac', description: 'Chargers and cables', active: true },
-    { _id: 'category-4', name: 'Dong ho', slug: 'dong-ho', description: 'Smart watches and wearables', active: true },
-    { _id: 'category-5', name: 'Phu kien', slug: 'phu-kien', description: 'General accessories', active: false },
-  ]);
-  await Brand.insertMany(['Apple', 'Samsung', 'Xiaomi', 'OPPO', 'Vivo', 'Honor', 'Realme', 'Google', 'Anker', 'Baseus', 'TechPhone'].map((name, index) => ({
-    _id: `brand-${index + 1}`,
-    name,
-    slug: name.toLowerCase(),
-    logo: imageFor(name, index % 2 ? '2563eb' : '0f766e'),
-    description: `${name} products available at TechPhone.`,
-    active: name !== 'TechPhone',
-  })));
   await Voucher.insertMany([
     { _id: 'voucher-1', code: 'TECH10', type: 'percent', value: 10, minOrder: 5000000, maxDiscount: 1000000, quantity: 100, used: 12, startDate: '2026-01-01', endDate: '2026-12-31', active: true },
     { _id: 'voucher-2', code: 'GIAM200K', type: 'fixed', value: 200000, minOrder: 3000000, maxDiscount: 200000, quantity: 200, used: 28, startDate: '2026-01-01', endDate: '2026-12-31', active: true },

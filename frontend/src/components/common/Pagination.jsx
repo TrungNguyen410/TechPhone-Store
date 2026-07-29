@@ -8,6 +8,8 @@ export default function Pagination({ currentPage, totalPages, onPageChange }) {
         <button
           key={page}
           className={page === currentPage ? 'active' : ''}
+          aria-current={page === currentPage ? 'page' : undefined}
+          aria-label={`Trang ${page}`}
           onClick={() => onPageChange(page)}
         >
           {page}

@@ -7,7 +7,7 @@ export default function Footer() {
   const settings = useStoreSettings();
   return (
     <footer className="site-footer">
-      <div className="container footer-grid">
+      <div className="container footer-grid footer-masthead">
         <div className="footer-about">
           <StoreBrand className="brand-light" />
           <p>Hệ thống bán lẻ điện thoại và phụ kiện chính hãng, tận tâm từ tư vấn đến hậu mãi.</p>
@@ -17,25 +17,19 @@ export default function Footer() {
             <a href={settings.youtube} target="_blank" rel="noreferrer" aria-label="Youtube"><FiYoutube /></a>
           </div>
         </div>
-        <div>
-          <h4>Về {settings.storeName}</h4>
-          <Link to="/contact">Giới thiệu công ty</Link>
-          <Link to="/contact">Hệ thống cửa hàng</Link>
-          <Link to="/contact">Tuyển dụng</Link>
-          <Link to="/contact">Liên hệ</Link>
-        </div>
-        <div>
-          <h4>Hỗ trợ khách hàng</h4>
-          <Link to="/order-lookup">Tra cứu đơn hàng</Link>
-          <Link to="/contact">Chính sách bảo hành</Link>
-          <Link to="/contact">Chính sách đổi trả</Link>
-          <Link to="/contact">Hướng dẫn mua hàng</Link>
-        </div>
-        <div className="footer-contact">
-          <h4>Thông tin liên hệ</h4>
-          <p><FiMapPin /> {settings.address}</p>
-          <p><FiPhone /> {settings.hotline}</p>
-          <p><FiMail /> {settings.email}</p>
+        <nav className="footer-link-rail" aria-label="Chính sách và hỗ trợ">
+          <Link to="/contact">Cửa hàng & liên hệ</Link>
+          <Link to="/order-lookup">Tra cứu đơn</Link>
+          <Link to="/account?tab=orders">Đơn hàng của tôi</Link>
+          <Link to="/policies/warranty">Bảo hành</Link>
+          <Link to="/policies/returns">Đổi trả</Link>
+          <Link to="/policies/shipping">Vận chuyển</Link>
+          <Link to="/policies/payment">Thanh toán</Link>
+        </nav>
+        <div className="footer-contact-line">
+          <span><FiMapPin /> {settings.address}</span>
+          <a href={`tel:${settings.hotline.replace(/\s/g, '')}`}><FiPhone /> {settings.hotline}</a>
+          <a href={`mailto:${settings.email}`}><FiMail /> {settings.email}</a>
         </div>
       </div>
       <div className="footer-bottom">

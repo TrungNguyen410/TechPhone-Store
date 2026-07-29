@@ -1,4 +1,5 @@
 import { FiAlertTriangle, FiX } from 'react-icons/fi';
+import AccessibleDialog from './AccessibleDialog';
 
 export default function ConfirmModal({
   open,
@@ -9,22 +10,27 @@ export default function ConfirmModal({
   danger = true,
   onConfirm,
   onCancel,
+  busy = false,
 }) {
-  if (!open) return null;
   return (
-    <div className="modal-backdrop-custom" role="presentation" onMouseDown={onCancel}>
-      <div className="confirm-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
-        <button className="icon-button modal-close" onClick={onCancel} aria-label="Đóng"><FiX /></button>
+    <AccessibleDialog
+      open={open}
+      title={title}
+      className="confirm-modal"
+      onClose={() => {
+        if (!busy) onCancel();
+      }}
+    >
+        <button className="icon-button modal-close" disabled={busy} onClick={onCancel} aria-label="Đóng"><FiX /></button>
         <div className={`confirm-icon ${danger ? 'danger' : ''}`}><FiAlertTriangle /></div>
         <h3>{title}</h3>
         <p>{message}</p>
         <div className="modal-actions">
-          <button className="btn btn-light" onClick={onCancel}>{cancelText}</button>
-          <button className={`btn ${danger ? 'btn-danger' : 'btn-primary'}`} onClick={onConfirm}>
-            {confirmText}
+          <button className="btn btn-light" disabled={busy} onClick={onCancel}>{cancelText}</button>
+          <button className={`btn ${danger ? 'btn-danger' : 'btn-primary'}`} disabled={busy} onClick={onConfirm}>
+            {busy ? 'Đang xử lý…' : confirmText}
           </button>
         </div>
-      </div>
-    </div>
+    </AccessibleDialog>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FiImage, FiStar, FiX } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import { reviewApi } from '../../api/reviewApi';
@@ -7,15 +7,33 @@ import { useAuth } from '../../hooks/useAuth';
 import { formatDate } from '../../utils/formatCurrency';
 import EmptyState from '../common/EmptyState';
 
-export default function ProductReview({ productId, accessoryId, onRequireLogin }) {
+export default function ProductReview({ productId, accessoryId, onRequireLogin, onSummaryChange }) {
   const [reviews, setReviews] = useState([]);
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
   const [images, setImages] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [ratingFilter, setRatingFilter] = useState(0);
   const { user, isAuthenticated } = useAuth();
   const isAccessoryReview = Boolean(accessoryId);
+  const reviewSummary = useMemo(() => {
+    const counts = [1, 2, 3, 4, 5].reduce(
+      (result, star) => ({ ...result, [star]: reviews.filter((review) => review.rating === star).length }),
+      {},
+    );
+    const average = reviews.length
+      ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length
+      : 0;
+    return { average, counts };
+  }, [reviews]);
+  const visibleReviews = ratingFilter
+    ? reviews.filter((review) => review.rating === ratingFilter)
+    : reviews;
+
+  useEffect(() => {
+    onSummaryChange?.({ average: reviewSummary.average, count: reviews.length });
+  }, [onSummaryChange, reviewSummary.average, reviews.length]);
 
   useEffect(() => {
     const loadReviews = isAccessoryReview ? reviewApi.getByAccessory(accessoryId) : reviewApi.getByProduct(productId);
@@ -76,6 +94,40 @@ export default function ProductReview({ productId, accessoryId, onRequireLogin }
   return (
     <section className="product-reviews">
       <div className="section-heading"><div><span>Phản hồi thực tế</span><h2>{isAccessoryReview ? 'Đánh giá phụ kiện' : 'Đánh giá sản phẩm'}</h2></div></div>
+      <div className="product-review-summary panel" aria-label="Tổng quan đánh giá">
+        <div className="review-average">
+          <strong>{reviewSummary.average.toFixed(1)}</strong>
+          <span><FiStar /> trên 5</span>
+          <small>{reviews.length} đánh giá đã duyệt</small>
+        </div>
+        <div className="review-distribution">
+          {[5, 4, 3, 2, 1].map((star) => {
+            const count = reviewSummary.counts[star];
+            const percentage = reviews.length ? (count / reviews.length) * 100 : 0;
+            return (
+              <button
+                type="button"
+                key={star}
+                className={ratingFilter === star ? 'active' : ''}
+                aria-pressed={ratingFilter === star}
+                onClick={() => setRatingFilter((current) => (current === star ? 0 : star))}
+              >
+                <span>{star} <FiStar /></span>
+                <i><b style={{ transform: `scaleX(${percentage / 100})` }} /></i>
+                <small>{count}</small>
+              </button>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          className="review-filter-reset"
+          disabled={!ratingFilter}
+          onClick={() => setRatingFilter(0)}
+        >
+          {ratingFilter ? `Bỏ lọc ${ratingFilter} sao` : 'Đang xem tất cả'}
+        </button>
+      </div>
       <div className="review-layout">
         <form className="review-form panel" onSubmit={submit}>
           <h3>Chia sẻ trải nghiệm</h3>
@@ -115,13 +167,13 @@ export default function ProductReview({ productId, accessoryId, onRequireLogin }
           </button>
         </form>
         <div className="review-list">
-          {reviews.length === 0 ? (
+          {visibleReviews.length === 0 ? (
             <EmptyState title="Chưa có đánh giá" description="Hãy là người đầu tiên chia sẻ trải nghiệm." />
-          ) : reviews.map((review) => (
+          ) : visibleReviews.map((review) => (
             <article className="review-item" key={review.id}>
               <div className="review-avatar">{review.userName.charAt(0)}</div>
               <div>
-                <div className="review-author"><strong>{review.userName}</strong><span>{formatDate(review.createdAt)}</span></div>
+                <div className="review-author"><strong>{review.userName}</strong><span>{formatDate(review.createdAt)}</span>{review.verifiedPurchase && <small className="verified-review">Đã mua hàng</small>}</div>
                 <div className="review-stars">{Array.from({ length: 5 }, (_, index) => <FiStar key={index} className={index < review.rating ? 'filled' : ''} />)}</div>
                 <p>{review.comment}</p>
                 {review.images?.length > 0 && (

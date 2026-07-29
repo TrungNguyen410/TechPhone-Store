@@ -1,4 +1,5 @@
 import { makeProductImage } from './imageFactory';
+import { brandIdByName, categoryIdByName } from './mockTaxonomy';
 
 const catalog = [
   ['iPhone 16 Pro Max', 'Apple', 33990000, 36990000, '8GB', '256GB', '#2563eb'],
@@ -43,6 +44,8 @@ export const mockProducts = catalog.map(([name, brand, price, oldPrice, ram, sto
     name,
     brand,
     category: 'Điện thoại',
+    brandId: brandIdByName[brand],
+    categoryId: categoryIdByName['Điện thoại'],
     price,
     oldPrice,
     discountPercent: Math.round(((oldPrice - price) / oldPrice) * 100),

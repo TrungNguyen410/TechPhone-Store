@@ -5,7 +5,7 @@ export default function BannerManagement() {
   return <SimpleCrudPage api={bannerApi} title="Danh sách banner" singular="Banner" createDefaults={{ title: '', description: '', image: '', link: '/products', active: true }} fields={[
     { key: 'title', label: 'Tiêu đề', required: true },
     { key: 'description', label: 'Mô tả', required: true },
-    { key: 'image', label: 'URL hình ảnh', required: true, full: true },
+    { key: 'image', label: 'Ảnh banner', type: 'image', required: true, full: true },
     { key: 'link', label: 'Đường dẫn', required: true },
     { key: 'active', label: 'Đang hiển thị', type: 'checkbox' },
   ]} columns={[

@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   FiArrowRight,
   FiAward,
   FiHeadphones,
+  FiPause,
+  FiPlay,
   FiRefreshCcw,
   FiShield,
   FiSmartphone,
@@ -15,7 +17,11 @@ import { accessoryApi } from '../api/accessoryApi';
 import { bannerApi } from '../api/bannerApi';
 import { productApi } from '../api/productApi';
 import Loading from '../components/common/Loading';
+import EmptyState from '../components/common/EmptyState';
+import CategoryCarousel from '../components/home/CategoryCarousel';
 import ProductGrid from '../components/product/ProductGrid';
+import PersonalizedRecommendations from '../components/product/PersonalizedRecommendations';
+import { bestDeals, bestSellers, featuredAccessories } from '../utils/merchandising';
 
 const categories = [
   { name: 'iPhone', icon: FiSmartphone, query: 'Apple', color: 'blue' },
@@ -23,7 +29,6 @@ const categories = [
   { name: 'Xiaomi', icon: FiZap, query: 'Xiaomi', color: 'orange' },
   { name: 'Tai nghe', icon: FiHeadphones, path: '/accessories?category=Tai%20nghe', color: 'cyan' },
   { name: 'Đồng hồ', icon: FiWatch, path: '/accessories?category=Dong%20ho', color: 'green' },
-  { name: 'Thu cũ đổi mới', icon: FiRefreshCcw, path: '/contact', color: 'pink' },
 ];
 
 export default function Home() {
@@ -31,41 +36,96 @@ export default function Home() {
   const [accessories, setAccessories] = useState([]);
   const [banners, setBanners] = useState([]);
   const [activeBanner, setActiveBanner] = useState(0);
+  const [bannerInteractionPaused, setBannerInteractionPaused] = useState(false);
+  const [bannerUserPaused, setBannerUserPaused] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(
+    () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,
+  );
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  useEffect(() => {
-    Promise.all([productApi.getAll(), accessoryApi.getAll(), bannerApi.getAll()])
-      .then(([productData, accessoryData, bannerData]) => {
-        setProducts(productData.filter((item) => item.status === 'active'));
-        setAccessories(accessoryData.filter((item) => item.status === 'active'));
-        setBanners(bannerData.filter((item) => item.active));
-      })
-      .finally(() => setLoading(false));
+  const loadHomeData = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [productData, accessoryData, bannerData] = await Promise.all([
+        productApi.getAll(),
+        accessoryApi.getAll(),
+        bannerApi.getAll(),
+      ]);
+      setProducts(productData.filter((item) => item.status === 'active'));
+      setAccessories(accessoryData.filter((item) => item.status === 'active'));
+      setBanners(bannerData.filter((item) => item.active));
+    } catch (requestError) {
+      setError(requestError.friendlyMessage || 'Không thể tải dữ liệu trang chủ. Vui lòng thử lại.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    if (banners.length < 2) return undefined;
+    loadHomeData();
+  }, [loadHomeData]);
+
+  useEffect(() => {
+    const media = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    if (!media) return undefined;
+    const change = (event) => setReducedMotion(event.matches);
+    media.addEventListener?.('change', change);
+    return () => media.removeEventListener?.('change', change);
+  }, []);
+
+  const bannerPaused = bannerInteractionPaused || bannerUserPaused || reducedMotion;
+  useEffect(() => {
+    if (banners.length < 2 || bannerPaused) return undefined;
     const timer = setInterval(() => setActiveBanner((current) => (current + 1) % banners.length), 5000);
     return () => clearInterval(timer);
-  }, [banners.length]);
+  }, [bannerPaused, banners.length]);
 
   if (loading) return <Loading />;
+  if (error) {
+    return (
+      <main className="page-shell">
+        <EmptyState title="Không thể tải trang chủ" description={error} />
+        <div className="home-retry"><button className="btn btn-primary" onClick={loadHomeData}>Thử lại</button></div>
+      </main>
+    );
+  }
 
-  const hotProducts = [...products].sort((a, b) => b.sold - a.sold).slice(0, 8);
-  const saleProducts = [...products].sort((a, b) => b.discountPercent - a.discountPercent).slice(0, 8);
+  const hotProducts = bestSellers(products);
+  const saleProducts = bestDeals(products);
+  const highlightedAccessories = featuredAccessories(accessories);
 
   return (
     <>
       <section className="hero-section">
         <div className="container">
-          <div className="hero-slider">
+          <div
+            className="hero-slider"
+            onMouseEnter={() => setBannerInteractionPaused(true)}
+            onMouseLeave={() => setBannerInteractionPaused(false)}
+            onFocus={() => setBannerInteractionPaused(true)}
+            onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) setBannerInteractionPaused(false);
+            }}
+          >
             {banners.map((banner, index) => (
               <Link
                 to={banner.link}
                 className={`hero-slide ${index === activeBanner ? 'active' : ''}`}
                 key={banner.id}
+                aria-hidden={index !== activeBanner || undefined}
+                tabIndex={index === activeBanner ? undefined : -1}
+                style={index === activeBanner
+                  ? undefined
+                  : { visibility: 'hidden', pointerEvents: 'none' }}
               >
                 <img src={banner.image} alt={banner.title} />
+                <span className="hero-mobile-copy" aria-hidden="true">
+                  <strong>{banner.title}</strong>
+                  {banner.description && <small>{banner.description}</small>}
+                  <b>Khám phá ngay</b>
+                </span>
               </Link>
             ))}
             <div className="slider-dots">
@@ -75,9 +135,20 @@ export default function Home() {
                   className={index === activeBanner ? 'active' : ''}
                   onClick={() => setActiveBanner(index)}
                   aria-label={`Xem banner ${index + 1}`}
+                  aria-pressed={index === activeBanner}
                 />
               ))}
             </div>
+            {banners.length > 1 && (
+              <button
+                type="button"
+                className="slider-pause-button"
+                aria-label={bannerUserPaused ? 'Tiếp tục banner' : 'Tạm dừng banner'}
+                onClick={() => setBannerUserPaused((current) => !current)}
+              >
+                {bannerUserPaused ? <FiPlay /> : <FiPause />}
+              </button>
+            )}
           </div>
         </div>
       </section>
@@ -86,33 +157,23 @@ export default function Home() {
         <div className="section-heading compact">
           <div><span>Mua sắm dễ dàng</span><h2>Danh mục nổi bật</h2></div>
         </div>
-        <div className="category-grid">
-          {categories.map(({ name, icon: Icon, query, path, color }) => (
-            <Link
-              key={name}
-              to={path || `/products?brand=${query}`}
-              className="category-card"
-            >
-              <div className={`category-icon ${color}`}><Icon /></div>
-              <strong>{name}</strong>
-              <span>Khám phá <FiArrowRight /></span>
-            </Link>
-          ))}
-        </div>
+        <CategoryCarousel categories={categories} />
       </section>
 
       <section className="container product-section">
         <div className="section-heading">
-          <div><span>Được yêu thích nhất</span><h2>Sản phẩm bán chạy</h2></div>
+          <div><span>Xếp hạng theo số lượng đã bán</span><h2>Sản phẩm bán chạy</h2></div>
           <Link to="/products">Xem tất cả <FiArrowRight /></Link>
         </div>
         <ProductGrid products={hotProducts} />
       </section>
 
+      <PersonalizedRecommendations products={products} />
+
       <section className="sale-band">
         <div className="container">
           <div className="section-heading light">
-            <div><span>Ưu đãi có hạn</span><h2>Giá tốt hôm nay</h2></div>
+            <div><span>Giảm từ 10%, ưu tiên số tiền tiết kiệm cao</span><h2>Ưu đãi tiết kiệm nhất</h2></div>
             <Link to="/products">Săn ưu đãi <FiArrowRight /></Link>
           </div>
           <ProductGrid products={saleProducts} />
@@ -121,10 +182,10 @@ export default function Home() {
 
       <section className="container product-section" id="accessories">
         <div className="section-heading">
-          <div><span>Hoàn thiện trải nghiệm</span><h2>Phụ kiện nổi bật</h2></div>
+          <div><span>Điểm từ 4.5 sao và có ít nhất 20 lượt bán</span><h2>Phụ kiện nổi bật</h2></div>
           <Link to="/accessories">Xem tất cả <FiArrowRight /></Link>
         </div>
-        <ProductGrid products={accessories.slice(0, 8)} type="accessory" />
+        <ProductGrid products={highlightedAccessories} type="accessory" />
       </section>
 
       <section className="store-story">
@@ -139,10 +200,10 @@ export default function Home() {
             <Link className="btn btn-light btn-lg" to="/contact">Tìm hiểu về chúng tôi</Link>
           </div>
           <div className="story-stats">
-            <div><strong>8+</strong><span>Năm kinh nghiệm</span></div>
-            <div><strong>50K+</strong><span>Khách hàng tin chọn</span></div>
-            <div><strong>98%</strong><span>Khách hàng hài lòng</span></div>
-            <div><strong>24/7</strong><span>Hỗ trợ trực tuyến</span></div>
+            <div><strong>Kiểm định</strong><span>Tình trạng sản phẩm</span></div>
+            <div><strong>Minh bạch</strong><span>Giá và phí giao hàng</span></div>
+            <div><strong>Toàn quốc</strong><span>Phạm vi giao nhận</span></div>
+            <div><strong>Hậu mãi</strong><span>Tra cứu và bảo hành</span></div>
           </div>
         </div>
       </section>

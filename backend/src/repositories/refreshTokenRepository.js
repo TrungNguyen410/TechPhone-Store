@@ -9,8 +9,24 @@ class RefreshTokenRepository {
     return RefreshToken.findOne({ tokenHash, revokedAt: null });
   }
 
+  async consume(tokenHash, now = new Date()) {
+    return RefreshToken.findOneAndUpdate(
+      {
+        tokenHash,
+        revokedAt: null,
+        expiresAt: { $gt: now },
+      },
+      { $set: { revokedAt: now } },
+      { returnDocument: 'before' },
+    );
+  }
+
   async revoke(tokenHash) {
-    return RefreshToken.findOneAndUpdate({ tokenHash }, { revokedAt: new Date() }, { returnDocument: 'after' });
+    return RefreshToken.findOneAndUpdate(
+      { tokenHash, revokedAt: null },
+      { revokedAt: new Date() },
+      { returnDocument: 'after' },
+    );
   }
 
   async revokeUserTokens(userId) {

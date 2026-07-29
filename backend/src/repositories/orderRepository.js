@@ -1,9 +1,21 @@
 const BaseRepository = require('./baseRepository');
 const Order = require('../models/Order');
+const OrderCounter = require('../models/OrderCounter');
 
 class OrderRepository extends BaseRepository {
   constructor() {
     super(Order);
+  }
+
+  async ensureIndexes() {
+    await Order.init();
+  }
+
+  async create(payload, session) {
+    await this.ensureIndexes();
+    if (!session) return super.create(payload);
+    const [order] = await Order.create([payload], { session });
+    return order.toJSON();
   }
 
   async findByOrderNumberAndPhone(orderNumber, phone) {
@@ -13,6 +25,73 @@ class OrderRepository extends BaseRepository {
       'customer.phone': phone,
     });
     return order?.toJSON() || null;
+  }
+
+  async findByIdempotencyKey(idempotencyKey, session) {
+    if (!idempotencyKey) return null;
+    await this.ensureIndexes();
+    const order = await Order.findOne({ isDeleted: false, idempotencyKey }).session(session || null);
+    return order?.toJSON() || null;
+  }
+
+  async nextSequence(datePart, session) {
+    const counter = await OrderCounter.findOneAndUpdate(
+      { _id: datePart },
+      { $inc: { value: 1 } },
+      {
+        upsert: true,
+        returnDocument: 'after',
+        setDefaultsOnInsert: true,
+        session,
+      },
+    );
+    return counter.value;
+  }
+
+  async transitionToCancelled(id, statuses, session) {
+    const order = await Order.findOneAndUpdate(
+      {
+        _id: id,
+        isDeleted: false,
+        status: { $in: statuses },
+        paymentStatus: { $nin: ['paid', 'refund_required', 'refunded'] },
+      },
+      { status: 'cancelled' },
+      { returnDocument: 'before', runValidators: true, session },
+    );
+    return order?.toJSON() || null;
+  }
+
+  async claimVoucherUsageRelease(id, session) {
+    const order = await Order.findOneAndUpdate(
+      {
+        _id: id,
+        isDeleted: false,
+        voucherCode: { $ne: null },
+        voucherUsageReleased: { $ne: true },
+      },
+      { voucherUsageReleased: true },
+      { returnDocument: 'after', runValidators: true, session },
+    );
+    return order?.toJSON() || null;
+  }
+
+  async updateState(id, filter, payload, session) {
+    const order = await Order.findOneAndUpdate(
+      { _id: id, isDeleted: false, ...filter },
+      { $set: payload },
+      { returnDocument: 'after', runValidators: true, session },
+    );
+    return order?.toJSON() || null;
+  }
+
+  async softDelete(id, session) {
+    const order = await Order.findOneAndUpdate(
+      { _id: id, isDeleted: false },
+      { $set: { isDeleted: true, deletedAt: new Date() } },
+      { returnDocument: 'after', runValidators: true, session },
+    );
+    return order ? { id, deleted: true } : null;
   }
 
   async findRecent(limit = 5) {

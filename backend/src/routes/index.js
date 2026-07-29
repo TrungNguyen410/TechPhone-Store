@@ -12,6 +12,8 @@ const contactRoutes = require('./contactRoutes');
 const settingRoutes = require('./settingRoutes');
 const uploadRoutes = require('./uploadRoutes');
 const adminRoutes = require('./adminRoutes');
+const paymentRoutes = require('./paymentRoutes');
+const seoRoutes = require('./seoRoutes');
 
 const router = express.Router();
 
@@ -28,5 +30,7 @@ router.use('/contacts', contactRoutes);
 router.use('/settings', settingRoutes);
 router.use('/uploads', uploadRoutes);
 router.use('/admin', adminRoutes);
+router.use('/payments', paymentRoutes);
+router.use('/seo', seoRoutes);
 
 module.exports = router;

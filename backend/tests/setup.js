@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
-const { MongoMemoryServer } = require('mongodb-memory-server');
+const { MongoMemoryReplSet } = require('mongodb-memory-server');
+const { assertTransactionTopology } = require('../src/config/database');
 
 let mongoServer;
 
@@ -13,15 +14,14 @@ beforeAll(async () => {
   process.env.NODE_ENV = 'test';
   process.env.JWT_ACCESS_SECRET = 'test-access-secret';
   process.env.JWT_REFRESH_SECRET = 'test-refresh-secret';
-  const testMongoUri = process.env.MONGO_URI_TEST || 'mongodb://127.0.0.1:27017/techphone_store_test';
-
-  try {
-    await mongoose.connect(testMongoUri, { serverSelectionTimeoutMS: 3000 });
-  } catch {
-    await mongoose.disconnect().catch(() => {});
-    mongoServer = await MongoMemoryServer.create();
+  if (process.env.MONGO_URI_TEST) {
+    await mongoose.connect(process.env.MONGO_URI_TEST, { serverSelectionTimeoutMS: 3000 });
+  } else {
+    mongoServer = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
     await mongoose.connect(mongoServer.getUri());
   }
+  const hello = await mongoose.connection.db.admin().command({ hello: 1 });
+  assertTransactionTopology(hello);
 
   await clearDatabase();
 });

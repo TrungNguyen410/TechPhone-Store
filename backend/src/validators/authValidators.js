@@ -18,6 +18,22 @@ const login = [
   body('password').notEmpty().withMessage('password is required'),
 ];
 
+const verifyRegistrationOtp = [
+  body('email').isEmail().normalizeEmail().withMessage('valid email is required'),
+  body('otp').trim().matches(/^\d{6}$/).withMessage('otp must contain 6 digits'),
+];
+
+const requestPasswordReset = [
+  body('identifier').trim().notEmpty().withMessage('identifier is required'),
+  body('channel').isIn(['email', 'sms']).withMessage('channel is invalid'),
+];
+
+const resetPassword = [
+  ...requestPasswordReset,
+  body('otp').trim().matches(/^\d{6}$/).withMessage('otp must contain 6 digits'),
+  body('newPassword').isLength({ min: 6 }).withMessage('newPassword must be at least 6 characters'),
+];
+
 const updateProfile = [
   body('fullName').optional().trim().notEmpty().withMessage('fullName cannot be empty'),
   body('phone').optional().trim().isLength({ min: 9, max: 15 }).withMessage('valid phone is required'),
@@ -33,4 +49,14 @@ const changePassword = [
 const refresh = [body('refreshToken').notEmpty().withMessage('refreshToken is required')];
 const logout = [body('refreshToken').optional().isString()];
 
-module.exports = { register, login, updateProfile, changePassword, refresh, logout };
+module.exports = {
+  register,
+  verifyRegistrationOtp,
+  requestPasswordReset,
+  resetPassword,
+  login,
+  updateProfile,
+  changePassword,
+  refresh,
+  logout,
+};

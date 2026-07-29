@@ -3,19 +3,49 @@ const User = require('../src/models/User');
 const { app, createUser, login } = require('./helpers');
 
 describe('Auth API', () => {
-  it('registers a customer and returns frontend-compatible token data', async () => {
-    const response = await request(app).post('/api/auth/register').send({
+  it('creates a customer only after the email OTP is verified', async () => {
+    const requested = await request(app).post('/api/auth/register/request-otp').send({
       fullName: 'Nguyen Minh Anh',
       email: 'minhanh@example.com',
       phone: '0912345678',
       password: '123456',
     });
 
-    expect(response.status).toBe(201);
-    expect(response.body.success).toBe(true);
-    expect(response.body.data.token).toBeTruthy();
-    expect(response.body.data.user.email).toBe('minhanh@example.com');
-    expect(response.body.data.user.password).toBeUndefined();
+    expect(requested.status).toBe(202);
+    expect(await User.findOne({ email: 'minhanh@example.com' })).toBeNull();
+
+    const verified = await request(app).post('/api/auth/register/verify-otp').send({
+      email: 'minhanh@example.com',
+      otp: requested.body.data.debugOtp,
+    });
+
+    expect(verified.status).toBe(201);
+    expect(verified.body.data.token).toBeTruthy();
+    expect(verified.body.data.user.emailVerified).toBe(true);
+    expect(verified.body.data.user.password).toBeUndefined();
+  });
+
+  it('resets a forgotten password with a one-time code', async () => {
+    await createUser({ email: 'forgot@test.com', phone: '0977777777' });
+    const requested = await request(app).post('/api/auth/forgot-password/request-otp').send({
+      identifier: 'forgot@test.com',
+      channel: 'email',
+    });
+    expect(requested.status).toBe(200);
+
+    const reset = await request(app).post('/api/auth/forgot-password/reset').send({
+      identifier: 'forgot@test.com',
+      channel: 'email',
+      otp: requested.body.data.debugOtp,
+      newPassword: 'new-password',
+    });
+    expect(reset.status).toBe(200);
+
+    const loggedIn = await request(app).post('/api/auth/login').send({
+      identifier: 'forgot@test.com',
+      password: 'new-password',
+    });
+    expect(loggedIn.status).toBe(200);
   });
 
   it('does not allow public registration to set admin role', async () => {
@@ -70,5 +100,73 @@ describe('Auth API', () => {
 
     expect(response.status).toBe(403);
     expect(response.body.success).toBe(false);
+  });
+
+  it('allows a refresh token to be consumed only once under concurrent requests', async () => {
+    await createUser({ email: 'refresh-race@test.com', phone: '0988888887' });
+    const loginResponse = await request(app).post('/api/auth/login').send({
+      identifier: 'refresh-race@test.com',
+      password: '123456',
+    });
+
+    const attempts = await Promise.all([
+      request(app).post('/api/auth/refresh').send({
+        refreshToken: loginResponse.body.data.refreshToken,
+      }),
+      request(app).post('/api/auth/refresh').send({
+        refreshToken: loginResponse.body.data.refreshToken,
+      }),
+    ]);
+
+    expect(attempts.map((response) => response.status).sort()).toEqual([200, 401]);
+  });
+
+  it('allows a password-reset OTP to be consumed only once under concurrent requests', async () => {
+    await createUser({ email: 'otp-race@test.com', phone: '0977777776' });
+    const requested = await request(app).post('/api/auth/forgot-password/request-otp').send({
+      identifier: 'otp-race@test.com',
+      channel: 'email',
+    });
+
+    const payload = {
+      identifier: 'otp-race@test.com',
+      channel: 'email',
+      otp: requested.body.data.debugOtp,
+      newPassword: 'one-time-password',
+    };
+    const attempts = await Promise.all([
+      request(app).post('/api/auth/forgot-password/reset').send(payload),
+      request(app).post('/api/auth/forgot-password/reset').send(payload),
+    ]);
+
+    expect(attempts.map((response) => response.status).sort()).toEqual([200, 400]);
+  });
+
+  it('returns 401 instead of 500 for an invalid access token', async () => {
+    const response = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', 'Bearer expired-or-invalid-token');
+
+    expect(response.status).toBe(401);
+    expect(response.body.message).toBe('Authentication token is invalid or expired');
+  });
+
+  it('persists a deduplicated wishlist with a 100 item limit', async () => {
+    await createUser({ email: 'wishlist@test.com', phone: '0977777777' });
+    const token = await login('wishlist@test.com');
+    const items = [...Array.from({ length: 105 }, (_, index) => `item-${index}`), 'item-0'];
+
+    const updated = await request(app)
+      .put('/api/auth/wishlist')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ items });
+    expect(updated.status).toBe(200);
+    expect(updated.body.data).toHaveLength(100);
+    expect(new Set(updated.body.data).size).toBe(100);
+
+    const fetched = await request(app)
+      .get('/api/auth/wishlist')
+      .set('Authorization', `Bearer ${token}`);
+    expect(fetched.body.data).toEqual(updated.body.data);
   });
 });

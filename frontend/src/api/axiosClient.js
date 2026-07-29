@@ -1,12 +1,70 @@
 import axios from 'axios';
 import { API_URL, STORAGE_KEYS } from '../utils/constants';
+import {
+  clearAuthSession,
+  getAuthSessionRevision,
+  persistAuthSession,
+} from '../utils/authSession';
 import { storage } from '../utils/storage';
+import { authApi } from './authApi';
 
 const axiosClient = axios.create({
   baseURL: API_URL,
   timeout: 10000,
   headers: { 'Content-Type': 'application/json' },
 });
+
+let refreshPromise = null;
+
+const refreshCancelled = () => Object.assign(
+  new Error('Session refresh was cancelled'),
+  { code: 'AUTH_REFRESH_CANCELLED' },
+);
+
+const isRefreshRequest = (config) => {
+  try {
+    return new URL(config?.url || '', API_URL).pathname.endsWith('/auth/refresh');
+  } catch {
+    return false;
+  }
+};
+
+const redirectToLogin = () => {
+  const currentPath = window.location.pathname.replace(/\/+$/, '') || '/';
+  if (currentPath === '/login') return;
+  const intended = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  window.location.assign(`/login?redirect=${encodeURIComponent(intended)}`);
+};
+
+const refreshSessionOnce = (refreshToken) => {
+  if (!refreshPromise) {
+    const sessionRevision = getAuthSessionRevision();
+    refreshPromise = authApi.refresh(refreshToken)
+      .then((session) => {
+        const persistedSession = persistAuthSession(session, sessionRevision);
+        if (!persistedSession) throw refreshCancelled();
+        return persistedSession;
+      })
+      .catch((error) => {
+        if (error.code === 'AUTH_REFRESH_CANCELLED') throw error;
+        if (getAuthSessionRevision() !== sessionRevision) throw refreshCancelled();
+        clearAuthSession();
+        redirectToLogin();
+        throw error;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+  return refreshPromise;
+};
+
+const rejectFriendly = (error) => {
+  const message =
+    error.response?.data?.message || error.message || 'Có lỗi xảy ra. Vui lòng thử lại sau.';
+  error.message = message;
+  return Promise.reject(Object.assign(error, { friendlyMessage: message }));
+};
 
 axiosClient.interceptors.request.use((config) => {
   const token = storage.get(STORAGE_KEYS.token);
@@ -22,18 +80,41 @@ axiosClient.interceptors.response.use(
     }
     return payload;
   },
-  (error) => {
-    if (error.response?.status === 401) {
-      storage.remove(STORAGE_KEYS.token);
-      storage.remove(STORAGE_KEYS.currentUser);
-      if (!window.location.pathname.includes('/login')) {
-        window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
+  async (error) => {
+    const originalRequest = error.config || {};
+    const refreshToken = storage.get(STORAGE_KEYS.refreshToken);
+    const status = error.response?.status;
+    const isAuthRefreshRequest = isRefreshRequest(originalRequest);
+
+    if (
+      status === 401
+      && !originalRequest._retry
+      && !originalRequest.skipAuthRefresh
+      && refreshToken
+      && !isAuthRefreshRequest
+    ) {
+      originalRequest._retry = true;
+      try {
+        const session = await refreshSessionOnce(refreshToken);
+        originalRequest.headers = originalRequest.headers || {};
+        originalRequest.headers.Authorization = `Bearer ${session.token}`;
+        return axiosClient(originalRequest);
+      } catch (refreshError) {
+        return rejectFriendly(refreshError);
       }
     }
-    const message =
-      error.response?.data?.message || error.message || 'Có lỗi xảy ra. Vui lòng thử lại sau.';
-    error.message = message;
-    return Promise.reject(Object.assign(error, { friendlyMessage: message }));
+
+    if (
+      status === 401
+      && !originalRequest._retry
+      && !originalRequest.skipAuthRefresh
+      && !refreshToken
+      && !isAuthRefreshRequest
+    ) {
+      clearAuthSession();
+      redirectToLogin();
+    }
+    return rejectFriendly(error);
   },
 );
 

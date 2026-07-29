@@ -16,6 +16,7 @@ export default function CatalogManagement({ api, kind = 'product' }) {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
+  const [mutationKey, setMutationKey] = useState('');
 
   const load = useCallback(
     () => api.getAll().then(setItems).finally(() => setLoading(false)),
@@ -31,18 +32,34 @@ export default function CatalogManagement({ api, kind = 'product' }) {
   const brands = [...new Set(items.map((item) => item.brand))].sort();
 
   const save = async (payload) => {
-    if (editing) await api.update(editing.id, payload);
-    else await api.create(payload);
-    toast.success(editing ? 'Đã cập nhật dữ liệu' : 'Đã thêm dữ liệu mới');
-    setFormOpen(false);
-    setEditing(null);
-    load();
+    if (mutationKey) return;
+    setMutationKey(`save:${editing?.id || 'new'}`);
+    try {
+      if (editing) await api.update(editing.id, payload);
+      else await api.create(payload);
+      toast.success(editing ? 'Đã cập nhật dữ liệu' : 'Đã thêm dữ liệu mới');
+      setFormOpen(false);
+      setEditing(null);
+      await load();
+    } catch (error) {
+      toast.error(error.friendlyMessage || error.message);
+    } finally {
+      setMutationKey('');
+    }
   };
   const remove = async () => {
-    await api.remove(deleteId);
-    setDeleteId(null);
-    toast.success('Đã xóa dữ liệu');
-    load();
+    if (mutationKey || !deleteId) return;
+    setMutationKey(`delete:${deleteId}`);
+    try {
+      await api.remove(deleteId);
+      setDeleteId(null);
+      toast.success('Đã xóa dữ liệu');
+      await load();
+    } catch (error) {
+      toast.error(error.friendlyMessage || error.message);
+    } finally {
+      setMutationKey('');
+    }
   };
 
   const columns = [
@@ -60,7 +77,7 @@ export default function CatalogManagement({ api, kind = 'product' }) {
       key: 'actions',
       label: 'Thao tác',
       className: 'table-actions-cell',
-      render: (item) => <div className="table-actions"><button onClick={() => { setEditing(item); setFormOpen(true); }}><FiEdit2 /></button><button className="danger" onClick={() => setDeleteId(item.id)}><FiTrash2 /></button></div>,
+      render: (item) => <div className="table-actions"><button disabled={Boolean(mutationKey)} onClick={() => { setEditing(item); setFormOpen(true); }}><FiEdit2 /></button><button className="danger" disabled={Boolean(mutationKey)} onClick={() => setDeleteId(item.id)}><FiTrash2 /></button></div>,
     },
   ];
 
@@ -71,11 +88,11 @@ export default function CatalogManagement({ api, kind = 'product' }) {
         <div className="admin-search"><FiSearch /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={`Tìm ${kind === 'product' ? 'sản phẩm' : 'phụ kiện'}...`} /></div>
         <select value={brand} onChange={(event) => setBrand(event.target.value)}><option value="">Tất cả thương hiệu</option>{brands.map((item) => <option key={item}>{item}</option>)}</select>
         <select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">Tất cả trạng thái</option><option value="active">Đang bán</option><option value="inactive">Ngừng bán</option></select>
-        <button className="btn btn-primary" onClick={() => { setEditing(null); setFormOpen(true); }}><FiPlus /> Thêm mới</button>
+        <button className="btn btn-primary" disabled={Boolean(mutationKey)} onClick={() => { setEditing(null); setFormOpen(true); }}><FiPlus /> Thêm mới</button>
       </div>
       <div className="admin-table-card"><div className="admin-table-title"><div><h2>Danh sách {kind === 'product' ? 'sản phẩm' : 'phụ kiện'}</h2><span>{filtered.length} mục hiển thị</span></div></div><DataTable columns={columns} rows={filtered} /></div>
-      <ProductFormModal open={formOpen} item={editing} kind={kind} onClose={() => { setFormOpen(false); setEditing(null); }} onSubmit={save} />
-      <ConfirmModal open={Boolean(deleteId)} title="Xóa dữ liệu này?" message="Thao tác sẽ xóa mục khỏi danh sách quản trị trong chế độ mock." onCancel={() => setDeleteId(null)} onConfirm={remove} />
+      <ProductFormModal open={formOpen} item={editing} kind={kind} saving={mutationKey.startsWith('save:')} onClose={() => { setFormOpen(false); setEditing(null); }} onSubmit={save} />
+      <ConfirmModal open={Boolean(deleteId)} title="Xóa dữ liệu này?" message="Thao tác sẽ xóa mục khỏi danh sách quản trị trong chế độ mock." onCancel={() => setDeleteId(null)} onConfirm={remove} busy={mutationKey === `delete:${deleteId}`} />
     </>
   );
 }

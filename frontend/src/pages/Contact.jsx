@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FiChevronDown, FiClock, FiMail, FiMapPin, FiPhone, FiSend } from 'react-icons/fi';
 import { toast } from 'react-toastify';
+import { contactApi } from '../api/contactApi';
 import { useStoreSettings } from '../hooks/useStoreSettings';
 import { isValidEmail, isValidVietnamesePhone, validateRequired } from '../utils/validators';
 
@@ -17,15 +18,26 @@ export default function Contact() {
   const [errors, setErrors] = useState({});
   const [openFaq, setOpenFaq] = useState(0);
 
-  const submit = (event) => {
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = async (event) => {
     event.preventDefault();
     const nextErrors = validateRequired(form);
     if (form.email && !isValidEmail(form.email)) nextErrors.email = 'Email không hợp lệ';
     if (form.phone && !isValidVietnamesePhone(form.phone)) nextErrors.phone = 'Số điện thoại không hợp lệ';
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return toast.error('Vui lòng hoàn thiện biểu mẫu');
-    setForm({ fullName: '', email: '', phone: '', subject: '', message: '' });
-    toast.success(`Đã gửi liên hệ. ${settings.storeName} sẽ phản hồi sớm nhất!`);
+    setSubmitting(true);
+    try {
+      await contactApi.create(form);
+      setForm({ fullName: '', email: '', phone: '', subject: '', message: '' });
+      window.dispatchEvent(new CustomEvent('contact-updated'));
+      toast.success(`Đã gửi liên hệ. ${settings.storeName} sẽ phản hồi sớm nhất!`);
+    } catch (error) {
+      toast.error(error.friendlyMessage || error.message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -48,7 +60,7 @@ export default function Contact() {
               <label className="form-field full"><span>Chủ đề *</span><input value={form.subject} onChange={(event) => setForm({ ...form, subject: event.target.value })} />{errors.subject && <small>{errors.subject}</small>}</label>
               <label className="form-field full"><span>Nội dung *</span><textarea rows="5" value={form.message} onChange={(event) => setForm({ ...form, message: event.target.value })} />{errors.message && <small>{errors.message}</small>}</label>
             </div>
-            <button className="btn btn-primary"><FiSend /> Gửi liên hệ</button>
+            <button className="btn btn-primary" disabled={submitting}><FiSend /> {submitting ? 'Đang gửi...' : 'Gửi liên hệ'}</button>
           </form>
           <div className="map-placeholder"><FiMapPin /><strong>{settings.storeName} Flagship Store</strong><span>{settings.address}</span><a href={`https://maps.google.com/?q=${encodeURIComponent(settings.address)}`} target="_blank" rel="noreferrer">Mở Google Maps</a></div>
         </div>

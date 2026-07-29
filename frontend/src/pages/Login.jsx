@@ -3,6 +3,8 @@ import { FiEye, FiEyeOff, FiLock, FiLogIn, FiMail, FiShield } from 'react-icons/
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useAuth } from '../hooks/useAuth';
+import { safeInternalRedirect } from '../utils/authSession';
+import { USE_MOCK } from '../utils/constants';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -12,7 +14,9 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const from = location.state?.from;
-  const requestedPath = from ? `${from.pathname}${from.search || ''}${from.hash || ''}` : '/';
+  const statePath = from ? `${from.pathname}${from.search || ''}${from.hash || ''}` : null;
+  const queryPath = new URLSearchParams(location.search).get('redirect');
+  const requestedPath = safeInternalRedirect(statePath || queryPath, '/');
   const customerDestination = requestedPath.startsWith('/admin') ? '/' : requestedPath;
   const adminDestination = requestedPath.startsWith('/admin') ? requestedPath : '/admin/dashboard';
 
@@ -46,12 +50,13 @@ export default function Login() {
           <p>Tiếp tục mua sắm và quản lý đơn hàng của bạn.</p>
           <label className="input-with-icon"><span>Email hoặc số điện thoại</span><div><FiMail /><input value={form.identifier} onChange={(event) => setForm({ ...form, identifier: event.target.value })} placeholder="user@gmail.com" /></div></label>
           <label className="input-with-icon"><span>Mật khẩu</span><div><FiLock /><input type={showPassword ? 'text' : 'password'} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder="Nhập mật khẩu" /><button type="button" onClick={() => setShowPassword(!showPassword)}>{showPassword ? <FiEyeOff /> : <FiEye />}</button></div></label>
+          <div className="auth-forgot-link"><Link to="/forgot-password">Quên mật khẩu?</Link></div>
           <button className="btn btn-primary auth-submit" disabled={loading}><FiLogIn /> {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}</button>
-          <div className="mock-accounts">
+          {USE_MOCK && <div className="mock-accounts">
             <strong>Tài khoản dùng thử</strong>
             <button type="button" onClick={() => setForm({ identifier: 'user@gmail.com', password: '123456' })}>Khách hàng: user@gmail.com</button>
             <button type="button" onClick={() => setForm({ identifier: 'admin@gmail.com', password: '123456' })}>Quản trị: admin@gmail.com</button>
-          </div>
+          </div>}
           <p className="auth-switch">Chưa có tài khoản? <Link to="/register">Đăng ký ngay</Link></p>
         </form>
       </div>

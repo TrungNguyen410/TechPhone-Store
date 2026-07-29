@@ -4,12 +4,15 @@ import { toast } from 'react-toastify';
 import ConfirmModal from '../common/ConfirmModal';
 import Loading from '../common/Loading';
 import DataTable from './DataTable';
+import AdminImageUpload from './AdminImageUpload';
+import AccessibleDialog from '../common/AccessibleDialog';
 
 export default function SimpleCrudPage({ api, title, singular, fields, columns, createDefaults = {} }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
+  const [mutationKey, setMutationKey] = useState('');
 
   const load = () => api.getAll().then(setItems).finally(() => setLoading(false));
 
@@ -25,6 +28,11 @@ export default function SimpleCrudPage({ api, title, singular, fields, columns, 
 
   const save = async (event) => {
     event.preventDefault();
+    if (mutationKey) return;
+    if (event.currentTarget.querySelector('[data-uploading="true"]')) {
+      toast.error('Vui lòng chờ ảnh tải lên hoàn tất');
+      return;
+    }
     const payload = fields.reduce((result, field) => {
       let value = form[field.key];
       if (field.type === 'date' && value) value = String(value).slice(0, 10);
@@ -33,20 +41,41 @@ export default function SimpleCrudPage({ api, title, singular, fields, columns, 
       result[field.key] = value;
       return result;
     }, {});
+    const missingField = fields.find((field) =>
+      field.required
+      && (payload[field.key] === undefined || payload[field.key] === null || payload[field.key] === ''));
+    if (missingField) {
+      toast.error(`Vui lòng nhập ${missingField.label.toLowerCase()}`);
+      return;
+    }
 
-    if (form.id) await api.update(form.id, payload);
-    else await api.create(payload);
-
-    setForm(null);
-    toast.success(`Đã lưu ${singular.toLowerCase()}`);
-    load();
+    setMutationKey(`save:${form.id || 'new'}`);
+    try {
+      if (form.id) await api.update(form.id, payload);
+      else await api.create(payload);
+      setForm(null);
+      toast.success(`Đã lưu ${singular.toLowerCase()}`);
+      await load();
+    } catch (error) {
+      toast.error(error.friendlyMessage || error.message);
+    } finally {
+      setMutationKey('');
+    }
   };
 
   const remove = async () => {
-    await api.remove(deleteId);
-    setDeleteId(null);
-    toast.success(`Đã xóa ${singular.toLowerCase()}`);
-    load();
+    if (mutationKey || !deleteId) return;
+    setMutationKey(`delete:${deleteId}`);
+    try {
+      await api.remove(deleteId);
+      setDeleteId(null);
+      toast.success(`Đã xóa ${singular.toLowerCase()}`);
+      await load();
+    } catch (error) {
+      toast.error(error.friendlyMessage || error.message);
+    } finally {
+      setMutationKey('');
+    }
   };
 
   const tableColumns = [
@@ -56,10 +85,10 @@ export default function SimpleCrudPage({ api, title, singular, fields, columns, 
       label: 'Thao tác',
       render: (item) => (
         <div className="table-actions">
-          <button onClick={() => setForm(item)}>
+          <button disabled={Boolean(mutationKey)} onClick={() => setForm(item)}>
             <FiEdit2 />
           </button>
-          <button className="danger" onClick={() => setDeleteId(item.id)}>
+          <button className="danger" disabled={Boolean(mutationKey)} onClick={() => setDeleteId(item.id)}>
             <FiTrash2 />
           </button>
         </div>
@@ -73,7 +102,7 @@ export default function SimpleCrudPage({ api, title, singular, fields, columns, 
     <>
       <div className="admin-page-toolbar">
         <div />
-        <button className="btn btn-primary" onClick={() => setForm({ ...createDefaults })}>
+        <button className="btn btn-primary" disabled={Boolean(mutationKey)} onClick={() => setForm({ ...createDefaults })}>
           <FiPlus /> Thêm {singular.toLowerCase()}
         </button>
       </div>
@@ -89,24 +118,41 @@ export default function SimpleCrudPage({ api, title, singular, fields, columns, 
       </div>
 
       {form && (
-        <div className="modal-backdrop-custom" onMouseDown={() => setForm(null)}>
+        <AccessibleDialog
+          open
+          title={`${form.id ? 'Chỉnh sửa' : 'Thêm mới'} ${singular}`}
+          className="admin-form-dialog"
+          onClose={() => {
+            if (!mutationKey) setForm(null);
+          }}
+        >
           <form
             className="admin-form-modal simple-form-modal"
             onSubmit={save}
-            onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="admin-modal-head">
               <div>
                 <span>{form.id ? 'Chỉnh sửa' : 'Thêm mới'}</span>
                 <h2>{singular}</h2>
               </div>
-              <button type="button" onClick={() => setForm(null)}>
+              <button type="button" disabled={Boolean(mutationKey)} onClick={() => setForm(null)}>
                 <FiX />
               </button>
             </div>
 
             <div className="form-grid">
               {fields.map((field) => {
+                if (field.type === 'image') {
+                  return (
+                    <AdminImageUpload
+                      key={field.key}
+                      label={field.label}
+                      value={fieldValue(field)}
+                      required={field.required}
+                      onChange={(value) => setForm({ ...form, [field.key]: value })}
+                    />
+                  );
+                }
                 if (field.type === 'checkbox') {
                   return (
                     <label className="admin-checkbox" key={field.key}>
@@ -156,13 +202,15 @@ export default function SimpleCrudPage({ api, title, singular, fields, columns, 
             </div>
 
             <div className="admin-modal-actions">
-              <button type="button" className="btn btn-light" onClick={() => setForm(null)}>
+              <button type="button" className="btn btn-light" disabled={Boolean(mutationKey)} onClick={() => setForm(null)}>
                 Hủy
               </button>
-              <button className="btn btn-primary">Lưu dữ liệu</button>
+              <button className="btn btn-primary" disabled={Boolean(mutationKey)}>
+                {mutationKey.startsWith('save:') ? 'Đang lưu…' : 'Lưu dữ liệu'}
+              </button>
             </div>
           </form>
-        </div>
+        </AccessibleDialog>
       )}
 
       <ConfirmModal
@@ -171,6 +219,7 @@ export default function SimpleCrudPage({ api, title, singular, fields, columns, 
         message="Dữ liệu sẽ bị xóa khỏi hệ thống."
         onCancel={() => setDeleteId(null)}
         onConfirm={remove}
+        busy={mutationKey === `delete:${deleteId}`}
       />
     </>
   );
