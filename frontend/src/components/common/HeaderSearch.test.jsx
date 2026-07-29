@@ -26,8 +26,16 @@ describe('Header search suggestions', () => {
     render(<MemoryRouter><Header /></MemoryRouter>);
 
     const search = screen.getByPlaceholderText(/điện thoại nào/i);
+    expect(search).toHaveAttribute('role', 'combobox');
+    expect(search).toHaveAttribute('aria-expanded', 'false');
     fireEvent.focus(search);
     fireEvent.change(search, { target: { value: 'iphone' } });
     expect(await screen.findByText('iPhone 16 Pro', {}, { timeout: 2500 })).toBeInTheDocument();
+    expect(search).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('listbox')).toBeInTheDocument();
+    fireEvent.keyDown(search, { key: 'ArrowDown' });
+    expect(screen.getByRole('option')).toHaveAttribute('aria-selected', 'true');
+    fireEvent.keyDown(search, { key: 'Escape' });
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
   });
 });

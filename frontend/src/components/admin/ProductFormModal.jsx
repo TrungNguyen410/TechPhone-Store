@@ -4,6 +4,7 @@ import { toast } from 'react-toastify';
 import { makeAccessoryImage, makeProductImage } from '../../mock/imageFactory';
 import { adminApi } from '../../api/adminApi';
 import AdminImageUpload from './AdminImageUpload';
+import AccessibleDialog from '../common/AccessibleDialog';
 
 const emptyProduct = {
   name: '',
@@ -102,8 +103,15 @@ export default function ProductFormModal({
   };
 
   return (
-    <div className="modal-backdrop-custom" onMouseDown={onClose}>
-      <form className="admin-form-modal" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
+    <AccessibleDialog
+      open={open}
+      title={item ? `Chỉnh sửa ${item.name}` : kind === 'product' ? 'Thêm sản phẩm' : 'Thêm phụ kiện'}
+      className="admin-form-dialog"
+      onClose={() => {
+        if (!saving) onClose();
+      }}
+    >
+      <form className="admin-form-modal" onSubmit={submit}>
         <div className="admin-modal-head">
           <div><span>{item ? 'Chỉnh sửa dữ liệu' : 'Tạo dữ liệu mới'}</span><h2>{item ? item.name : kind === 'product' ? 'Thêm sản phẩm' : 'Thêm phụ kiện'}</h2></div>
           <button type="button" disabled={saving} onClick={onClose}><FiX /></button>
@@ -144,6 +152,6 @@ export default function ProductFormModal({
           </button>
         </div>
       </form>
-    </div>
+    </AccessibleDialog>
   );
 }

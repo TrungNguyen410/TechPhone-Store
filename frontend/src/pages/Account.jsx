@@ -9,6 +9,7 @@ import ConfirmModal from '../components/common/ConfirmModal';
 import EmptyState from '../components/common/EmptyState';
 import Loading from '../components/common/Loading';
 import LoadError from '../components/common/LoadError';
+import AccessibleDialog from '../components/common/AccessibleDialog';
 import OrderLookupPanel from '../components/order/OrderLookupPanel';
 import { useAuth } from '../hooks/useAuth';
 import { useCart } from '../hooks/useCart';
@@ -148,8 +149,8 @@ export default function Account() {
               <form onSubmit={saveProfile}>
                 <div className="content-heading"><h2>Thông tin cá nhân</h2><p>Cập nhật thông tin dùng cho đơn hàng và liên hệ.</p></div>
                 <div className="form-grid">
-                  <label className="form-field"><span>Họ và tên *</span><input value={profile.fullName} onChange={(event) => updateProfileField('fullName', event.target.value)} />{profileErrors.fullName && <small>{profileErrors.fullName}</small>}</label>
-                  <label className="form-field"><span>Số điện thoại *</span><input value={profile.phone} onChange={(event) => updateProfileField('phone', event.target.value)} />{profileErrors.phone && <small>{profileErrors.phone}</small>}</label>
+                  <label className="form-field"><span>Họ và tên *</span><input aria-invalid={Boolean(profileErrors.fullName)} aria-describedby={profileErrors.fullName ? 'profile-fullName-error' : undefined} value={profile.fullName} onChange={(event) => updateProfileField('fullName', event.target.value)} />{profileErrors.fullName && <small id="profile-fullName-error">{profileErrors.fullName}</small>}</label>
+                  <label className="form-field"><span>Số điện thoại *</span><input aria-invalid={Boolean(profileErrors.phone)} aria-describedby={profileErrors.phone ? 'profile-phone-error' : undefined} value={profile.phone} onChange={(event) => updateProfileField('phone', event.target.value)} />{profileErrors.phone && <small id="profile-phone-error">{profileErrors.phone}</small>}</label>
                   <label className="form-field full"><span>Email *</span><input type="email" value={profile.email} readOnly /></label>
                   <label className="form-field full"><span>Địa chỉ</span><textarea rows="3" value={profile.address} onChange={(event) => updateProfileField('address', event.target.value)} /></label>
                 </div>
@@ -193,14 +194,17 @@ export default function Account() {
         </div>
       </div>
       {selectedOrder && (
-        <div className="modal-backdrop-custom" onMouseDown={() => setSelectedOrder(null)}>
-          <div className="order-detail-modal" onMouseDown={(event) => event.stopPropagation()}>
-            <button className="icon-button modal-close" onClick={() => setSelectedOrder(null)}>×</button>
+        <AccessibleDialog
+          open
+          title={`Chi tiết đơn ${selectedOrder.orderNumber}`}
+          className="order-detail-modal"
+          onClose={() => setSelectedOrder(null)}
+        >
+            <button className="icon-button modal-close" aria-label="Đóng chi tiết đơn" onClick={() => setSelectedOrder(null)}>×</button>
             <h2>Chi tiết đơn {selectedOrder.orderNumber}</h2>
             {selectedOrder.items.map((item) => <div className="modal-order-item" key={item.id}><img src={item.image} alt={item.name} /><span><strong>{item.name}</strong><small>{formatCurrency(item.price)} × {item.quantity}</small></span><b>{formatCurrency(item.price * item.quantity)}</b></div>)}
             <div className="success-total"><span>Tổng thanh toán</span><strong>{formatCurrency(selectedOrder.total)}</strong></div>
-          </div>
-        </div>
+        </AccessibleDialog>
       )}
       <ConfirmModal open={Boolean(cancelOrderId)} title="Hủy đơn hàng?" message="Đơn hàng sẽ được chuyển sang trạng thái đã hủy và không thể khôi phục." onCancel={() => setCancelOrderId(null)} onConfirm={cancelOrder} />
     </main>

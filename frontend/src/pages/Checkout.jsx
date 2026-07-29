@@ -133,6 +133,10 @@ export default function Checkout() {
     setErrors((current) => ({ ...current, [key]: '' }));
     if (key === 'paymentMethod') setPaymentConfirmStep(false);
   };
+  const errorProps = (key) => ({
+    'aria-invalid': Boolean(errors[key]),
+    'aria-describedby': errors[key] ? `checkout-${key}-error` : undefined,
+  });
 
   const validateCheckout = () => {
     const nextErrors = validateRequired({
@@ -262,31 +266,31 @@ export default function Checkout() {
               <div className="form-grid">
                 <label className="form-field">
                   <span>Họ và tên *</span>
-                  <input value={form.fullName} onChange={(event) => update('fullName', event.target.value)} />
-                  {errors.fullName && <small>{errors.fullName}</small>}
+                  <input {...errorProps('fullName')} value={form.fullName} onChange={(event) => update('fullName', event.target.value)} />
+                  {errors.fullName && <small id="checkout-fullName-error">{errors.fullName}</small>}
                 </label>
                 <label className="form-field">
                   <span>Số điện thoại *</span>
-                  <input value={form.phone} onChange={(event) => update('phone', event.target.value)} />
-                  {errors.phone && <small>{errors.phone}</small>}
+                  <input {...errorProps('phone')} value={form.phone} onChange={(event) => update('phone', event.target.value)} />
+                  {errors.phone && <small id="checkout-phone-error">{errors.phone}</small>}
                 </label>
                 <label className="form-field full">
                   <span>Email *</span>
-                  <input type="email" value={form.email} onChange={(event) => update('email', event.target.value)} />
-                  {errors.email && <small>{errors.email}</small>}
+                  <input {...errorProps('email')} type="email" value={form.email} onChange={(event) => update('email', event.target.value)} />
+                  {errors.email && <small id="checkout-email-error">{errors.email}</small>}
                 </label>
                 <label className="form-field full">
                   <span>Địa chỉ nhận hàng *</span>
-                  <textarea rows="3" value={form.address} onChange={(event) => update('address', event.target.value)} />
-                  {errors.address && <small>{errors.address}</small>}
+                  <textarea {...errorProps('address')} rows="3" value={form.address} onChange={(event) => update('address', event.target.value)} />
+                  {errors.address && <small id="checkout-address-error">{errors.address}</small>}
                 </label>
                 <label className="form-field full">
                   <span>Tỉnh/thành phố *</span>
-                  <select value={form.province} onChange={(event) => update('province', event.target.value)}>
+                  <select {...errorProps('province')} value={form.province} onChange={(event) => update('province', event.target.value)}>
                     <option value="">Chọn tỉnh/thành phố</option>
                     {SHIPPING_PROVINCES.map((province) => <option key={province} value={province}>{province}</option>)}
                   </select>
-                  {errors.province && <small>{errors.province}</small>}
+                  {errors.province && <small id="checkout-province-error">{errors.province}</small>}
                 </label>
                 <label className="form-field">
                   <span>Quận/huyện cũ (nếu có)</span>
@@ -294,8 +298,8 @@ export default function Checkout() {
                 </label>
                 <label className="form-field">
                   <span>Phường/xã/đặc khu *</span>
-                  <input value={form.ward} onChange={(event) => update('ward', event.target.value)} placeholder="Ví dụ: Bến Nghé" />
-                  {errors.ward && <small>{errors.ward}</small>}
+                  <input {...errorProps('ward')} value={form.ward} onChange={(event) => update('ward', event.target.value)} placeholder="Ví dụ: Bến Nghé" />
+                  {errors.ward && <small id="checkout-ward-error">{errors.ward}</small>}
                 </label>
                 <label className="form-field full">
                   <span>Ghi chú đơn hàng</span>

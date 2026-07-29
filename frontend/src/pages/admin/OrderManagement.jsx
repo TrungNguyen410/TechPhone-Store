@@ -4,6 +4,7 @@ import { toast } from 'react-toastify';
 import { orderApi } from '../../api/orderApi';
 import DataTable from '../../components/admin/DataTable';
 import Loading from '../../components/common/Loading';
+import AccessibleDialog from '../../components/common/AccessibleDialog';
 import { ORDER_STATUSES, PAYMENT_METHODS } from '../../utils/constants';
 import { formatCurrency, formatDate } from '../../utils/formatCurrency';
 import { getNextOrderStatuses, getOrderStatus } from '../../utils/orderStatus';
@@ -105,7 +106,42 @@ export default function OrderManagement() {
     <>
       <div className="admin-page-toolbar"><div className="admin-search"><FiSearch /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm mã đơn, khách hàng, số điện thoại..." /></div><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">Tất cả trạng thái</option>{ORDER_STATUSES.map((status) => <option value={status} key={status}>{getOrderStatus(status).label}</option>)}</select></div>
       <div className="admin-table-card"><div className="admin-table-title"><div><h2>Danh sách đơn hàng</h2><span>{visible.length} đơn hàng</span></div></div><DataTable columns={columns} rows={visible} /></div>
-      {selectedOrder && <div className="modal-backdrop-custom" onMouseDown={() => setSelectedOrder(null)}><div className="order-detail-modal admin-order-modal" onMouseDown={(event) => event.stopPropagation()}><button className="icon-button modal-close" aria-label="Đóng chi tiết đơn" onClick={() => setSelectedOrder(null)}>×</button><span className="eyebrow">Chi tiết đơn hàng</span><h2>{selectedOrder.orderNumber}</h2><div className="admin-order-customer"><div><small>Khách hàng</small><strong>{selectedOrder.customer.fullName}</strong><span>{selectedOrder.customer.phone}</span></div><div><small>Địa chỉ giao hàng</small><strong>{[selectedOrder.customer.address, selectedOrder.customer.ward, selectedOrder.customer.district, selectedOrder.customer.province].filter(Boolean).join(', ')}</strong></div><div><small>Phương thức thanh toán</small><strong>{paymentMethodLabel(selectedOrder.paymentMethod)}</strong></div></div>{selectedOrder.items.map((item) => <div className="modal-order-item" key={item.id}><img src={item.image} alt="" /><span><strong>{item.name}</strong><small>{formatCurrency(item.price)} × {item.quantity}</small></span><b>{formatCurrency(item.price * item.quantity)}</b></div>)}<form className="admin-tracking-form" onSubmit={saveTracking}><h3><FiTruck /> Thông tin vận chuyển</h3><div className="form-grid"><label className="form-field"><span>Đơn vị vận chuyển</span><input value={trackingForm.shippingProvider} onChange={(event) => setTrackingForm((current) => ({ ...current, shippingProvider: event.target.value }))} /></label><label className="form-field"><span>Mã vận đơn</span><input value={trackingForm.trackingNumber} onChange={(event) => setTrackingForm((current) => ({ ...current, trackingNumber: event.target.value }))} /></label><label className="form-field full"><span>Ngày giao dự kiến</span><input type="date" value={trackingForm.estimatedDelivery} onChange={(event) => setTrackingForm((current) => ({ ...current, estimatedDelivery: event.target.value }))} /></label></div><button className="btn btn-primary" disabled={savingTracking}>{savingTracking ? 'Đang lưu…' : 'Lưu vận đơn'}</button></form><div className="success-total"><span>Tổng thanh toán</span><strong>{formatCurrency(selectedOrder.total)}</strong></div></div></div>}
+      {selectedOrder && (
+        <AccessibleDialog
+          open
+          title={`Chi tiết đơn ${selectedOrder.orderNumber}`}
+          className="order-detail-modal admin-order-modal"
+          onClose={() => {
+            if (!savingTracking) setSelectedOrder(null);
+          }}
+        >
+          <button className="icon-button modal-close" aria-label="Đóng chi tiết đơn" onClick={() => setSelectedOrder(null)}>×</button>
+          <span className="eyebrow">Chi tiết đơn hàng</span>
+          <h2>{selectedOrder.orderNumber}</h2>
+          <div className="admin-order-customer">
+            <div><small>Khách hàng</small><strong>{selectedOrder.customer.fullName}</strong><span>{selectedOrder.customer.phone}</span></div>
+            <div><small>Địa chỉ giao hàng</small><strong>{[selectedOrder.customer.address, selectedOrder.customer.ward, selectedOrder.customer.district, selectedOrder.customer.province].filter(Boolean).join(', ')}</strong></div>
+            <div><small>Phương thức thanh toán</small><strong>{paymentMethodLabel(selectedOrder.paymentMethod)}</strong></div>
+          </div>
+          {selectedOrder.items.map((item) => (
+            <div className="modal-order-item" key={item.id}>
+              <img src={item.image} alt="" />
+              <span><strong>{item.name}</strong><small>{formatCurrency(item.price)} × {item.quantity}</small></span>
+              <b>{formatCurrency(item.price * item.quantity)}</b>
+            </div>
+          ))}
+          <form className="admin-tracking-form" onSubmit={saveTracking}>
+            <h3><FiTruck /> Thông tin vận chuyển</h3>
+            <div className="form-grid">
+              <label className="form-field"><span>Đơn vị vận chuyển</span><input value={trackingForm.shippingProvider} onChange={(event) => setTrackingForm((current) => ({ ...current, shippingProvider: event.target.value }))} /></label>
+              <label className="form-field"><span>Mã vận đơn</span><input value={trackingForm.trackingNumber} onChange={(event) => setTrackingForm((current) => ({ ...current, trackingNumber: event.target.value }))} /></label>
+              <label className="form-field full"><span>Ngày giao dự kiến</span><input type="date" value={trackingForm.estimatedDelivery} onChange={(event) => setTrackingForm((current) => ({ ...current, estimatedDelivery: event.target.value }))} /></label>
+            </div>
+            <button className="btn btn-primary" disabled={savingTracking}>{savingTracking ? 'Đang lưu…' : 'Lưu vận đơn'}</button>
+          </form>
+          <div className="success-total"><span>Tổng thanh toán</span><strong>{formatCurrency(selectedOrder.total)}</strong></div>
+        </AccessibleDialog>
+      )}
     </>
   );
 }

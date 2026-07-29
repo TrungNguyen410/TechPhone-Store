@@ -68,4 +68,15 @@ describe('CategoryCarousel', () => {
     act(() => vi.advanceTimersByTime(1));
     expect(track).not.toHaveClass('is-paused');
   });
+
+  it('offers a persistent pause and resume control', () => {
+    setMotion(false);
+    const { container } = render(
+      <MemoryRouter><CategoryCarousel categories={categories} /></MemoryRouter>,
+    );
+    const pauseButton = screen.getByRole('button', { name: /tạm dừng danh mục/i });
+    fireEvent.click(pauseButton);
+    expect(container.querySelector('.category-marquee-track')).toHaveClass('is-paused');
+    expect(screen.getByRole('button', { name: /tiếp tục danh mục/i })).toBeInTheDocument();
+  });
 });

@@ -5,6 +5,7 @@ import { contactApi } from '../../api/contactApi';
 import DataTable from '../../components/admin/DataTable';
 import ConfirmModal from '../../components/common/ConfirmModal';
 import Loading from '../../components/common/Loading';
+import AccessibleDialog from '../../components/common/AccessibleDialog';
 import { formatDate } from '../../utils/formatCurrency';
 
 const statusLabel = {
@@ -66,9 +67,13 @@ export default function ContactManagement() {
       </div>
 
       {selected && (
-        <div className="modal-backdrop-custom" onMouseDown={() => setSelected(null)}>
-          <div className="contact-detail-modal" onMouseDown={(event) => event.stopPropagation()}>
-            <button className="icon-button modal-close" onClick={() => setSelected(null)}><FiX /></button>
+        <AccessibleDialog
+          open
+          title={`Liên hệ: ${selected.subject}`}
+          className="contact-detail-modal"
+          onClose={() => setSelected(null)}
+        >
+            <button className="icon-button modal-close" aria-label="Đóng liên hệ" onClick={() => setSelected(null)}><FiX /></button>
             <span className={`contact-status ${selected.status}`}>{statusLabel[selected.status]}</span>
             <h2>{selected.subject}</h2>
             <div className="contact-customer-meta">
@@ -90,8 +95,7 @@ export default function ContactManagement() {
               <button className="btn btn-light" onClick={() => update(selected.id, { status: 'read', adminNote: selected.adminNote })}>Lưu ghi chú</button>
               <button className="btn btn-primary" onClick={() => update(selected.id, { status: 'resolved', adminNote: selected.adminNote })}>Đánh dấu đã giải quyết</button>
             </div>
-          </div>
-        </div>
+        </AccessibleDialog>
       )}
       <ConfirmModal open={Boolean(deleteId)} title="Xóa yêu cầu liên hệ?" message="Yêu cầu này sẽ bị xóa khỏi hệ thống." onCancel={() => setDeleteId(null)} onConfirm={remove} />
     </>

@@ -29,16 +29,12 @@ export default function ProductCard({ product, type = 'product' }) {
     return () => window.removeEventListener('compare-updated', sync);
   }, [product.id]);
 
-  const add = (event) => {
-    event.preventDefault();
-    event.stopPropagation();
+  const add = () => {
     if (isOutOfStock) return toast.error('Sản phẩm đã hết hàng');
     addToCart(product, 1, type);
     toast.success(`Đã thêm ${product.name} vào giỏ hàng`);
   };
-  const toggleFavorite = async (event) => {
-    event.preventDefault();
-    event.stopPropagation();
+  const toggleFavorite = async () => {
     try {
       const nextWishlist = await toggleWishlist(product.id);
       setFavorite(nextWishlist.includes(product.id));
@@ -47,9 +43,7 @@ export default function ProductCard({ product, type = 'product' }) {
       toast.error(error.friendlyMessage || 'Không thể cập nhật danh sách yêu thích');
     }
   };
-  const toggleCompare = (event) => {
-    event.preventDefault();
-    event.stopPropagation();
+  const toggleCompare = () => {
     const before = getComparedProducts();
     const next = toggleComparedProduct(product.id);
     if (!before.includes(product.id) && !next.includes(product.id)) {
@@ -67,26 +61,6 @@ export default function ProductCard({ product, type = 'product' }) {
           <img src={product.image} alt={product.name} loading="lazy" />
           {product.discountPercent > 0 && <span className="discount-badge">-{product.discountPercent}%</span>}
           {isOutOfStock && <span className="stock-badge">Hết hàng</span>}
-          <button
-            type="button"
-            className={`wishlist-button ${favorite ? 'active' : ''}`}
-            aria-label={favorite ? 'Bỏ khỏi yêu thích' : 'Thêm vào yêu thích'}
-            aria-pressed={favorite}
-            onClick={toggleFavorite}
-          >
-            <FiHeart />
-          </button>
-          {type === 'product' && (
-            <button
-              type="button"
-              className={`compare-card-button ${compared ? 'active' : ''}`}
-              aria-label={compared ? 'Bỏ khỏi so sánh' : 'Thêm vào so sánh'}
-              aria-pressed={compared}
-              onClick={toggleCompare}
-            >
-              <FiBarChart2 />
-            </button>
-          )}
         </div>
         <div className="product-card-body">
           <span className="product-brand">{product.brand}</span>
@@ -105,11 +79,33 @@ export default function ProductCard({ product, type = 'product' }) {
             <span><FiStar /> {product.rating}</span>
             <span>Đã bán {product.sold}</span>
           </div>
-          <button className="add-cart-button" disabled={isOutOfStock} onClick={add}>
-            <FiShoppingCart /> {isOutOfStock ? 'Hết hàng' : 'Thêm vào giỏ'}
-          </button>
         </div>
       </Link>
+      <button
+        type="button"
+        className={`wishlist-button ${favorite ? 'active' : ''}`}
+        aria-label={favorite ? 'Bỏ khỏi yêu thích' : 'Thêm vào yêu thích'}
+        aria-pressed={favorite}
+        onClick={toggleFavorite}
+      >
+        <FiHeart />
+      </button>
+      {type === 'product' && (
+        <button
+          type="button"
+          className={`compare-card-button ${compared ? 'active' : ''}`}
+          aria-label={compared ? 'Bỏ khỏi so sánh' : 'Thêm vào so sánh'}
+          aria-pressed={compared}
+          onClick={toggleCompare}
+        >
+          <FiBarChart2 />
+        </button>
+      )}
+      <div className="product-card-actions">
+        <button className="add-cart-button" disabled={isOutOfStock} onClick={add}>
+          <FiShoppingCart /> {isOutOfStock ? 'Hết hàng' : 'Thêm vào giỏ'}
+        </button>
+      </div>
     </article>
   );
 }

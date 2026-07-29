@@ -3,6 +3,8 @@ import {
   FiArrowRight,
   FiAward,
   FiHeadphones,
+  FiPause,
+  FiPlay,
   FiRefreshCcw,
   FiShield,
   FiSmartphone,
@@ -34,7 +36,11 @@ export default function Home() {
   const [accessories, setAccessories] = useState([]);
   const [banners, setBanners] = useState([]);
   const [activeBanner, setActiveBanner] = useState(0);
-  const [bannerPaused, setBannerPaused] = useState(false);
+  const [bannerInteractionPaused, setBannerInteractionPaused] = useState(false);
+  const [bannerUserPaused, setBannerUserPaused] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(
+    () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -62,6 +68,15 @@ export default function Home() {
   }, [loadHomeData]);
 
   useEffect(() => {
+    const media = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    if (!media) return undefined;
+    const change = (event) => setReducedMotion(event.matches);
+    media.addEventListener?.('change', change);
+    return () => media.removeEventListener?.('change', change);
+  }, []);
+
+  const bannerPaused = bannerInteractionPaused || bannerUserPaused || reducedMotion;
+  useEffect(() => {
     if (banners.length < 2 || bannerPaused) return undefined;
     const timer = setInterval(() => setActiveBanner((current) => (current + 1) % banners.length), 5000);
     return () => clearInterval(timer);
@@ -87,11 +102,11 @@ export default function Home() {
         <div className="container">
           <div
             className="hero-slider"
-            onMouseEnter={() => setBannerPaused(true)}
-            onMouseLeave={() => setBannerPaused(false)}
-            onFocus={() => setBannerPaused(true)}
+            onMouseEnter={() => setBannerInteractionPaused(true)}
+            onMouseLeave={() => setBannerInteractionPaused(false)}
+            onFocus={() => setBannerInteractionPaused(true)}
             onBlur={(event) => {
-              if (!event.currentTarget.contains(event.relatedTarget)) setBannerPaused(false);
+              if (!event.currentTarget.contains(event.relatedTarget)) setBannerInteractionPaused(false);
             }}
           >
             {banners.map((banner, index) => (
@@ -99,6 +114,11 @@ export default function Home() {
                 to={banner.link}
                 className={`hero-slide ${index === activeBanner ? 'active' : ''}`}
                 key={banner.id}
+                aria-hidden={index !== activeBanner || undefined}
+                tabIndex={index === activeBanner ? undefined : -1}
+                style={index === activeBanner
+                  ? undefined
+                  : { visibility: 'hidden', pointerEvents: 'none' }}
               >
                 <img src={banner.image} alt={banner.title} />
               </Link>
@@ -110,9 +130,20 @@ export default function Home() {
                   className={index === activeBanner ? 'active' : ''}
                   onClick={() => setActiveBanner(index)}
                   aria-label={`Xem banner ${index + 1}`}
+                  aria-pressed={index === activeBanner}
                 />
               ))}
             </div>
+            {banners.length > 1 && (
+              <button
+                type="button"
+                className="slider-pause-button"
+                aria-label={bannerUserPaused ? 'Tiếp tục banner' : 'Tạm dừng banner'}
+                onClick={() => setBannerUserPaused((current) => !current)}
+              >
+                {bannerUserPaused ? <FiPlay /> : <FiPause />}
+              </button>
+            )}
           </div>
         </div>
       </section>

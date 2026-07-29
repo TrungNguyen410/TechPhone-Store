@@ -727,10 +727,14 @@ p {
   inset: 0;
   opacity: 0;
   transition: opacity 0.6s ease;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .hero-slide.active {
   opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
 }
 
 .hero-slide img {
@@ -761,6 +765,29 @@ p {
 .slider-dots button.active {
   width: 28px;
   background: #fff;
+}
+
+.slider-pause-button,
+.carousel-pause-button {
+  display: inline-grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--navy);
+  background: var(--surface);
+}
+
+.slider-pause-button {
+  position: absolute;
+  z-index: 3;
+  right: 18px;
+  bottom: 18px;
+}
+
+.carousel-pause-button {
+  margin: 12px auto 0;
 }
 
 .category-section,
@@ -984,6 +1011,7 @@ p {
 }
 
 .product-card {
+  position: relative;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -1068,7 +1096,11 @@ p {
 }
 
 .product-card-body {
-  padding: 17px;
+  padding: 17px 17px 0;
+}
+
+.product-card-actions {
+  padding: 13px 17px 17px;
 }
 
 .product-brand {
@@ -3466,6 +3498,27 @@ p {
 }
 
 /* Modals */
+dialog.accessible-dialog {
+  max-width: calc(100% - 40px);
+  max-height: calc(100% - 40px);
+  margin: auto;
+  border: 0;
+}
+
+dialog.accessible-dialog::backdrop {
+  background: rgba(15, 23, 42, 0.62);
+  backdrop-filter: blur(4px);
+}
+
+dialog.accessible-dialog.admin-form-dialog {
+  padding: 0;
+  background: transparent;
+}
+
+dialog.accessible-dialog.mobile-drawer[open] {
+  display: block;
+}
+
 .modal-backdrop-custom {
   position: fixed;
   z-index: 2000;

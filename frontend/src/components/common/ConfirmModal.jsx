@@ -1,4 +1,5 @@
 import { FiAlertTriangle, FiX } from 'react-icons/fi';
+import AccessibleDialog from './AccessibleDialog';
 
 export default function ConfirmModal({
   open,
@@ -11,12 +12,15 @@ export default function ConfirmModal({
   onCancel,
   busy = false,
 }) {
-  if (!open) return null;
   return (
-    <div className="modal-backdrop-custom" role="presentation" onMouseDown={() => {
-      if (!busy) onCancel();
-    }}>
-      <div className="confirm-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+    <AccessibleDialog
+      open={open}
+      title={title}
+      className="confirm-modal"
+      onClose={() => {
+        if (!busy) onCancel();
+      }}
+    >
         <button className="icon-button modal-close" disabled={busy} onClick={onCancel} aria-label="Đóng"><FiX /></button>
         <div className={`confirm-icon ${danger ? 'danger' : ''}`}><FiAlertTriangle /></div>
         <h3>{title}</h3>
@@ -27,7 +31,6 @@ export default function ConfirmModal({
             {busy ? 'Đang xử lý…' : confirmText}
           </button>
         </div>
-      </div>
-    </div>
+    </AccessibleDialog>
   );
 }

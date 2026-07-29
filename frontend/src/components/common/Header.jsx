@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   FiChevronDown,
   FiHeart,
@@ -20,6 +20,7 @@ import { STORAGE_KEYS } from '../../utils/constants';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { storage } from '../../utils/storage';
 import StoreBrand from './StoreBrand';
+import AccessibleDialog from './AccessibleDialog';
 import { trackEvent } from '../../utils/analytics';
 
 const normalizeSearch = (value = '') => value
@@ -33,6 +34,8 @@ export default function Header() {
   const [search, setSearch] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [searchFocused, setSearchFocused] = useState(false);
+  const [activeSuggestion, setActiveSuggestion] = useState(-1);
+  const mobileCloseRef = useRef(null);
   const [wishlistCount, setWishlistCount] = useState(
     () => storage.get(STORAGE_KEYS.wishlist, []).length,
   );
@@ -56,6 +59,7 @@ export default function Header() {
     let active = true;
     if (debouncedSearch.length < 2) {
       setSuggestions([]);
+      setActiveSuggestion(-1);
       return undefined;
     }
     Promise.all([
@@ -72,11 +76,40 @@ export default function Header() {
           normalizeSearch(`${item.name} ${item.brand} ${item.category}`).includes(term))
         .slice(0, 6);
       setSuggestions(matches);
+      setActiveSuggestion(-1);
     }).catch(() => {
       if (active) setSuggestions([]);
     });
     return () => { active = false; };
   }, [debouncedSearch]);
+
+  const chooseSuggestion = (item) => {
+    navigate(item.type === 'accessory' ? `/accessories/${item.id}` : `/products/${item.id}`);
+    setSearch('');
+    setSearchFocused(false);
+    setActiveSuggestion(-1);
+  };
+
+  const handleSearchKeyDown = (event) => {
+    if (event.key === 'Escape') {
+      setSearchFocused(false);
+      setActiveSuggestion(-1);
+      return;
+    }
+    if (!suggestions.length || !searchFocused) return;
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setActiveSuggestion((current) => (current + 1) % suggestions.length);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setActiveSuggestion((current) => (
+        current <= 0 ? suggestions.length - 1 : current - 1
+      ));
+    } else if (event.key === 'Enter' && activeSuggestion >= 0) {
+      event.preventDefault();
+      chooseSuggestion(suggestions[activeSuggestion]);
+    }
+  };
 
   const submitSearch = (event) => {
     event.preventDefault();
@@ -96,7 +129,13 @@ export default function Header() {
       </div>
       <header className="site-header">
         <div className="container header-main">
-          <button className="mobile-menu-button" onClick={() => setMobileOpen(true)} aria-label="Mở menu">
+          <button
+            className="mobile-menu-button"
+            onClick={() => setMobileOpen(true)}
+            aria-label="Mở menu"
+            aria-expanded={mobileOpen}
+            aria-controls="mobile-navigation-drawer"
+          >
             <FiMenu />
           </button>
           <StoreBrand />
@@ -108,23 +147,30 @@ export default function Header() {
           >
             <FiSearch />
             <input
+              role="combobox"
+              aria-label="Tìm kiếm sản phẩm"
+              aria-autocomplete="list"
+              aria-controls="header-search-suggestions"
+              aria-expanded={searchFocused && debouncedSearch.length >= 2}
+              aria-activedescendant={activeSuggestion >= 0 ? `header-suggestion-${activeSuggestion}` : undefined}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
+              onKeyDown={handleSearchKeyDown}
               placeholder="Bạn cần tìm điện thoại nào?"
             />
             <button>Tìm kiếm</button>
             {searchFocused && debouncedSearch.length >= 2 && (
-              <div className="search-suggestions">
+              <div className="search-suggestions" id="header-search-suggestions" role="listbox">
                 {suggestions.length ? suggestions.map((item) => (
                   <button
                     type="button"
                     key={`${item.type}-${item.id}`}
+                    id={`header-suggestion-${suggestions.indexOf(item)}`}
+                    role="option"
+                    aria-selected={suggestions.indexOf(item) === activeSuggestion}
                     onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => {
-                      navigate(item.type === 'accessory' ? `/accessories/${item.id}` : `/products/${item.id}`);
-                      setSearch('');
-                      setSearchFocused(false);
-                    }}
+                    onMouseEnter={() => setActiveSuggestion(suggestions.indexOf(item))}
+                    onClick={() => chooseSuggestion(item)}
                   >
                     <img src={item.image} alt="" />
                     <span><strong>{item.name}</strong><small>{item.brand} · {formatCurrency(item.price)}</small></span>
@@ -167,10 +213,17 @@ export default function Header() {
           </div>
         </nav>
       </header>
-      <div className={`mobile-drawer ${mobileOpen ? 'open' : ''}`}>
+      <AccessibleDialog
+        open={mobileOpen}
+        title="Menu điều hướng"
+        id="mobile-navigation-drawer"
+        className="mobile-drawer open"
+        initialFocusRef={mobileCloseRef}
+        onClose={() => setMobileOpen(false)}
+      >
         <div className="mobile-drawer-header">
           <StoreBrand onClick={() => setMobileOpen(false)} />
-          <button onClick={() => setMobileOpen(false)} aria-label="Đóng menu"><FiX /></button>
+          <button ref={mobileCloseRef} onClick={() => setMobileOpen(false)} aria-label="Đóng menu"><FiX /></button>
         </div>
         <form className="mobile-search" onSubmit={submitSearch}>
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm sản phẩm..." />
@@ -189,8 +242,7 @@ export default function Header() {
           </NavLink>
           {user?.role === 'admin' && <NavLink to="/admin/dashboard">Quản trị</NavLink>}
         </nav>
-      </div>
-      {mobileOpen && <div className="drawer-overlay" onClick={() => setMobileOpen(false)} />}
+      </AccessibleDialog>
     </>
   );
 }

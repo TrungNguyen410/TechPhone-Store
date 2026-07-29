@@ -5,6 +5,7 @@ import ConfirmModal from '../common/ConfirmModal';
 import Loading from '../common/Loading';
 import DataTable from './DataTable';
 import AdminImageUpload from './AdminImageUpload';
+import AccessibleDialog from '../common/AccessibleDialog';
 
 export default function SimpleCrudPage({ api, title, singular, fields, columns, createDefaults = {} }) {
   const [items, setItems] = useState([]);
@@ -117,13 +118,17 @@ export default function SimpleCrudPage({ api, title, singular, fields, columns, 
       </div>
 
       {form && (
-        <div className="modal-backdrop-custom" onMouseDown={() => {
-          if (!mutationKey) setForm(null);
-        }}>
+        <AccessibleDialog
+          open
+          title={`${form.id ? 'Chỉnh sửa' : 'Thêm mới'} ${singular}`}
+          className="admin-form-dialog"
+          onClose={() => {
+            if (!mutationKey) setForm(null);
+          }}
+        >
           <form
             className="admin-form-modal simple-form-modal"
             onSubmit={save}
-            onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="admin-modal-head">
               <div>
@@ -205,7 +210,7 @@ export default function SimpleCrudPage({ api, title, singular, fields, columns, 
               </button>
             </div>
           </form>
-        </div>
+        </AccessibleDialog>
       )}
 
       <ConfirmModal

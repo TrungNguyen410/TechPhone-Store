@@ -205,4 +205,16 @@ describe('Checkout payment confirmations', () => {
     expect(screen.getByText('123456789')).toBeInTheDocument();
     expect(screen.getByText('TECHPHONE TEST')).toBeInTheDocument();
   });
+
+  it('connects inline validation errors to invalid fields', async () => {
+    render(<MemoryRouter><Checkout /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận đặt hàng' }));
+
+    const province = screen.getByRole('combobox', { name: /Tỉnh\/thành phố/i });
+    const ward = screen.getByRole('textbox', { name: /Phường\/xã\/đặc khu/i });
+    expect(province).toHaveAttribute('aria-invalid', 'true');
+    expect(province).toHaveAttribute('aria-describedby');
+    expect(ward).toHaveAttribute('aria-invalid', 'true');
+    expect(ward).toHaveAttribute('aria-describedby');
+  });
 });
