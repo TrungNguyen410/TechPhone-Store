@@ -76,7 +76,7 @@ class CatalogService {
 
   async getById(id) {
     const item = await this.repository.findById(id);
-    if (!item) throw new AppError('Resource not found', 404);
+    if (!item) throw new AppError('Không tìm thấy dữ liệu yêu cầu', 404);
     return this.denormalize(item);
   }
 

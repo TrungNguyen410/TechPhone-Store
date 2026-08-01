@@ -4,7 +4,7 @@ const AppError = require('../utils/AppError');
 const validate = (req, _res, next) => {
   const result = validationResult(req);
   if (result.isEmpty()) return next();
-  return next(new AppError('Validation failed', 422, result.array()));
+  return next(new AppError('Dữ liệu gửi lên không hợp lệ', 422, result.array()));
 };
 
 module.exports = validate;

@@ -33,7 +33,7 @@ class OtpDeliveryService {
         html: `<p>Mã OTP TechPhone của bạn:</p><p style="font-size:28px;font-weight:700;letter-spacing:6px">${code}</p><p>Mã có hiệu lực trong 10 phút. Không chia sẻ mã này với bất kỳ ai.</p>`,
       });
     } else if (env.nodeEnv === 'production') {
-      throw new AppError('Email OTP service is not configured', 503);
+      throw new AppError('Dịch vụ gửi OTP qua email chưa được cấu hình', 503);
     } else {
       console.info(`[DEV OTP] ${purpose} email ${target}: ${code}`);
     }
@@ -58,9 +58,9 @@ class OtpDeliveryService {
           body,
         },
       );
-      if (!response.ok) throw new AppError('SMS OTP could not be delivered', 502);
+      if (!response.ok) throw new AppError('Không thể gửi mã OTP qua SMS', 502);
     } else if (env.nodeEnv === 'production') {
-      throw new AppError('SMS OTP service is not configured', 503);
+      throw new AppError('Dịch vụ gửi OTP qua SMS chưa được cấu hình', 503);
     } else {
       console.info(`[DEV OTP] ${purpose} sms ${target}: ${code}`);
     }

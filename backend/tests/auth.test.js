@@ -148,7 +148,7 @@ describe('Auth API', () => {
       .set('Authorization', 'Bearer expired-or-invalid-token');
 
     expect(response.status).toBe(401);
-    expect(response.body.message).toBe('Authentication token is invalid or expired');
+    expect(response.body.message).toBe('Phiên đăng nhập không hợp lệ hoặc đã hết hạn');
   });
 
   it('persists a deduplicated wishlist with a 100 item limit', async () => {

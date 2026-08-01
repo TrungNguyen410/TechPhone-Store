@@ -11,7 +11,7 @@ class BaseCrudService {
 
   async getById(id) {
     const resource = await this.repository.findById(id);
-    if (!resource) throw new AppError('Resource not found', 404);
+    if (!resource) throw new AppError('Không tìm thấy dữ liệu yêu cầu', 404);
     return resource;
   }
 

@@ -3,7 +3,7 @@ export const createRuntimeConfig = (env = {}) => {
   const apiUrl = env.VITE_API_URL || '';
 
   if (env.PROD && !useMock && !apiUrl) {
-    throw new Error('VITE_API_URL is required when VITE_USE_MOCK is false');
+    throw new Error('VITE_API_URL là bắt buộc khi VITE_USE_MOCK được đặt thành false');
   }
 
   return {

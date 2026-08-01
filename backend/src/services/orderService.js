@@ -17,6 +17,14 @@ const statusTransitions = {
   completed: [],
   cancelled: [],
 };
+const statusLabels = {
+  pending: 'chờ xác nhận',
+  confirmed: 'đã xác nhận',
+  shipping: 'đang giao hàng',
+  delivered: 'đã giao hàng',
+  completed: 'hoàn thành',
+  cancelled: 'đã hủy',
+};
 const safeUpdateFields = [
   'customer',
   'note',
@@ -77,7 +85,7 @@ class OrderService {
       : existing.paymentMethod === paymentMethod;
     if (!matches) {
       throw new AppError(
-        'This idempotency key was already used for a different checkout request',
+        'Yêu cầu thanh toán này đã được dùng cho một nội dung đơn hàng khác',
         409,
       );
     }
@@ -115,10 +123,10 @@ class OrderService {
         : await productRepository.findById(itemId, { session });
 
       if (!catalogItem || catalogItem.status !== 'active') {
-        throw new AppError(`${type === 'accessory' ? 'Accessory' : 'Product'} is unavailable`, 400);
+        throw new AppError(`${type === 'accessory' ? 'Phụ kiện' : 'Sản phẩm'} hiện không khả dụng`, 400);
       }
       if (catalogItem.stock < quantity) {
-        throw new AppError(`${catalogItem.name} does not have enough stock`, 400);
+        throw new AppError(`${catalogItem.name} không đủ số lượng tồn kho`, 400);
       }
 
       normalized.push({
@@ -168,7 +176,7 @@ class OrderService {
 
       if (!updated) {
         if (!session) await this.rollbackInventory(decrements);
-        throw new AppError(`${item.name} does not have enough stock`, 400);
+        throw new AppError(`${item.name} không đủ số lượng tồn kho`, 400);
       }
 
       decrements.push({ Model, id, quantity: item.quantity });
@@ -215,7 +223,7 @@ class OrderService {
         }
 
         const items = await this.normalizeItems(payload.items, session);
-        if (!items.length) throw new AppError('Order must contain at least one item', 422);
+        if (!items.length) throw new AppError('Đơn hàng phải có ít nhất một sản phẩm', 422);
         const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
         const shipping = this.shippingQuote(payload.customer, subtotal);
         const shippingFee = shipping.fee;
@@ -273,21 +281,21 @@ class OrderService {
 
   async getById(id, user) {
     const order = await orderRepository.findById(id);
-    if (!order) throw new AppError('Order not found', 404);
-    if (user.role !== 'admin' && order.userId !== user.id) throw new AppError('Order access denied', 403);
+    if (!order) throw new AppError('Không tìm thấy đơn hàng', 404);
+    if (user.role !== 'admin' && order.userId !== user.id) throw new AppError('Bạn không có quyền truy cập đơn hàng này', 403);
     return order;
   }
 
   async lookup(orderNumber, phone) {
     const order = await orderRepository.findByOrderNumberAndPhone(orderNumber, phone);
-    if (!order) throw new AppError('No matching order found', 404);
+    if (!order) throw new AppError('Không tìm thấy đơn hàng phù hợp', 404);
     return order;
   }
 
   async update(id, payload) {
     const fields = Object.keys(payload || {});
     if (!fields.length || fields.some((field) => !safeUpdateFields.includes(field))) {
-      throw new AppError('Only customer and shipping details can be updated here', 422);
+      throw new AppError('Chỉ được cập nhật thông tin khách hàng và giao hàng tại đây', 422);
     }
     const safePayload = Object.fromEntries(
       fields.map((field) => [field, payload[field]]),
@@ -296,12 +304,15 @@ class OrderService {
   }
 
   async updateStatus(id, status) {
-    if (!allowedStatuses.includes(status)) throw new AppError('Invalid order status', 422);
+    if (!allowedStatuses.includes(status)) throw new AppError('Trạng thái đơn hàng không hợp lệ', 422);
     const order = await orderRepository.findById(id);
-    if (!order) throw new AppError('Order not found', 404);
+    if (!order) throw new AppError('Không tìm thấy đơn hàng', 404);
     if (order.status === status) return order;
     if (!statusTransitions[order.status].includes(status)) {
-      throw new AppError(`Cannot change order status from ${order.status} to ${status}`, 400);
+      throw new AppError(
+        `Không thể đổi trạng thái đơn hàng từ ${statusLabels[order.status] || order.status} sang ${statusLabels[status] || status}`,
+        400,
+      );
     }
     if (status === 'cancelled') return this.cancelOrder(order.id);
     return orderRepository.update(id, { status });
@@ -309,16 +320,16 @@ class OrderService {
 
   async cancelOrderInSession(id, user, session) {
     const order = await orderRepository.findById(id, { session });
-    if (!order) throw new AppError('Order not found', 404);
+    if (!order) throw new AppError('Không tìm thấy đơn hàng', 404);
     if (user && user.role !== 'admin' && order.userId !== user.id) {
-      throw new AppError('Order access denied', 403);
+      throw new AppError('Bạn không có quyền truy cập đơn hàng này', 403);
     }
     if (order.status === 'cancelled') return order;
     if (['paid', 'refund_required', 'refunded'].includes(order.paymentStatus)) {
-      throw new AppError('A paid order cannot be cancelled automatically', 400);
+      throw new AppError('Không thể tự động hủy đơn hàng đã thanh toán', 400);
     }
     if (['shipping', 'delivered', 'completed'].includes(order.status)) {
-      throw new AppError('Order can no longer be cancelled', 400);
+      throw new AppError('Đơn hàng không còn có thể hủy', 400);
     }
 
     const previous = await orderRepository.transitionToCancelled(
@@ -329,7 +340,7 @@ class OrderService {
     if (!previous) {
       const current = await orderRepository.findById(id, { session });
       if (current?.status === 'cancelled') return current;
-      throw new AppError('Order can no longer be cancelled', 400);
+      throw new AppError('Đơn hàng không còn có thể hủy', 400);
     }
 
     await this.restoreInventory(previous.items, session);
@@ -351,17 +362,17 @@ class OrderService {
   async remove(id) {
     return withTransaction(async (session) => {
       let order = await orderRepository.findById(id, { session });
-      if (!order) throw new AppError('Order not found', 404);
+      if (!order) throw new AppError('Không tìm thấy đơn hàng', 404);
 
       if (['pending', 'confirmed'].includes(order.status)) {
         order = await this.cancelOrderInSession(id, { role: 'admin' }, session);
       }
       if (!['cancelled', 'completed'].includes(order.status)) {
-        throw new AppError('Only cancelled or completed orders can be archived', 400);
+        throw new AppError('Chỉ có thể lưu trữ đơn hàng đã hủy hoặc đã hoàn thành', 400);
       }
 
       const result = await orderRepository.softDelete(id, session);
-      if (!result) throw new AppError('Order not found', 404);
+      if (!result) throw new AppError('Không tìm thấy đơn hàng', 404);
       return result;
     });
   }

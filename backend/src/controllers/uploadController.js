@@ -5,7 +5,7 @@ const AppError = require('../utils/AppError');
 
 const uploadSingle = asyncHandler(async (req, res) => {
   const file = req.file;
-  if (!file) throw new AppError('Image file is required', 422);
+  if (!file) throw new AppError('Vui lòng chọn ảnh để tải lên', 422);
   const uploaded = await uploadService.save(file);
   successResponse(
     res,

@@ -28,7 +28,7 @@ class CustomerService {
       payload,
       { returnDocument: 'after', runValidators: true },
     );
-    if (!user) throw new AppError('Customer not found', 404);
+    if (!user) throw new AppError('Không tìm thấy khách hàng', 404);
     return user.toJSON();
   }
 }

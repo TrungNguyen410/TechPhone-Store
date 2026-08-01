@@ -7,11 +7,11 @@ const asyncHandler = require('../utils/asyncHandler');
 const protect = asyncHandler(async (req, _res, next) => {
   const header = req.headers.authorization || '';
   const [, token] = header.startsWith('Bearer ') ? header.split(' ') : [];
-  if (!token) throw new AppError('Authentication token is required', 401);
+  if (!token) throw new AppError('Vui lòng đăng nhập để tiếp tục', 401);
 
   const payload = jwt.verify(token, env.jwtAccessSecret);
   const user = await User.findOne({ _id: payload.sub, isDeleted: false });
-  if (!user || user.status !== 'active') throw new AppError('User is not authorized', 401);
+  if (!user || user.status !== 'active') throw new AppError('Tài khoản không có quyền truy cập', 401);
 
   req.user = user.toJSON();
   return next();
@@ -27,17 +27,17 @@ const optionalProtect = asyncHandler(async (req, _res, next) => {
   try {
     const payload = jwt.verify(token, env.jwtAccessSecret);
     const user = await User.findOne({ _id: payload.sub, isDeleted: false });
-    if (!user || user.status !== 'active') throw new AppError('User is not authorized', 401);
+    if (!user || user.status !== 'active') throw new AppError('Tài khoản không có quyền truy cập', 401);
     req.user = user.toJSON();
   } catch {
-    throw new AppError('Authentication token is invalid or expired', 401);
+    throw new AppError('Phiên đăng nhập không hợp lệ hoặc đã hết hạn', 401);
   }
   return next();
 });
 
 const authorize = (...roles) => (req, _res, next) => {
   if (!req.user || !roles.includes(req.user.role)) {
-    return next(new AppError('Insufficient permissions', 403));
+    return next(new AppError('Bạn không có đủ quyền để thực hiện thao tác này', 403));
   }
   return next();
 };

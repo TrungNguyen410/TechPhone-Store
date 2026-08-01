@@ -17,7 +17,7 @@ const axiosClient = axios.create({
 let refreshPromise = null;
 
 const refreshCancelled = () => Object.assign(
-  new Error('Session refresh was cancelled'),
+  new Error('Phiên đăng nhập đã được thay đổi'),
   { code: 'AUTH_REFRESH_CANCELLED' },
 );
 
@@ -60,8 +60,32 @@ const refreshSessionOnce = (refreshToken) => {
 };
 
 const rejectFriendly = (error) => {
-  const message =
-    error.response?.data?.message || error.message || 'Có lỗi xảy ra. Vui lòng thử lại sau.';
+  const serverMessage = error.response?.data?.message;
+  const status = error.response?.status;
+  let message = typeof serverMessage === 'string' && serverMessage.trim()
+    ? serverMessage
+    : '';
+
+  if (!message && error.code === 'AUTH_REFRESH_CANCELLED') {
+    message = error.message;
+  } else if (!message && error.code === 'ECONNABORTED') {
+    message = 'Yêu cầu mất quá nhiều thời gian. Vui lòng thử lại.';
+  } else if (!message && !error.response) {
+    message = 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra mạng và thử lại.';
+  } else if (!message) {
+    const statusMessages = {
+      400: 'Yêu cầu không hợp lệ.',
+      401: 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.',
+      403: 'Bạn không có quyền thực hiện thao tác này.',
+      404: 'Không tìm thấy dữ liệu yêu cầu.',
+      409: 'Dữ liệu đã thay đổi hoặc bị trùng lặp.',
+      422: 'Dữ liệu gửi lên không hợp lệ.',
+      429: 'Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau.',
+    };
+    message = statusMessages[status]
+      || (status >= 500 ? 'Đã xảy ra lỗi máy chủ. Vui lòng thử lại sau.' : '')
+      || 'Có lỗi xảy ra. Vui lòng thử lại sau.';
+  }
   error.message = message;
   return Promise.reject(Object.assign(error, { friendlyMessage: message }));
 };

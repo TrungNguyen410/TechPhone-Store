@@ -2,7 +2,7 @@ import { STORAGE_KEYS } from '../utils/constants';
 import { calculateVoucherDiscount } from '../utils/checkoutPricing';
 import { getShippingQuote } from '../utils/shipping';
 import { storage } from '../utils/storage';
-import { getNextOrderStatuses } from '../utils/orderStatus';
+import { getNextOrderStatuses, getOrderStatus } from '../utils/orderStatus';
 import { mockAccessories } from './mockAccessories';
 import { mockBanners } from './mockBanners';
 import { mockOrders } from './mockOrders';
@@ -250,9 +250,11 @@ export const mockDb = {
         : item.productId || item.id;
       const current = catalog.find((entry) => entry.id === itemId);
       const quantity = Number(item.quantity);
-      if (!current || current.status !== 'active') fail(`${type === 'accessory' ? 'Accessory' : 'Product'} is unavailable`);
+      if (!current || current.status !== 'active') {
+        fail(`${type === 'accessory' ? 'Phụ kiện' : 'Sản phẩm'} hiện không khả dụng`);
+      }
       if (!Number.isInteger(quantity) || quantity < 1 || current.stock < quantity) {
-        fail(`${current.name} does not have enough stock`);
+        fail(`${current.name} không đủ số lượng tồn kho`);
       }
       current.stock -= quantity;
       current.sold = Number(current.sold || 0) + quantity;
@@ -267,7 +269,7 @@ export const mockDb = {
         type,
       };
     });
-    if (!items.length) fail('Order must contain at least one item', 422);
+    if (!items.length) fail('Đơn hàng phải có ít nhất một sản phẩm', 422);
 
     const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const shipping = getShippingQuote({ province: payload.customer?.province, subtotal });
@@ -284,7 +286,7 @@ export const mockDb = {
         && now >= new Date(voucher.startDate)
         && now <= new Date(`${voucher.endDate}T23:59:59`)
         && (!Number(voucher.quantity) || Number(voucher.used || 0) < Number(voucher.quantity));
-      if (!usable) fail('MÃ£ giáº£m giÃ¡ khÃ´ng há»£p lá»‡');
+      if (!usable) fail('Mã giảm giá không hợp lệ');
     }
     if (voucher) voucher.used = Number(voucher.used || 0) + 1;
     const discount = calculateVoucherDiscount(voucher, subtotal, shipping.fee);
@@ -356,14 +358,17 @@ export const mockDb = {
     const order = orders.find((item) => item.id === id);
     if (!order) fail('Không tìm thấy đơn hàng', 404);
     if (status !== order.status && !getNextOrderStatuses(order.status).includes(status)) {
-      fail(`Không thể chuyển đơn từ ${order.status} sang ${status}`, 400);
+      fail(
+        `Không thể chuyển đơn từ ${getOrderStatus(order.status).label.toLowerCase()} sang ${getOrderStatus(status).label.toLowerCase()}`,
+        400,
+      );
     }
     if (status === 'cancelled' && order.status !== 'cancelled') {
       if (['paid', 'refund_required', 'refunded'].includes(order.paymentStatus)) {
-        fail('Paid orders cannot be cancelled automatically', 400);
+        fail('Không thể tự động hủy đơn hàng đã thanh toán', 400);
       }
       if (['shipping', 'delivered', 'completed'].includes(order.status)) {
-        fail('This order can no longer be cancelled', 400);
+        fail('Đơn hàng không còn có thể hủy', 400);
       }
       const products = read('products');
       const accessories = read('accessories');

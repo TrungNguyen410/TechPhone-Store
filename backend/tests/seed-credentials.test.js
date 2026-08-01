@@ -9,7 +9,7 @@ describe('resolveSeedPassword', () => {
 
   it('rejects weak production seed passwords', () => {
     expect(() => resolveSeedPassword({ NODE_ENV: 'production', SEED_DEMO_PASSWORD: '123456' }))
-      .toThrow('at least 12 characters');
+      .toThrow('ít nhất 12 ký tự');
   });
 
   it('requires a strong production seed password', () => {

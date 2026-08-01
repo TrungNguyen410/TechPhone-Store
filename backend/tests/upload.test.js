@@ -64,6 +64,6 @@ describe('Admin image uploads', () => {
       });
 
     expect(response.status).toBe(422);
-    expect(response.body.message).toBe('Uploaded file content is not a supported image');
+    expect(response.body.message).toBe('Nội dung tệp tải lên không phải là ảnh được hỗ trợ');
   });
 });

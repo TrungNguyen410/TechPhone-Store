@@ -21,7 +21,7 @@ const detectImageType = (buffer) => {
 
 const fileFilter = (_req, file, cb) => {
   if (!allowedImageTypes.has(file.mimetype)) {
-    return cb(new AppError('Only JPG, PNG, WEBP, and GIF image uploads are allowed', 422));
+    return cb(new AppError('Chỉ chấp nhận ảnh định dạng JPG, PNG, WEBP hoặc GIF', 422));
   }
   return cb(null, true);
 };
@@ -31,7 +31,7 @@ const validateImageContent = (req, _res, next) => {
 
   const detectedType = detectImageType(req.file.buffer);
   if (!detectedType || !allowedImageTypes.has(detectedType.mime)) {
-    return next(new AppError('Uploaded file content is not a supported image', 422));
+    return next(new AppError('Nội dung tệp tải lên không phải là ảnh được hỗ trợ', 422));
   }
   req.file.detectedType = detectedType;
   return next();

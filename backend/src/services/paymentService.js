@@ -69,7 +69,7 @@ class PaymentService {
   assertVnpayConfigured() {
     const config = this.getVnpayConfig();
     if (!config.tmnCode || !config.hashSecret) {
-      throw new AppError('VNPay is not configured. Add VNPAY_TMN_CODE and VNPAY_HASH_SECRET.', 503);
+      throw new AppError('VNPay chưa được cấu hình. Vui lòng thêm VNPAY_TMN_CODE và VNPAY_HASH_SECRET.', 503);
     }
     return config;
   }
@@ -91,7 +91,7 @@ class PaymentService {
       order.status === 'cancelled'
       || ['paid', 'refund_required', 'refunded'].includes(order.paymentStatus)
     ) {
-      throw new AppError('This order has already been paid', 409);
+      throw new AppError('Đơn hàng này đã được thanh toán', 409);
     }
     const reference =
       `${order.orderNumber}${Date.now().toString().slice(-6)}${crypto.randomBytes(3).toString('hex')}`;
@@ -112,7 +112,7 @@ class PaymentService {
           || currentOrder.status === 'cancelled'
           || ['paid', 'refund_required', 'refunded'].includes(currentOrder.paymentStatus)
         ) {
-          throw new AppError('This order is no longer payable', 409);
+          throw new AppError('Đơn hàng này không còn đủ điều kiện thanh toán', 409);
         }
 
         const existing = await paymentTransactionRepository.findPendingByIdempotencyKey(
@@ -135,7 +135,7 @@ class PaymentService {
               },
               session,
             );
-            if (!payableOrder) throw new AppError('This order is no longer payable', 409);
+            if (!payableOrder) throw new AppError('Đơn hàng này không còn đủ điều kiện thanh toán', 409);
             return {
               order: payableOrder,
               paymentUrl: existing.rawResponse?.paymentUrl,
@@ -168,7 +168,7 @@ class PaymentService {
           { paymentReference: reference, paymentStatus: 'pending' },
           session,
         );
-        if (!payableOrder) throw new AppError('This order is no longer payable', 409);
+        if (!payableOrder) throw new AppError('Đơn hàng này không còn đủ điều kiện thanh toán', 409);
         return { order: payableOrder, paymentUrl, transaction };
       });
     } catch (error) {
@@ -183,7 +183,7 @@ class PaymentService {
             || winnerOrder.status === 'cancelled'
             || ['paid', 'refund_required', 'refunded'].includes(winnerOrder.paymentStatus)
           ) {
-            throw new AppError('This order is no longer payable', 409);
+            throw new AppError('Đơn hàng này không còn đủ điều kiện thanh toán', 409);
           }
           return {
             order: winnerOrder,
@@ -198,7 +198,7 @@ class PaymentService {
 
   async processVnpayIpn(query) {
     if (!vnpayProvider.verifyCallback(query, this.getVnpayConfig().hashSecret)) {
-      return { RspCode: '97', Message: 'Invalid checksum' };
+      return { RspCode: '97', Message: 'Chữ ký không hợp lệ' };
     }
 
     const paid = query.vnp_ResponseCode === '00' && query.vnp_TransactionStatus === '00';
@@ -207,17 +207,17 @@ class PaymentService {
         query.vnp_TxnRef,
         session,
       );
-      if (!transaction) return { RspCode: '01', Message: 'Order not found' };
+      if (!transaction) return { RspCode: '01', Message: 'Không tìm thấy đơn hàng' };
       if (Number(query.vnp_Amount) / 100 !== transaction.amount) {
-        return { RspCode: '04', Message: 'Invalid amount' };
+        return { RspCode: '04', Message: 'Số tiền không hợp lệ' };
       }
       if (transaction.status === 'paid') {
-        return { RspCode: '02', Message: 'Order already confirmed' };
+        return { RspCode: '02', Message: 'Đơn hàng đã được xác nhận trước đó' };
       }
       const order = await orderRepository.findById(transaction.orderId, { session });
-      if (!order) return { RspCode: '01', Message: 'Order not found' };
+      if (!order) return { RspCode: '01', Message: 'Không tìm thấy đơn hàng' };
       if (order.paymentStatus === 'paid') {
-        return { RspCode: '02', Message: 'Order already confirmed' };
+        return { RspCode: '02', Message: 'Đơn hàng đã được xác nhận trước đó' };
       }
 
       await paymentTransactionRepository.settle(
@@ -248,7 +248,7 @@ class PaymentService {
           session,
         );
         if (!updatedOrder) {
-          throw new AppError('Order payment state changed concurrently', 409);
+          throw new AppError('Trạng thái thanh toán của đơn hàng vừa thay đổi. Vui lòng thử lại.', 409);
         }
         await paymentTransactionRepository.expireOtherPending(
           transaction.orderId,
@@ -303,14 +303,14 @@ class PaymentService {
         audience: 'vnpay-result',
         issuer: 'techphone',
       });
-      if (payload.provider !== 'vnpay') throw new Error('Invalid payment provider');
+      if (payload.provider !== 'vnpay') throw new Error('Nhà cung cấp thanh toán không hợp lệ');
       return {
         valid: true,
         reference: payload.reference,
         code: payload.code,
       };
     } catch {
-      throw new AppError('Payment result proof is invalid or expired', 400);
+      throw new AppError('Thông tin xác minh kết quả thanh toán không hợp lệ hoặc đã hết hạn', 400);
     }
   }
 }

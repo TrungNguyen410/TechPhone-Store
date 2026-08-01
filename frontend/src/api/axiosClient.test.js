@@ -380,4 +380,26 @@ describe('axiosClient session refresh', () => {
     expect(request.url).toBe('/auth/logout');
     expect(JSON.parse(request.data)).toEqual({ refreshToken: 'refresh-to-revoke' });
   });
+
+  it('shows a Vietnamese message when the server cannot be reached', async () => {
+    axiosClient.defaults.adapter = (config) => Promise.reject(Object.assign(
+      new Error('Network Error'),
+      { config },
+    ));
+
+    await expect(axiosClient.get('/products')).rejects.toMatchObject({
+      friendlyMessage: 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra mạng và thử lại.',
+    });
+  });
+
+  it('shows a Vietnamese message when a request times out', async () => {
+    axiosClient.defaults.adapter = (config) => Promise.reject(Object.assign(
+      new Error('timeout of 10000ms exceeded'),
+      { code: 'ECONNABORTED', config },
+    ));
+
+    await expect(axiosClient.get('/products')).rejects.toMatchObject({
+      friendlyMessage: 'Yêu cầu mất quá nhiều thời gian. Vui lòng thử lại.',
+    });
+  });
 });

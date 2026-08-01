@@ -17,7 +17,7 @@ const rateLimit = ({ windowMs = 15 * 60 * 1000, max = 5 } = {}) => (req, res, ne
     res.set('Retry-After', String(Math.ceil((bucket.resetAt - now) / 1000)));
     return res.status(429).json({
       success: false,
-      message: 'Too many requests. Please try again later.',
+      message: 'Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau.',
     });
   }
   bucket.count += 1;

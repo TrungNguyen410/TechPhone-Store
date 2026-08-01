@@ -6,7 +6,7 @@ const getJwtSecret = (name, developmentFallback) => {
   const value = process.env[name] || (isProduction ? '' : developmentFallback);
   const looksLikePlaceholder = /^(change|replace|dev|docker|example|test)[\s_-]/i.test(value);
   if (isProduction && (!value || value.length < 32 || looksLikePlaceholder)) {
-    throw new Error(`${name} must be a strong, unique value of at least 32 characters in production`);
+    throw new Error(`${name} phải là giá trị mạnh, duy nhất và có ít nhất 32 ký tự trong môi trường production`);
   }
 
   return value;

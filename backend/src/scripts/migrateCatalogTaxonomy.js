@@ -31,7 +31,7 @@ async function migrate(Model) {
   const items = await Model.collection.find({ isDeleted: { $ne: true } }).toArray();
   for (const item of items) {
     if ((!item.brandId && !item.brand) || (!item.categoryId && !item.category)) {
-      throw new Error(`Cannot migrate ${Model.modelName} ${item._id}: taxonomy name is missing`);
+      throw new Error(`Không thể di chuyển ${Model.modelName} ${item._id}: thiếu tên phân loại`);
     }
     const brandId = item.brandId || await taxonomyId(Brand, item.brand);
     const categoryId = item.categoryId || await taxonomyId(Category, item.category);

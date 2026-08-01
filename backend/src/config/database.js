@@ -4,7 +4,7 @@ const env = require('./env');
 const assertTransactionTopology = (hello) => {
   if (!hello?.setName && hello?.msg !== 'isdbgrid') {
     throw new Error(
-      'MongoDB replica set or sharded cluster is required for atomic checkout transactions.',
+      'MongoDB phải chạy ở chế độ replica set hoặc sharded cluster để hỗ trợ giao dịch thanh toán nguyên tử.',
     );
   }
 };

@@ -15,10 +15,10 @@ const allowedFolders = new Set([
 class UploadService {
   async save(file) {
     if (!file?.buffer || !file.detectedType) {
-      throw new AppError('Validated image file is required', 422);
+      throw new AppError('Vui lòng cung cấp tệp ảnh hợp lệ', 422);
     }
     if (!allowedFolders.has(file.fieldname)) {
-      throw new AppError('Upload destination is invalid', 422);
+      throw new AppError('Thư mục lưu ảnh không hợp lệ', 422);
     }
 
     const destination = path.join(process.cwd(), env.uploadDir, file.fieldname);
