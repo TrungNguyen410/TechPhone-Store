@@ -151,11 +151,11 @@ curl -H "Authorization: Bearer eyJhbGc..." http://localhost:5000/api/auth/me
 
 ```
 Admin User:
-  Email: admin@gmail.com
+  Phone: 0900000000
   Password: 123456
 
 Customer User:
-  Email: user@gmail.com
+  Phone: 0911111111
   Password: 123456
 ```
 
@@ -284,7 +284,7 @@ Solution: Run npm install in the directory
 - Connection pooling configured in Mongoose
 
 ### Database Optimization
-- Indexes: email (users), productId (orders), userId (reviews)
+- Indexes: unique phone + optional unique email (users), productId (orders), userId (reviews)
 - Aggregation pipelines for statistics
 - Lean queries when projection is possible
 - Batch operations when available
@@ -393,7 +393,7 @@ const { name, email } = user;
 - [ ] Monitor performance metrics
 - [ ] Verify all endpoints working
 - [ ] Test admin dashboard
-- [ ] Confirm email notifications
+- [ ] Confirm SMS OTP notifications (or the free debug OTP flow for demos)
 - [ ] Document any issues
 
 ## 📚 Additional Resources

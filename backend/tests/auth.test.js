@@ -3,46 +3,45 @@ const User = require('../src/models/User');
 const { app, createUser, login } = require('./helpers');
 
 describe('Auth API', () => {
-  it('creates a customer only after the email OTP is verified', async () => {
+  it('creates a customer only after the SMS phone OTP is verified', async () => {
     const requested = await request(app).post('/api/auth/register/request-otp').send({
       fullName: 'Nguyen Minh Anh',
-      email: 'minhanh@example.com',
       phone: '0912345678',
       password: '123456',
     });
 
     expect(requested.status).toBe(202);
-    expect(await User.findOne({ email: 'minhanh@example.com' })).toBeNull();
+    expect(await User.findOne({ phone: '0912345678' })).toBeNull();
 
     const verified = await request(app).post('/api/auth/register/verify-otp').send({
-      email: 'minhanh@example.com',
+      phone: '+84912345678',
       otp: requested.body.data.debugOtp,
     });
 
     expect(verified.status).toBe(201);
     expect(verified.body.data.token).toBeTruthy();
-    expect(verified.body.data.user.emailVerified).toBe(true);
+    expect(verified.body.data.user.phone).toBe('0912345678');
+    expect(verified.body.data.user.phoneVerified).toBe(true);
+    expect(verified.body.data.user.email).toBeUndefined();
     expect(verified.body.data.user.password).toBeUndefined();
   });
 
-  it('resets a forgotten password with a one-time code', async () => {
+  it('resets a forgotten password with a one-time SMS code', async () => {
     await createUser({ email: 'forgot@test.com', phone: '0977777777' });
     const requested = await request(app).post('/api/auth/forgot-password/request-otp').send({
-      identifier: 'forgot@test.com',
-      channel: 'email',
+      identifier: '+84977777777',
     });
     expect(requested.status).toBe(200);
 
     const reset = await request(app).post('/api/auth/forgot-password/reset').send({
-      identifier: 'forgot@test.com',
-      channel: 'email',
+      identifier: '0977777777',
       otp: requested.body.data.debugOtp,
       newPassword: 'new-password',
     });
     expect(reset.status).toBe(200);
 
     const loggedIn = await request(app).post('/api/auth/login').send({
-      identifier: 'forgot@test.com',
+      identifier: '0977777777',
       password: 'new-password',
     });
     expect(loggedIn.status).toBe(200);
@@ -51,7 +50,6 @@ describe('Auth API', () => {
   it('does not allow public registration to set admin role', async () => {
     const response = await request(app).post('/api/auth/register').send({
       fullName: 'Privilege Attempt',
-      email: 'privilege@example.com',
       phone: '0912345679',
       password: '123456',
       role: 'admin',
@@ -71,6 +69,19 @@ describe('Auth API', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.data.role).toBe('admin');
+  });
+
+  it('does not allow changing the verified login phone through profile updates', async () => {
+    await createUser({ email: 'profile@test.com', phone: '0901234567' });
+    const token = await login('0901234567');
+
+    const response = await request(app)
+      .put('/api/auth/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ phone: '0912345678' });
+
+    expect(response.status).toBe(422);
+    expect((await User.findOne({ phone: '0901234567' })).phone).toBe('0901234567');
   });
 
   it('rejects locked users', async () => {
@@ -124,13 +135,11 @@ describe('Auth API', () => {
   it('allows a password-reset OTP to be consumed only once under concurrent requests', async () => {
     await createUser({ email: 'otp-race@test.com', phone: '0977777776' });
     const requested = await request(app).post('/api/auth/forgot-password/request-otp').send({
-      identifier: 'otp-race@test.com',
-      channel: 'email',
+      identifier: '0977777776',
     });
 
     const payload = {
-      identifier: 'otp-race@test.com',
-      channel: 'email',
+      identifier: '0977777776',
       otp: requested.body.data.debugOtp,
       newPassword: 'one-time-password',
     };
@@ -140,6 +149,26 @@ describe('Auth API', () => {
     ]);
 
     expect(attempts.map((response) => response.status).sort()).toEqual([200, 400]);
+  });
+
+  it('rejects the old email registration verification contract', async () => {
+    const response = await request(app).post('/api/auth/register/verify-otp').send({
+      email: 'legacy@example.com',
+      otp: '123456',
+    });
+
+    expect(response.status).toBe(422);
+  });
+
+  it('rejects duplicate phones after normalization', async () => {
+    await createUser({ email: 'normalized@test.com', phone: '0912345678' });
+    const response = await request(app).post('/api/auth/register/request-otp').send({
+      fullName: 'Duplicate Phone',
+      phone: '+84 912 345 678',
+      password: '123456',
+    });
+
+    expect(response.status).toBe(409);
   });
 
   it('returns 401 instead of 500 for an invalid access token', async () => {

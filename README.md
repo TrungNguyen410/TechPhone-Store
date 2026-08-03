@@ -69,10 +69,10 @@ VITE_USE_MOCK=true
 
 ## Tài khoản mock
 
-| Vai trò | Email | Số điện thoại | Mật khẩu |
-| --- | --- | --- | --- |
-| Admin | `admin@gmail.com` | `0900000000` | `123456` |
-| Khách hàng | `user@gmail.com` | `0911111111` | `123456` |
+| Vai trò | Số điện thoại | Mật khẩu |
+| --- | --- | --- |
+| Admin | `0900000000` | `123456` |
+| Khách hàng | `0911111111` | `123456` |
 
 Đơn hàng mẫu để tra cứu: `TP260601` và số điện thoại `0911111111`.
 

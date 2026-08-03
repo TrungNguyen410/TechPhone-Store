@@ -54,7 +54,7 @@ describe('Login', () => {
       </MemoryRouter>,
     );
 
-    await user.type(screen.getByPlaceholderText('user@gmail.com'), 'user@gmail.com');
+    await user.type(screen.getByPlaceholderText('0912 345 678'), '0911111111');
     await user.type(screen.getByPlaceholderText('Nhập mật khẩu'), '123456');
     await user.click(screen.getByRole('button', { name: 'Đăng nhập' }));
 
@@ -72,7 +72,7 @@ describe('Login', () => {
       </MemoryRouter>,
     );
 
-    await user.type(screen.getByPlaceholderText('user@gmail.com'), 'user@gmail.com');
+    await user.type(screen.getByPlaceholderText('0912 345 678'), '0911111111');
     await user.type(screen.getByPlaceholderText('Nhập mật khẩu'), '123456');
     await user.click(screen.getByRole('button', { name: 'Đăng nhập' }));
 

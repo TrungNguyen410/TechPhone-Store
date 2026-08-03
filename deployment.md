@@ -25,8 +25,8 @@ docker compose exec backend npm run seed
 
 Trước khi seed, điền `SEED_DEMO_PASSWORD` dài ít nhất 12 ký tự trong file `.env` ở thư mục gốc rồi chạy lại `docker compose up -d`. Demo accounts:
 
-- Admin: `admin@gmail.com` / giá trị `SEED_DEMO_PASSWORD`
-- Customer: `user@gmail.com` / giá trị `SEED_DEMO_PASSWORD`
+- Admin: `0900000000` / giá trị `SEED_DEMO_PASSWORD`
+- Customer: `0911111111` / giá trị `SEED_DEMO_PASSWORD`
 
 ## Frontend: Netlify
 

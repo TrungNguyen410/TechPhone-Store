@@ -49,17 +49,17 @@ describe('Account profile', () => {
     cleanup();
   });
 
-  it('keeps email read-only and omits it from the profile update payload', async () => {
+  it('keeps the verified phone read-only and omits account identifiers from profile updates', async () => {
     const user = userEvent.setup();
     render(<MemoryRouter><Account /></MemoryRouter>);
 
-    expect(screen.getByLabelText('Email *')).toHaveAttribute('readonly');
+    expect(screen.getByDisplayValue('0912345678')).toHaveAttribute('readonly');
+    expect(screen.queryByLabelText('Email *')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
 
     expect(authMock.updateProfile).toHaveBeenCalledWith({
       address: '1 Main Street',
       fullName: 'Test User',
-      phone: '0912345678',
     });
   });
 

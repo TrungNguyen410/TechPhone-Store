@@ -222,18 +222,16 @@ describe('axiosClient session refresh', () => {
       }));
     };
 
-    await authApi.login({ identifier: 'user@test.com', password: '123456' });
+    await authApi.login({ identifier: '0912345678', password: '123456' });
     await authApi.requestRegistrationOtp({
-      email: 'user@test.com',
       fullName: 'Test User',
       password: '123456',
       phone: '0912345678',
     });
-    await authApi.verifyRegistrationOtp({ email: 'user@test.com', otp: '123456' });
-    await authApi.requestPasswordReset({ identifier: 'user@test.com', channel: 'email' });
+    await authApi.verifyRegistrationOtp({ phone: '0912345678', otp: '123456' });
+    await authApi.requestPasswordReset({ identifier: '0912345678' });
     await authApi.resetPassword({
-      channel: 'email',
-      identifier: 'user@test.com',
+      identifier: '0912345678',
       newPassword: 'new-password',
       otp: '123456',
     });

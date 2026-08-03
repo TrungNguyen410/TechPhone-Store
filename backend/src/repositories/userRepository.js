@@ -1,5 +1,6 @@
 const BaseRepository = require('./baseRepository');
 const User = require('../models/User');
+const { normalizeVietnamesePhone } = require('../utils/phone');
 
 class UserRepository extends BaseRepository {
   constructor() {
@@ -7,9 +8,15 @@ class UserRepository extends BaseRepository {
   }
 
   async findByIdentifier(identifier, includePassword = false) {
+    const rawIdentifier = String(identifier || '').trim();
+    const phone = normalizeVietnamesePhone(rawIdentifier);
+    const identifiers = [];
+    if (phone) identifiers.push({ phone });
+    if (rawIdentifier.includes('@')) identifiers.push({ email: rawIdentifier.toLowerCase() });
+    if (!identifiers.length) return null;
     const query = User.findOne({
       isDeleted: false,
-      $or: [{ email: identifier.toLowerCase() }, { phone: identifier }],
+      $or: identifiers,
     });
     if (includePassword) query.select('+password');
     const user = await query;
@@ -17,11 +24,14 @@ class UserRepository extends BaseRepository {
   }
 
   async findByEmail(email) {
-    return User.findOne({ email: email.toLowerCase(), isDeleted: false });
+    if (!email) return null;
+    return User.findOne({ email: String(email).toLowerCase(), isDeleted: false });
   }
 
   async findByPhone(phone) {
-    return User.findOne({ phone, isDeleted: false });
+    const normalized = normalizeVietnamesePhone(phone);
+    if (!normalized) return null;
+    return User.findOne({ phone: normalized, isDeleted: false });
   }
 
   async findByIdWithPassword(id) {

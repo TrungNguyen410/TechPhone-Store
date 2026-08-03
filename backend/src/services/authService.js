@@ -8,6 +8,7 @@ const refreshTokenRepository = require('../repositories/refreshTokenRepository')
 const verificationCodeRepository = require('../repositories/verificationCodeRepository');
 const userRepository = require('../repositories/userRepository');
 const otpDeliveryService = require('./otpDeliveryService');
+const { normalizeVietnamesePhone } = require('../utils/phone');
 
 const publicUser = (user) => (typeof user.toJSON === 'function' ? user.toJSON() : user);
 
@@ -22,7 +23,7 @@ class AuthService {
 
   async storeAndDeliverOtp({ target, channel, purpose, payload = null }) {
     const code = this.createOtp();
-    await verificationCodeRepository.replace({
+    const verification = await verificationCodeRepository.replace({
       target,
       purpose,
       channel,
@@ -30,10 +31,17 @@ class AuthService {
       payload,
       expiresAt: new Date(Date.now() + 10 * 60 * 1000),
     });
-    const deliveryTarget = await otpDeliveryService.send(channel, target, code, purpose);
+    let delivery;
+    try {
+      delivery = await otpDeliveryService.send(channel, target, code, purpose);
+    } catch (error) {
+      await verificationCodeRepository.invalidate(verification.id);
+      throw error;
+    }
     return {
-      deliveryTarget,
+      deliveryTarget: delivery.deliveryTarget,
       expiresInSeconds: 600,
+      ...(delivery.trackingId ? { trackingId: delivery.trackingId } : {}),
       ...(env.nodeEnv !== 'production' ? { debugOtp: code } : {}),
     };
   }
@@ -75,21 +83,19 @@ class AuthService {
   }
 
   async requestRegistrationOtp(payload) {
-    const [existingEmail, existingPhone] = await Promise.all([
-      userRepository.findByEmail(payload.email),
-      userRepository.findByPhone(payload.phone),
-    ]);
-
-    if (existingEmail) throw new AppError('Email này đã được đăng ký', 409);
+    const phone = normalizeVietnamesePhone(payload.phone);
+    if (!phone) throw new AppError('Số điện thoại Việt Nam không hợp lệ', 422);
+    const existingPhone = await userRepository.findByPhone(phone);
     if (existingPhone) throw new AppError('Số điện thoại này đã được đăng ký', 409);
 
     const password = await bcrypt.hash(payload.password, 12);
     return this.storeAndDeliverOtp({
-      target: payload.email.toLowerCase(),
-      channel: 'email',
+      target: phone,
+      channel: 'sms',
       purpose: 'register',
       payload: {
-        ...payload,
+        fullName: payload.fullName,
+        phone,
         password,
         role: 'customer',
         status: 'active',
@@ -101,42 +107,42 @@ class AuthService {
     return this.requestRegistrationOtp(payload);
   }
 
-  async verifyRegistrationOtp({ email, otp }) {
-    const target = email.toLowerCase();
+  async verifyRegistrationOtp({ phone, otp }) {
+    const target = normalizeVietnamesePhone(phone);
+    if (!target) throw new AppError('Số điện thoại Việt Nam không hợp lệ', 422);
     const verification = await this.verifyOtp({ target, purpose: 'register', otp });
     const payload = verification.payload;
-    const [existingEmail, existingPhone] = await Promise.all([
-      userRepository.findByEmail(payload.email),
-      userRepository.findByPhone(payload.phone),
-    ]);
-    if (existingEmail) throw new AppError('Email này đã được đăng ký', 409);
+    const existingPhone = await userRepository.findByPhone(payload.phone);
     if (existingPhone) throw new AppError('Số điện thoại này đã được đăng ký', 409);
     const user = await userRepository.create({
       ...payload,
-      emailVerified: true,
-      emailVerifiedAt: new Date(),
+      phoneVerified: true,
+      phoneVerifiedAt: new Date(),
     });
     return this.issueSession(user);
   }
 
-  async requestPasswordReset({ identifier, channel }) {
-    const user = await userRepository.findByIdentifier(identifier);
+  async requestPasswordReset({ identifier }) {
+    const phone = normalizeVietnamesePhone(identifier);
+    const user = await userRepository.findByIdentifier(phone);
     if (!user) return { message: 'If the account exists, an OTP has been sent.' };
-    const target = channel === 'sms' ? user.phone : user.email;
     const delivery = await this.storeAndDeliverOtp({
-      target,
-      channel,
+      target: user.phone,
+      channel: 'sms',
       purpose: 'password-reset',
       payload: { userId: user.id },
     });
-    return { message: 'If the account exists, an OTP has been sent.', ...delivery };
+    return {
+      message: 'If the account exists, an OTP has been sent.',
+      ...(env.nodeEnv !== 'production' ? delivery : {}),
+    };
   }
 
-  async resetPassword({ identifier, channel, otp, newPassword }) {
-    const user = await userRepository.findByIdentifier(identifier);
+  async resetPassword({ identifier, otp, newPassword }) {
+    const phone = normalizeVietnamesePhone(identifier);
+    const user = await userRepository.findByIdentifier(phone);
     if (!user) throw new AppError('Mã OTP không hợp lệ hoặc đã hết hạn', 400);
-    const target = channel === 'sms' ? user.phone : user.email;
-    await this.verifyOtp({ target, purpose: 'password-reset', otp });
+    await this.verifyOtp({ target: user.phone, purpose: 'password-reset', otp });
     const password = await bcrypt.hash(newPassword, 12);
     await userRepository.update(user.id, { password });
     await refreshTokenRepository.revokeUserTokens(user.id);
@@ -149,7 +155,7 @@ class AuthService {
     if (!user) throw new AppError('Thông tin đăng nhập không chính xác', 401);
     if (user.status === 'locked') throw new AppError('Tài khoản đã bị khóa', 403);
     if (user.status !== 'active') throw new AppError('Tài khoản đang ngừng hoạt động', 403);
-    if (!user.emailVerified) throw new AppError('Email chưa được xác thực', 403);
+    if (user.phoneVerified === false) throw new AppError('Số điện thoại chưa được xác thực', 403);
 
     const passwordMatches = await bcrypt.compare(password, user.password);
     if (!passwordMatches) throw new AppError('Thông tin đăng nhập không chính xác', 401);
@@ -164,14 +170,7 @@ class AuthService {
   }
 
   async updateProfile(userId, payload) {
-    if (payload.phone) {
-      const existingPhone = await userRepository.findByPhone(payload.phone);
-      if (existingPhone && existingPhone.id !== userId) {
-        throw new AppError('Số điện thoại này đã được đăng ký', 409);
-      }
-    }
-
-    const allowed = ['fullName', 'phone', 'address', 'avatar'];
+    const allowed = ['fullName', 'address', 'avatar'];
     const updates = Object.fromEntries(Object.entries(payload).filter(([key]) => allowed.includes(key)));
     return userRepository.update(userId, updates);
   }

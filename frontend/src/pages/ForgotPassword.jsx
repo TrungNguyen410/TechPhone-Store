@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FiKey, FiLock, FiMail, FiPhone } from 'react-icons/fi';
+import { FiKey, FiLock, FiPhone } from 'react-icons/fi';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { authApi } from '../api/authApi';
@@ -10,26 +10,26 @@ export default function ForgotPassword() {
   const [step, setStep] = useState('request');
   const [form, setForm] = useState({
     identifier: '',
-    channel: 'email',
     otp: '',
     newPassword: '',
     confirmPassword: '',
   });
   const [deliveryTarget, setDeliveryTarget] = useState('');
+  const [isDebugOtp, setIsDebugOtp] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
 
   const requestOtp = async (event) => {
     event.preventDefault();
-    if (!form.identifier.trim()) return toast.error('Vui lòng nhập email hoặc số điện thoại');
+    if (!form.identifier.trim()) return toast.error('Vui lòng nhập số điện thoại');
     setLoading(true);
     try {
       const result = await authApi.requestPasswordReset({
         identifier: form.identifier.trim(),
-        channel: form.channel,
       });
       setDeliveryTarget(result.deliveryTarget || form.identifier);
+      setIsDebugOtp(Boolean(result.debugOtp));
       setStep('reset');
       toast.success(result.debugOtp ? `Mã OTP thử nghiệm: ${result.debugOtp}` : 'Nếu tài khoản tồn tại, mã OTP đã được gửi');
     } catch (error) {
@@ -48,7 +48,6 @@ export default function ForgotPassword() {
     try {
       await authApi.resetPassword({
         identifier: form.identifier.trim(),
-        channel: form.channel,
         otp: form.otp,
         newPassword: form.newPassword,
       });
@@ -71,24 +70,22 @@ export default function ForgotPassword() {
         <form className="auth-form" onSubmit={step === 'request' ? requestOtp : resetPassword}>
           <span className="eyebrow">Bảo mật tài khoản</span>
           <h1>{step === 'request' ? 'Quên mật khẩu' : 'Tạo mật khẩu mới'}</h1>
-          <p>{step === 'request' ? 'Chọn nơi nhận mã OTP rồi nhập thông tin tài khoản.' : `Nhập mã đã gửi đến ${deliveryTarget}.`}</p>
+          <p>{step === 'request'
+            ? 'Nhập số điện thoại tài khoản để nhận mã OTP qua SMS.'
+            : isDebugOtp
+              ? `Đang dùng SMS thử nghiệm miễn phí cho ${deliveryTarget}; nhập mã hiển thị trong thông báo.`
+              : `Nhập mã SMS đã gửi đến ${deliveryTarget}.`}</p>
           {step === 'request' ? (
-            <>
-              <div className="otp-channel-options">
-                <label><input type="radio" name="channel" value="email" checked={form.channel === 'email'} onChange={() => update('channel', 'email')} /><FiMail /> Nhận qua email</label>
-                <label><input type="radio" name="channel" value="sms" checked={form.channel === 'sms'} onChange={() => update('channel', 'sms')} /><FiPhone /> Nhận qua SMS</label>
-              </div>
-              <label className="input-with-icon">
-                <span>{form.channel === 'email' ? 'Email tài khoản' : 'Số điện thoại tài khoản'}</span>
-                <div>{form.channel === 'email' ? <FiMail /> : <FiPhone />}<input value={form.identifier} onChange={(event) => update('identifier', event.target.value)} /></div>
-              </label>
-            </>
+            <label className="input-with-icon">
+              <span>Số điện thoại tài khoản</span>
+              <div><FiPhone /><input inputMode="tel" autoComplete="tel" value={form.identifier} onChange={(event) => update('identifier', event.target.value)} placeholder="0912 345 678" /></div>
+            </label>
           ) : (
             <>
               <label className="input-with-icon otp-input"><span>Mã OTP</span><div><FiKey /><input inputMode="numeric" maxLength="6" value={form.otp} onChange={(event) => update('otp', event.target.value.replace(/\D/g, ''))} placeholder="••••••" /></div></label>
               <label className="input-with-icon"><span>Mật khẩu mới</span><div><FiLock /><input type="password" value={form.newPassword} onChange={(event) => update('newPassword', event.target.value)} /></div></label>
               <label className="input-with-icon"><span>Xác nhận mật khẩu mới</span><div><FiLock /><input type="password" value={form.confirmPassword} onChange={(event) => update('confirmPassword', event.target.value)} /></div></label>
-              <button type="button" className="auth-text-button" onClick={() => setStep('request')}>Gửi lại hoặc đổi phương thức nhận mã</button>
+              <button type="button" className="auth-text-button" onClick={() => setStep('request')}>Gửi lại hoặc sửa số điện thoại</button>
             </>
           )}
           <button className="btn btn-primary auth-submit" disabled={loading}>{loading ? 'Đang xử lý...' : step === 'request' ? 'Gửi mã OTP' : 'Đặt lại mật khẩu'}</button>

@@ -6,7 +6,7 @@ const userSchema = new mongoose.Schema(
   {
     _id: stringId,
     fullName: { type: String, required: true, trim: true },
-    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    email: { type: String, lowercase: true, trim: true },
     phone: { type: String, required: true, unique: true, trim: true },
     password: { type: String, required: true, select: false },
     role: { type: String, enum: ['customer', 'admin'], default: 'customer', index: true },
@@ -16,10 +16,16 @@ const userSchema = new mongoose.Schema(
     wishlist: { type: [String], default: [] },
     emailVerified: { type: Boolean, default: true, index: true },
     emailVerifiedAt: { type: Date, default: null },
+    phoneVerified: { type: Boolean, default: true, index: true },
+    phoneVerifiedAt: { type: Date, default: null },
   },
   baseSchemaOptions,
 );
 
 userSchema.plugin(softDeletePlugin);
+userSchema.index(
+  { email: 1 },
+  { name: 'email_optional_unique', unique: true, partialFilterExpression: { email: { $type: 'string' } } },
+);
 
 module.exports = mongoose.model('User', userSchema);
