@@ -17,25 +17,25 @@ export const authApi = {
     USE_MOCK
       ? mockDb.requestRegistrationOtp(payload)
       : axiosClient.post('/auth/register/request-otp', payload, skipAuthRefresh),
-  verifyRegistrationOtp: ({ email, otp }) =>
+  verifyRegistrationOtp: ({ phone, otp }) =>
     USE_MOCK
-      ? mockDb.verifyRegistrationOtp(email, otp)
-      : axiosClient.post('/auth/register/verify-otp', { email, otp }, skipAuthRefresh),
-  requestPasswordReset: ({ identifier, channel }) =>
+      ? mockDb.verifyRegistrationOtp(phone, otp)
+      : axiosClient.post('/auth/register/verify-otp', { phone, otp }, skipAuthRefresh),
+  requestPasswordReset: ({ identifier }) =>
     USE_MOCK
-      ? mockDb.requestPasswordReset(identifier, channel)
-      : axiosClient.post('/auth/forgot-password/request-otp', { identifier, channel }, skipAuthRefresh),
-  resetPassword: ({ identifier, channel, otp, newPassword }) =>
+      ? mockDb.requestPasswordReset(identifier)
+      : axiosClient.post('/auth/forgot-password/request-otp', { identifier }, skipAuthRefresh),
+  resetPassword: ({ identifier, otp, newPassword }) =>
     USE_MOCK
-      ? mockDb.resetPassword(identifier, channel, otp, newPassword)
+      ? mockDb.resetPassword(identifier, otp, newPassword)
       : axiosClient.post(
           '/auth/forgot-password/reset',
-          { identifier, channel, otp, newPassword },
+          { identifier, otp, newPassword },
           skipAuthRefresh,
         ),
   me: (user) => (USE_MOCK ? Promise.resolve(user) : axiosClient.get('/auth/me')),
   updateProfile: (userId, payload) =>
-    USE_MOCK ? mockDb.updateUser(userId, payload) : axiosClient.put('/auth/profile', payload),
+    USE_MOCK ? mockDb.updateProfile(userId, payload) : axiosClient.put('/auth/profile', payload),
   changePassword: (userId, payload) =>
     USE_MOCK
       ? mockDb.changePassword(userId, payload.currentPassword, payload.newPassword)

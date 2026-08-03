@@ -39,6 +39,13 @@ class VerificationCodeRepository {
     );
     return result.modifiedCount === 1;
   }
+
+  async invalidate(id, now = new Date()) {
+    return VerificationCode.updateOne(
+      { _id: id, consumedAt: null },
+      { $set: { consumedAt: now } },
+    );
+  }
 }
 
 module.exports = new VerificationCodeRepository();

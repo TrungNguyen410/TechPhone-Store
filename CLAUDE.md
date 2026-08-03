@@ -96,10 +96,10 @@ Defaults are already coded in `src/config/env.js`, so the backend runs without a
 
 ## Mock Demo Accounts
 
-| Role | Email | Phone | Password |
-|---|---|---|---|
-| Admin | admin@gmail.com | 0900000000 | 123456 |
-| Customer | user@gmail.com | 0911111111 | 123456 |
+| Role | Phone | Password |
+|---|---|---|
+| Admin | 0900000000 | 123456 |
+| Customer | 0911111111 | 123456 |
 
 Sample order for lookup: `TP260601` with phone `0911111111`.
 

@@ -662,6 +662,6 @@ describe('VNPay checkout and IPN', () => {
       .query({ vnp_TxnRef: 'missing', vnp_SecureHash: 'invalid' })
       .expect(200);
 
-    expect(response.body).toEqual({ RspCode: '97', Message: 'Invalid checksum' });
+    expect(response.body).toEqual({ RspCode: '97', Message: 'Chữ ký không hợp lệ' });
   });
 });

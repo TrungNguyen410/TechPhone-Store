@@ -17,29 +17,29 @@ describe('Utility helpers', () => {
     expect(successRes.json).toHaveBeenCalledWith({ success: true, message: 'Success', data: { ok: true } });
 
     const errorRes = { status: jest.fn().mockReturnThis(), json: jest.fn() };
-    errorResponse(errorRes, 'Bad input', 422, [{ msg: 'Invalid' }]);
+    errorResponse(errorRes, 'Dữ liệu không hợp lệ', 422, [{ msg: 'Giá trị không hợp lệ' }]);
     expect(errorRes.status).toHaveBeenCalledWith(422);
     expect(errorRes.json).toHaveBeenCalledWith({
       success: false,
-      message: 'Bad input',
-      data: { errors: [{ msg: 'Invalid' }] },
+      message: 'Dữ liệu không hợp lệ',
+      data: { errors: [{ msg: 'Giá trị không hợp lệ' }] },
     });
 
     const plainErrorRes = { status: jest.fn().mockReturnThis(), json: jest.fn() };
     errorResponse(plainErrorRes);
     expect(plainErrorRes.json).toHaveBeenCalledWith({
       success: false,
-      message: 'Internal server error',
+      message: 'Đã xảy ra lỗi máy chủ',
       data: {},
     });
   });
 
   it('handles async errors and small helper branches', async () => {
-    const error = new AppError('Custom failure', 418, ['x']);
+    const error = new AppError('Lỗi tùy chỉnh', 418, ['x']);
     expect(error.statusCode).toBe(418);
     expect(error.errors).toEqual(['x']);
 
-    const defaultError = new AppError('Default failure');
+    const defaultError = new AppError('Lỗi mặc định');
     expect(defaultError.statusCode).toBe(500);
 
     const next = jest.fn();
@@ -68,15 +68,15 @@ describe('Utility helpers', () => {
       expect(unexpectedRes.status).toHaveBeenCalledWith(500);
       expect(unexpectedRes.json).toHaveBeenCalledWith({
         success: false,
-        message: 'Internal server error',
+        message: 'Đã xảy ra lỗi máy chủ',
         data: {},
       });
 
       const operationalRes = { status: jest.fn().mockReturnThis(), json: jest.fn() };
-      errorHandler(new AppError('Payment temporarily unavailable', 503), {}, operationalRes, jest.fn());
+      errorHandler(new AppError('Dịch vụ thanh toán tạm thời không khả dụng', 503), {}, operationalRes, jest.fn());
       expect(operationalRes.json).toHaveBeenCalledWith({
         success: false,
-        message: 'Payment temporarily unavailable',
+        message: 'Dịch vụ thanh toán tạm thời không khả dụng',
         data: {},
       });
     } finally {
@@ -137,8 +137,8 @@ describe('Voucher service unit coverage', () => {
       expect.objectContaining({ code: 'TECH10' }),
     );
 
-    await expect(voucherService.validate('missing', 6000000)).rejects.toThrow('Voucher code is invalid');
-    await expect(voucherService.validate('tech10', 1000000)).rejects.toThrow('minimum value');
+    await expect(voucherService.validate('missing', 6000000)).rejects.toThrow('Mã giảm giá không hợp lệ');
+    await expect(voucherService.validate('tech10', 1000000)).rejects.toThrow('giá trị tối thiểu');
   });
 
   it('rejects inactive, exhausted, and expired vouchers', async () => {
@@ -146,12 +146,12 @@ describe('Voucher service unit coverage', () => {
     await createVoucher({ code: 'FULL', quantity: 1, used: 1 });
     await createVoucher({ code: 'OLD', startDate: '2020-01-01', endDate: '2020-12-31' });
 
-    await expect(voucherService.validate('OFF', 6000000)).rejects.toThrow('invalid');
-    await expect(voucherService.validate('FULL', 6000000)).rejects.toThrow('fully used');
-    await expect(voucherService.validate('OLD', 6000000)).rejects.toThrow('date range');
+    await expect(voucherService.validate('OFF', 6000000)).rejects.toThrow('không hợp lệ');
+    await expect(voucherService.validate('FULL', 6000000)).rejects.toThrow('hết lượt sử dụng');
+    await expect(voucherService.validate('OLD', 6000000)).rejects.toThrow('hết hạn sử dụng');
   });
 
   it('throws when fetching a missing voucher', async () => {
-    await expect(voucherService.getById('missing')).rejects.toThrow('Voucher not found');
+    await expect(voucherService.getById('missing')).rejects.toThrow('Không tìm thấy mã giảm giá');
   });
 });

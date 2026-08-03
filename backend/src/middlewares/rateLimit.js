@@ -1,7 +1,8 @@
 const buckets = new Map();
 
-const rateLimit = ({ windowMs = 15 * 60 * 1000, max = 5 } = {}) => (req, res, next) => {
-  const key = `${req.ip}:${req.baseUrl}${req.path}`;
+const rateLimit = ({ windowMs = 15 * 60 * 1000, max = 5, namespace = 'ip', keyGenerator } = {}) => (req, res, next) => {
+  const identity = keyGenerator ? keyGenerator(req) : req.ip;
+  const key = `${namespace}:${identity}:${req.baseUrl}${req.path}`;
   const now = Date.now();
   const bucket = buckets.get(key);
   if (!bucket || bucket.resetAt <= now) {
@@ -17,7 +18,7 @@ const rateLimit = ({ windowMs = 15 * 60 * 1000, max = 5 } = {}) => (req, res, ne
     res.set('Retry-After', String(Math.ceil((bucket.resetAt - now) / 1000)));
     return res.status(429).json({
       success: false,
-      message: 'Too many requests. Please try again later.',
+      message: 'Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau.',
     });
   }
   bucket.count += 1;

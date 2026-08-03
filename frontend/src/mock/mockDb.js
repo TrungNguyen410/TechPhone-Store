@@ -2,7 +2,7 @@ import { STORAGE_KEYS } from '../utils/constants';
 import { calculateVoucherDiscount } from '../utils/checkoutPricing';
 import { getShippingQuote } from '../utils/shipping';
 import { storage } from '../utils/storage';
-import { getNextOrderStatuses } from '../utils/orderStatus';
+import { getNextOrderStatuses, getOrderStatus } from '../utils/orderStatus';
 import { mockAccessories } from './mockAccessories';
 import { mockBanners } from './mockBanners';
 import { mockOrders } from './mockOrders';
@@ -12,6 +12,7 @@ import { mockReviews } from './mockReviews';
 import { mockUsers } from './mockUsers';
 import { mockVouchers } from './mockVouchers';
 import { mockBrands, mockCategories } from './mockTaxonomy';
+import { normalizeVietnamesePhone } from '../utils/validators';
 
 const wait = (value, delay = 180) => new Promise((resolve) => setTimeout(() => resolve(value), delay));
 const fail = (message, status = 400) => {
@@ -70,20 +71,24 @@ const scopedCheckoutKey = (payload, idempotencyKey) => {
 
 export const mockDb = {
   async login(identifier, password) {
+    const normalizedPhone = normalizeVietnamesePhone(identifier);
     const user = read('users').find(
-      (item) => item.email.toLowerCase() === identifier.toLowerCase() || item.phone === identifier,
+      (item) => (item.email && item.email.toLowerCase() === identifier.toLowerCase())
+        || item.phone === normalizedPhone,
     );
-    if (!user || user.password !== password) fail('Email/số điện thoại hoặc mật khẩu không đúng', 401);
+    if (!user || user.password !== password) fail('Số điện thoại hoặc mật khẩu không đúng', 401);
     if (user.status === 'locked') fail('Tài khoản đã bị khóa', 403);
     return wait({ token: tokenFor(user), user: publicUser(user) });
   },
 
   async register(payload) {
     const users = read('users');
-    if (users.some((user) => user.email.toLowerCase() === payload.email.toLowerCase())) {
+    const phone = normalizeVietnamesePhone(payload.phone);
+    if (!phone) fail('Số điện thoại Việt Nam không hợp lệ');
+    if (payload.email && users.some((user) => user.email?.toLowerCase() === payload.email.toLowerCase())) {
       fail('Email đã được sử dụng');
     }
-    if (users.some((user) => user.phone === payload.phone)) fail('Số điện thoại đã được sử dụng');
+    if (users.some((user) => user.phone === phone)) fail('Số điện thoại đã được sử dụng');
     const user = {
       id: createId('user'),
       role: 'customer',
@@ -91,6 +96,7 @@ export const mockDb = {
       address: '',
       createdAt: new Date().toISOString(),
       ...payload,
+      phone,
     };
     write('users', [...users, user]);
     return wait({ token: tokenFor(user), user: publicUser(user) });
@@ -98,47 +104,44 @@ export const mockDb = {
 
   async requestRegistrationOtp(payload) {
     const users = read('users');
-    if (users.some((user) => user.email.toLowerCase() === payload.email.toLowerCase())) {
-      fail('Email đã được sử dụng');
-    }
-    if (users.some((user) => user.phone === payload.phone)) fail('Số điện thoại đã được sử dụng');
+    const phone = normalizeVietnamesePhone(payload.phone);
+    if (!phone) fail('Số điện thoại Việt Nam không hợp lệ');
+    if (users.some((user) => user.phone === phone)) fail('Số điện thoại đã được sử dụng');
     const request = {
       id: createId('otp'),
       purpose: 'register',
-      target: payload.email.toLowerCase(),
+      target: phone,
       otp: mockOtp,
-      payload,
+      payload: { ...payload, phone },
       expiresAt: Date.now() + 10 * 60 * 1000,
     };
     writeOtpRequests([
       request,
       ...readOtpRequests().filter((item) => !(item.purpose === request.purpose && item.target === request.target)),
     ]);
-    return wait({ deliveryTarget: payload.email, expiresInSeconds: 600, debugOtp: mockOtp });
+    return wait({ deliveryTarget: `${phone.slice(0, 3)}***${phone.slice(-3)}`, expiresInSeconds: 600, debugOtp: mockOtp });
   },
 
-  async verifyRegistrationOtp(email, otp) {
-    const target = email.toLowerCase();
+  async verifyRegistrationOtp(phone, otp) {
+    const target = normalizeVietnamesePhone(phone);
     const request = readOtpRequests().find(
       (item) => item.purpose === 'register' && item.target === target && item.expiresAt > Date.now(),
     );
     if (!request || request.otp !== otp) fail('Mã OTP không hợp lệ hoặc đã hết hạn');
     writeOtpRequests(readOtpRequests().filter((item) => item.id !== request.id));
-    return this.register({ ...request.payload, emailVerified: true });
+    return this.register({ ...request.payload, phoneVerified: true, phoneVerifiedAt: new Date().toISOString() });
   },
 
-  async requestPasswordReset(identifier, channel) {
-    const user = read('users').find(
-      (item) => item.email.toLowerCase() === identifier.toLowerCase() || item.phone === identifier,
-    );
+  async requestPasswordReset(identifier) {
+    const phone = normalizeVietnamesePhone(identifier);
+    const user = read('users').find((item) => item.phone === phone);
     if (!user) return wait({ message: 'Nếu tài khoản tồn tại, mã OTP đã được gửi.' });
-    const target = channel === 'sms' ? user.phone : user.email;
     const request = {
       id: createId('otp'),
       purpose: 'password-reset',
-      identifier: identifier.toLowerCase(),
-      target,
-      channel,
+      identifier: phone,
+      target: user.phone,
+      channel: 'sms',
       userId: user.id,
       otp: mockOtp,
       expiresAt: Date.now() + 10 * 60 * 1000,
@@ -147,15 +150,16 @@ export const mockDb = {
       request,
       ...readOtpRequests().filter((item) => !(item.purpose === request.purpose && item.userId === user.id)),
     ]);
-    return wait({ deliveryTarget: target, expiresInSeconds: 600, debugOtp: mockOtp });
+    return wait({ deliveryTarget: `${phone.slice(0, 3)}***${phone.slice(-3)}`, expiresInSeconds: 600, debugOtp: mockOtp });
   },
 
-  async resetPassword(identifier, channel, otp, newPassword) {
+  async resetPassword(identifier, otp, newPassword) {
+    const phone = normalizeVietnamesePhone(identifier);
     const request = readOtpRequests().find(
       (item) =>
         item.purpose === 'password-reset'
-        && item.identifier === identifier.toLowerCase()
-        && item.channel === channel
+        && item.identifier === phone
+        && item.channel === 'sms'
         && item.expiresAt > Date.now(),
     );
     if (!request || request.otp !== otp) fail('Mã OTP không hợp lệ hoặc đã hết hạn');
@@ -174,6 +178,14 @@ export const mockDb = {
     if (!user) fail('Không tìm thấy người dùng', 404);
     write('users', updated);
     return wait(publicUser(user));
+  },
+
+  async updateProfile(userId, updates) {
+    const allowed = ['fullName', 'address', 'avatar'];
+    const safeUpdates = Object.fromEntries(
+      Object.entries(updates || {}).filter(([key]) => allowed.includes(key)),
+    );
+    return this.updateUser(userId, safeUpdates);
   },
 
   async getWishlist(userId) {
@@ -250,9 +262,11 @@ export const mockDb = {
         : item.productId || item.id;
       const current = catalog.find((entry) => entry.id === itemId);
       const quantity = Number(item.quantity);
-      if (!current || current.status !== 'active') fail(`${type === 'accessory' ? 'Accessory' : 'Product'} is unavailable`);
+      if (!current || current.status !== 'active') {
+        fail(`${type === 'accessory' ? 'Phụ kiện' : 'Sản phẩm'} hiện không khả dụng`);
+      }
       if (!Number.isInteger(quantity) || quantity < 1 || current.stock < quantity) {
-        fail(`${current.name} does not have enough stock`);
+        fail(`${current.name} không đủ số lượng tồn kho`);
       }
       current.stock -= quantity;
       current.sold = Number(current.sold || 0) + quantity;
@@ -267,7 +281,7 @@ export const mockDb = {
         type,
       };
     });
-    if (!items.length) fail('Order must contain at least one item', 422);
+    if (!items.length) fail('Đơn hàng phải có ít nhất một sản phẩm', 422);
 
     const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const shipping = getShippingQuote({ province: payload.customer?.province, subtotal });
@@ -284,7 +298,7 @@ export const mockDb = {
         && now >= new Date(voucher.startDate)
         && now <= new Date(`${voucher.endDate}T23:59:59`)
         && (!Number(voucher.quantity) || Number(voucher.used || 0) < Number(voucher.quantity));
-      if (!usable) fail('MÃ£ giáº£m giÃ¡ khÃ´ng há»£p lá»‡');
+      if (!usable) fail('Mã giảm giá không hợp lệ');
     }
     if (voucher) voucher.used = Number(voucher.used || 0) + 1;
     const discount = calculateVoucherDiscount(voucher, subtotal, shipping.fee);
@@ -356,14 +370,17 @@ export const mockDb = {
     const order = orders.find((item) => item.id === id);
     if (!order) fail('Không tìm thấy đơn hàng', 404);
     if (status !== order.status && !getNextOrderStatuses(order.status).includes(status)) {
-      fail(`Không thể chuyển đơn từ ${order.status} sang ${status}`, 400);
+      fail(
+        `Không thể chuyển đơn từ ${getOrderStatus(order.status).label.toLowerCase()} sang ${getOrderStatus(status).label.toLowerCase()}`,
+        400,
+      );
     }
     if (status === 'cancelled' && order.status !== 'cancelled') {
       if (['paid', 'refund_required', 'refunded'].includes(order.paymentStatus)) {
-        fail('Paid orders cannot be cancelled automatically', 400);
+        fail('Không thể tự động hủy đơn hàng đã thanh toán', 400);
       }
       if (['shipping', 'delivered', 'completed'].includes(order.status)) {
-        fail('This order can no longer be cancelled', 400);
+        fail('Đơn hàng không còn có thể hủy', 400);
       }
       const products = read('products');
       const accessories = read('accessories');

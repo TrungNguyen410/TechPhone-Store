@@ -1,21 +1,21 @@
 const { body } = require('express-validator');
 
 const create = [
-  body('title').trim().notEmpty().withMessage('title is required'),
+  body('title').trim().notEmpty().withMessage('Tiêu đề là bắt buộc'),
   body('description').optional().trim(),
-  body('image').trim().notEmpty().withMessage('image is required'),
+  body('image').trim().notEmpty().withMessage('Ảnh là bắt buộc'),
   body('link').optional().trim(),
-  body('position').optional().isInt({ min: 0 }).withMessage('position must be positive'),
-  body('active').optional().isBoolean().withMessage('active must be boolean'),
+  body('position').optional().isInt({ min: 0 }).withMessage('Vị trí phải là số nguyên không âm'),
+  body('active').optional().isBoolean().withMessage('Trạng thái kích hoạt phải là kiểu boolean'),
 ];
 
 const update = [
-  body('title').optional().trim().notEmpty().withMessage('title cannot be empty'),
+  body('title').optional().trim().notEmpty().withMessage('Tiêu đề không được để trống'),
   body('description').optional().trim(),
-  body('image').optional().trim().notEmpty().withMessage('image cannot be empty'),
+  body('image').optional().trim().notEmpty().withMessage('Ảnh không được để trống'),
   body('link').optional().trim(),
-  body('position').optional().isInt({ min: 0 }).withMessage('position must be positive'),
-  body('active').optional().isBoolean().withMessage('active must be boolean'),
+  body('position').optional().isInt({ min: 0 }).withMessage('Vị trí phải là số nguyên không âm'),
+  body('active').optional().isBoolean().withMessage('Trạng thái kích hoạt phải là kiểu boolean'),
 ];
 
 module.exports = { create, update };

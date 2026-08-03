@@ -6,7 +6,7 @@ const getJwtSecret = (name, developmentFallback) => {
   const value = process.env[name] || (isProduction ? '' : developmentFallback);
   const looksLikePlaceholder = /^(change|replace|dev|docker|example|test)[\s_-]/i.test(value);
   if (isProduction && (!value || value.length < 32 || looksLikePlaceholder)) {
-    throw new Error(`${name} must be a strong, unique value of at least 32 characters in production`);
+    throw new Error(`${name} phải là giá trị mạnh, duy nhất và có ít nhất 32 ký tự trong môi trường production`);
   }
 
   return value;
@@ -25,19 +25,6 @@ const env = {
   apiPublicUrl:
     process.env.API_PUBLIC_URL || `http://localhost:${Number(process.env.PORT || 5000)}`,
   uploadDir: process.env.UPLOAD_DIR || 'uploads',
-  smtp: {
-    host: process.env.SMTP_HOST || '',
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: process.env.SMTP_SECURE === 'true',
-    user: process.env.SMTP_USER || '',
-    pass: process.env.SMTP_PASS || '',
-    from: process.env.SMTP_FROM || 'TechPhone <no-reply@techphone.local>',
-  },
-  twilio: {
-    accountSid: process.env.TWILIO_ACCOUNT_SID || '',
-    authToken: process.env.TWILIO_AUTH_TOKEN || '',
-    from: process.env.TWILIO_FROM || '',
-  },
   bank: {
     name: process.env.BANK_NAME || '',
     bin: process.env.BANK_BIN || '',

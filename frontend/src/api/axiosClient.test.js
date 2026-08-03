@@ -222,18 +222,16 @@ describe('axiosClient session refresh', () => {
       }));
     };
 
-    await authApi.login({ identifier: 'user@test.com', password: '123456' });
+    await authApi.login({ identifier: '0912345678', password: '123456' });
     await authApi.requestRegistrationOtp({
-      email: 'user@test.com',
       fullName: 'Test User',
       password: '123456',
       phone: '0912345678',
     });
-    await authApi.verifyRegistrationOtp({ email: 'user@test.com', otp: '123456' });
-    await authApi.requestPasswordReset({ identifier: 'user@test.com', channel: 'email' });
+    await authApi.verifyRegistrationOtp({ phone: '0912345678', otp: '123456' });
+    await authApi.requestPasswordReset({ identifier: '0912345678' });
     await authApi.resetPassword({
-      channel: 'email',
-      identifier: 'user@test.com',
+      identifier: '0912345678',
       newPassword: 'new-password',
       otp: '123456',
     });
@@ -379,5 +377,27 @@ describe('axiosClient session refresh', () => {
 
     expect(request.url).toBe('/auth/logout');
     expect(JSON.parse(request.data)).toEqual({ refreshToken: 'refresh-to-revoke' });
+  });
+
+  it('shows a Vietnamese message when the server cannot be reached', async () => {
+    axiosClient.defaults.adapter = (config) => Promise.reject(Object.assign(
+      new Error('Network Error'),
+      { config },
+    ));
+
+    await expect(axiosClient.get('/products')).rejects.toMatchObject({
+      friendlyMessage: 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra mạng và thử lại.',
+    });
+  });
+
+  it('shows a Vietnamese message when a request times out', async () => {
+    axiosClient.defaults.adapter = (config) => Promise.reject(Object.assign(
+      new Error('timeout of 10000ms exceeded'),
+      { code: 'ECONNABORTED', config },
+    ));
+
+    await expect(axiosClient.get('/products')).rejects.toMatchObject({
+      friendlyMessage: 'Yêu cầu mất quá nhiều thời gian. Vui lòng thử lại.',
+    });
   });
 });

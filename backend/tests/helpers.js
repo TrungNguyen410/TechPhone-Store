@@ -13,6 +13,8 @@ const createUser = async (overrides = {}) => {
     role: overrides.role || 'customer',
     status: overrides.status || 'active',
     address: overrides.address || 'Test address',
+    phoneVerified: overrides.phoneVerified ?? true,
+    phoneVerifiedAt: overrides.phoneVerifiedAt || new Date(),
   });
 };
 

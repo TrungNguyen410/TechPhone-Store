@@ -46,13 +46,13 @@ class BaseRepository {
       payload,
       { returnDocument: 'after', runValidators: true },
     );
-    if (!doc) throw new AppError('Resource not found', 404);
+    if (!doc) throw new AppError('Không tìm thấy dữ liệu yêu cầu', 404);
     return toResource(doc);
   }
 
   async softDelete(id) {
     const doc = await this.model.findOne({ _id: id, isDeleted: false });
-    if (!doc) throw new AppError('Resource not found', 404);
+    if (!doc) throw new AppError('Không tìm thấy dữ liệu yêu cầu', 404);
     await doc.softDelete();
     return { id, deleted: true };
   }

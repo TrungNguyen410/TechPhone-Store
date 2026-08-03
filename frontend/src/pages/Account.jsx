@@ -15,14 +15,14 @@ import { useAuth } from '../hooks/useAuth';
 import { useCart } from '../hooks/useCart';
 import { formatCurrency, formatDate } from '../utils/formatCurrency';
 import { getOrderStatus } from '../utils/orderStatus';
-import { isStrongEnoughPassword, isValidVietnamesePhone, validateRequired } from '../utils/validators';
+import { isStrongEnoughPassword, validateRequired } from '../utils/validators';
 
 export default function Account() {
   const [searchParams] = useSearchParams();
   const { user, updateProfile, changePassword, logout } = useAuth();
   const { addToCart } = useCart();
   const [tab, setTab] = useState(searchParams.get('tab') || 'profile');
-  const [profile, setProfile] = useState({ fullName: user.fullName, email: user.email, phone: user.phone, address: user.address || '' });
+  const [profile, setProfile] = useState({ fullName: user.fullName, phone: user.phone, address: user.address || '' });
   const [profileErrors, setProfileErrors] = useState({});
   const [passwords, setPasswords] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [orders, setOrders] = useState([]);
@@ -54,15 +54,12 @@ export default function Account() {
     event.preventDefault();
     const nextErrors = validateRequired({
       fullName: profile.fullName,
-      phone: profile.phone,
     });
-    if (profile.phone && !isValidVietnamesePhone(profile.phone)) nextErrors.phone = 'Số điện thoại Việt Nam phải có 10 số';
     setProfileErrors(nextErrors);
     if (Object.keys(nextErrors).length) return toast.error('Vui lòng kiểm tra lại thông tin cá nhân');
     try {
       await updateProfile({
         fullName: profile.fullName.trim(),
-        phone: profile.phone.trim(),
         address: profile.address.trim(),
       });
       toast.success('Đã cập nhật thông tin cá nhân');
@@ -138,7 +135,7 @@ export default function Account() {
         <div className="page-title-row"><div><span className="eyebrow">Khu vực thành viên</span><h1>Tài khoản của tôi</h1></div></div>
         <div className="account-layout">
           <aside className="account-sidebar panel">
-            <div className="account-user"><div>{(user.fullName || user.email || '?').charAt(0)}</div><span><strong>{user.fullName}</strong><small>{user.email}</small></span></div>
+            <div className="account-user"><div>{(user.fullName || user.phone || '?').charAt(0)}</div><span><strong>{user.fullName}</strong><small>{user.phone}</small></span></div>
             <button className={tab === 'profile' ? 'active' : ''} onClick={() => setTab('profile')}><FiUser /> Thông tin cá nhân</button>
             <button className={tab === 'orders' ? 'active' : ''} onClick={() => setTab('orders')}><FiPackage /> Đơn hàng của tôi</button>
             <button className={tab === 'password' ? 'active' : ''} onClick={() => setTab('password')}><FiLock /> Đổi mật khẩu</button>
@@ -150,8 +147,7 @@ export default function Account() {
                 <div className="content-heading"><h2>Thông tin cá nhân</h2><p>Cập nhật thông tin dùng cho đơn hàng và liên hệ.</p></div>
                 <div className="form-grid">
                   <label className="form-field"><span>Họ và tên *</span><input aria-invalid={Boolean(profileErrors.fullName)} aria-describedby={profileErrors.fullName ? 'profile-fullName-error' : undefined} value={profile.fullName} onChange={(event) => updateProfileField('fullName', event.target.value)} />{profileErrors.fullName && <small id="profile-fullName-error">{profileErrors.fullName}</small>}</label>
-                  <label className="form-field"><span>Số điện thoại *</span><input aria-invalid={Boolean(profileErrors.phone)} aria-describedby={profileErrors.phone ? 'profile-phone-error' : undefined} value={profile.phone} onChange={(event) => updateProfileField('phone', event.target.value)} />{profileErrors.phone && <small id="profile-phone-error">{profileErrors.phone}</small>}</label>
-                  <label className="form-field full"><span>Email *</span><input type="email" value={profile.email} readOnly /></label>
+                  <label className="form-field"><span>Số điện thoại đăng nhập</span><input value={profile.phone} readOnly /><small>Đã xác minh qua SMS</small></label>
                   <label className="form-field full"><span>Địa chỉ</span><textarea rows="3" value={profile.address} onChange={(event) => updateProfileField('address', event.target.value)} /></label>
                 </div>
                 <button className="btn btn-primary">Lưu thay đổi</button>

@@ -3,7 +3,7 @@ const { assertTransactionTopology, connectDB } = require('../src/config/database
 describe('database transaction topology', () => {
   it('fails fast with a clear message for a standalone MongoDB server', () => {
     expect(() => assertTransactionTopology({ ok: 1 })).toThrow(
-      /replica set or sharded cluster is required/i,
+      /phải chạy ở chế độ replica set hoặc sharded cluster/i,
     );
   });
 
@@ -27,7 +27,7 @@ describe('database transaction topology', () => {
     };
 
     await expect(connectDB('mongodb://standalone.test/store', client)).rejects.toThrow(
-      /replica set or sharded cluster is required/i,
+      /phải chạy ở chế độ replica set hoặc sharded cluster/i,
     );
     expect(client.disconnect).toHaveBeenCalledTimes(1);
   });

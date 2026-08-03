@@ -215,7 +215,7 @@ describe('mock checkout invariants', () => {
         email: 'guest@example.com',
         phone: '0911111111',
       },
-    }, 'inactive-key')).rejects.toThrow('Product is unavailable');
+    }, 'inactive-key')).rejects.toThrow('Sản phẩm hiện không khả dụng');
 
     expect(storage.get(STORAGE_KEYS.mockProducts)[0].stock).toBe(2);
   });
@@ -227,7 +227,7 @@ describe('mock checkout invariants', () => {
         email: 'guest@example.com',
         phone: '0911111111',
       },
-    }, 'stock-key')).rejects.toThrow('does not have enough stock');
+    }, 'stock-key')).rejects.toThrow('không đủ số lượng tồn kho');
 
     expect(storage.get(STORAGE_KEYS.mockProducts)[0].stock).toBe(2);
   });

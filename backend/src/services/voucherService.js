@@ -8,7 +8,7 @@ class VoucherService {
 
   async getById(id) {
     const voucher = await voucherRepository.findById(id);
-    if (!voucher) throw new AppError('Voucher not found', 404);
+    if (!voucher) throw new AppError('Không tìm thấy mã giảm giá', 404);
     return voucher;
   }
 
@@ -28,15 +28,15 @@ class VoucherService {
 
   async validate(code, subtotal) {
     const voucher = await voucherRepository.findByCode(code);
-    if (!voucher || !voucher.active) throw new AppError('Voucher code is invalid', 400);
-    if (voucher.quantity && voucher.used >= voucher.quantity) throw new AppError('Voucher has been fully used', 400);
-    if (Number(subtotal) < voucher.minOrder) throw new AppError('Order does not meet voucher minimum value', 400);
+    if (!voucher || !voucher.active) throw new AppError('Mã giảm giá không hợp lệ', 400);
+    if (voucher.quantity && voucher.used >= voucher.quantity) throw new AppError('Mã giảm giá đã hết lượt sử dụng', 400);
+    if (Number(subtotal) < voucher.minOrder) throw new AppError('Đơn hàng chưa đạt giá trị tối thiểu để dùng mã giảm giá', 400);
 
     const today = new Date();
     const start = new Date(voucher.startDate);
     const end = new Date(voucher.endDate);
     end.setHours(23, 59, 59, 999);
-    if (today < start || today > end) throw new AppError('Voucher is outside its valid date range', 400);
+    if (today < start || today > end) throw new AppError('Mã giảm giá chưa đến hạn hoặc đã hết hạn sử dụng', 400);
 
     return voucher;
   }
@@ -45,7 +45,7 @@ class VoucherService {
     const voucher = await voucherRepository.reserve(code, subtotal, new Date(), session);
     if (voucher) return voucher;
     await this.validate(code, subtotal);
-    throw new AppError('Voucher could not be reserved', 409);
+    throw new AppError('Không thể giữ lượt sử dụng mã giảm giá', 409);
   }
 
   async release(code, session) {

@@ -41,11 +41,10 @@ const swaggerDocument = {
       },
       RegisterRequest: {
         type: 'object',
-        required: ['fullName', 'email', 'phone', 'password'],
+        required: ['fullName', 'phone', 'password'],
         properties: {
           fullName: { type: 'string' },
-          email: { type: 'string', format: 'email' },
-          phone: { type: 'string' },
+          phone: { type: 'string', example: '0912345678' },
           password: { type: 'string', minLength: 6 },
         },
       },
@@ -53,7 +52,7 @@ const swaggerDocument = {
         type: 'object',
         required: ['identifier', 'password'],
         properties: {
-          identifier: { type: 'string', description: 'Email or phone number' },
+          identifier: { type: 'string', description: 'Vietnamese phone number' },
           password: { type: 'string' },
         },
       },
@@ -66,18 +65,24 @@ const swaggerDocument = {
       },
       OtpVerificationRequest: {
         type: 'object',
-        required: ['email', 'otp'],
+        required: ['phone', 'otp'],
         properties: {
-          email: { type: 'string', format: 'email' },
+          phone: { type: 'string', example: '0912345678' },
           otp: { type: 'string', pattern: '^\\d{6}$' },
+        },
+      },
+      PasswordResetOtpRequest: {
+        type: 'object',
+        required: ['identifier'],
+        properties: {
+          identifier: { type: 'string', description: 'Vietnamese phone number', example: '0912345678' },
         },
       },
       PasswordResetRequest: {
         type: 'object',
-        required: ['identifier', 'channel', 'otp', 'newPassword'],
+        required: ['identifier', 'otp', 'newPassword'],
         properties: {
           identifier: { type: 'string' },
-          channel: { type: 'string', enum: ['email', 'sms'] },
           otp: { type: 'string', pattern: '^\\d{6}$' },
           newPassword: { type: 'string', minLength: 6 },
         },
@@ -158,7 +163,7 @@ const swaggerDocument = {
     '/auth/register': {
       post: {
         tags: ['Auth'],
-        summary: 'Request registration email OTP',
+        summary: 'Request registration OTP through SMS',
         requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/RegisterRequest' } } } },
         responses: { 202: { description: 'OTP sent', content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiResponse' } } } } },
       },
@@ -166,21 +171,22 @@ const swaggerDocument = {
     '/auth/register/request-otp': {
       post: {
         tags: ['Auth'],
-        summary: 'Request registration email OTP',
+        summary: 'Request registration OTP through SMS',
         requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/RegisterRequest' } } } },
       },
     },
     '/auth/register/verify-otp': {
       post: {
         tags: ['Auth'],
-        summary: 'Verify email OTP and create customer account',
+        summary: 'Verify SMS phone OTP and create customer account',
         requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/OtpVerificationRequest' } } } },
       },
     },
     '/auth/forgot-password/request-otp': {
       post: {
         tags: ['Auth'],
-        summary: 'Request password reset OTP by email or SMS',
+        summary: 'Request password reset OTP through SMS',
+        requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/PasswordResetOtpRequest' } } } },
       },
     },
     '/auth/forgot-password/reset': {
@@ -193,7 +199,7 @@ const swaggerDocument = {
     '/auth/login': {
       post: {
         tags: ['Auth'],
-        summary: 'Login with email or phone',
+        summary: 'Login with phone number',
         requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/LoginRequest' } } } },
         responses: { 200: { description: 'Authenticated' } },
       },

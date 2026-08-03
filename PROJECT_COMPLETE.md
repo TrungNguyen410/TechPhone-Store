@@ -360,8 +360,8 @@ See [deployment.md](./deployment.md) for detailed instructions:
 ## 🎯 Demo Accounts
 
 ### Local/Docker
-- **Admin:** `admin@gmail.com` / `123456`
-- **Customer:** `user@gmail.com` / `123456`
+- **Admin:** `0900000000` / `123456`
+- **Customer:** `0911111111` / `123456`
 
 *Note: Change in production*
 

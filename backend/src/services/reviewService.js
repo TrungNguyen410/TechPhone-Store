@@ -35,7 +35,7 @@ class ReviewService {
     }
     const existingReview = await reviewRepository.findByUserAndTarget(userId, { productId, accessoryId });
     if (existingReview) {
-      throw new AppError('You already reviewed this item', 409);
+      throw new AppError('Bạn đã đánh giá mặt hàng này rồi', 409);
     }
 
     try {
@@ -51,7 +51,7 @@ class ReviewService {
       });
     } catch (error) {
       if (error?.code === 11000) {
-        throw new AppError('You already reviewed this item', 409);
+        throw new AppError('Bạn đã đánh giá mặt hàng này rồi', 409);
       }
       throw error;
     }
@@ -71,7 +71,7 @@ class ReviewService {
 
   async remove(id) {
     const review = await reviewRepository.findById(id);
-    if (!review) throw new AppError('Review not found', 404);
+    if (!review) throw new AppError('Không tìm thấy đánh giá', 404);
     return reviewRepository.softDelete(id);
   }
 }

@@ -1,11 +1,11 @@
 const { param, query } = require('express-validator');
 
-const idParam = [param('id').notEmpty().withMessage('id is required')];
+const idParam = [param('id').notEmpty().withMessage('Mã định danh là bắt buộc')];
 
 const paginationQuery = [
-  query('page').optional().isInt({ min: 1 }).withMessage('page must be a positive integer'),
-  query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('limit must be between 1 and 100'),
-  query('pageSize').optional().isInt({ min: 1, max: 100 }).withMessage('pageSize must be between 1 and 100'),
+  query('page').optional().isInt({ min: 1 }).withMessage('Số trang phải là số nguyên dương'),
+  query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Số bản ghi mỗi trang phải từ 1 đến 100'),
+  query('pageSize').optional().isInt({ min: 1, max: 100 }).withMessage('Kích thước trang phải từ 1 đến 100'),
 ];
 
 module.exports = { idParam, paginationQuery };

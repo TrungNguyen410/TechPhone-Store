@@ -1,52 +1,64 @@
 const { body } = require('express-validator');
+const { normalizeVietnamesePhone } = require('../utils/phone');
+
+const vietnamesePhone = (field, message = 'Số điện thoại Việt Nam không hợp lệ') =>
+  body(field)
+    .trim()
+    .customSanitizer((value) => normalizeVietnamesePhone(value) || value)
+    .custom((value) => Boolean(normalizeVietnamesePhone(value)))
+    .withMessage(message);
 
 const register = [
-  body('fullName').trim().notEmpty().withMessage('fullName is required'),
-  body('email').isEmail().normalizeEmail().withMessage('valid email is required'),
-  body('phone').trim().isLength({ min: 9, max: 15 }).withMessage('valid phone is required'),
-  body('password').isLength({ min: 6 }).withMessage('password must be at least 6 characters'),
-  body('role').not().exists().withMessage('role cannot be set during registration'),
+  body('fullName').trim().notEmpty().withMessage('Họ và tên là bắt buộc'),
+  vietnamesePhone('phone'),
+  body('password').isLength({ min: 6 }).withMessage('Mật khẩu phải có ít nhất 6 ký tự'),
+  body('role').not().exists().withMessage('Không được chỉ định vai trò khi đăng ký'),
+  body('email').not().exists().withMessage('Đăng ký tài khoản không sử dụng email'),
+  body('status').not().exists().withMessage('Không được chỉ định trạng thái khi đăng ký'),
+  body('channel').not().exists().withMessage('Không được chỉ định kênh OTP khi đăng ký'),
+  body('phoneVerified').not().exists().withMessage('Không được tự xác minh số điện thoại'),
 ];
 
 const login = [
   body().custom((value) => {
     if (!value.identifier && !value.email && !value.phone) {
-      throw new Error('identifier, email, or phone is required');
+      throw new Error('Vui lòng nhập số điện thoại');
     }
     return true;
   }),
-  body('password').notEmpty().withMessage('password is required'),
+  body('password').notEmpty().withMessage('Mật khẩu là bắt buộc'),
 ];
 
 const verifyRegistrationOtp = [
-  body('email').isEmail().normalizeEmail().withMessage('valid email is required'),
-  body('otp').trim().matches(/^\d{6}$/).withMessage('otp must contain 6 digits'),
+  vietnamesePhone('phone'),
+  body('otp').trim().matches(/^\d{6}$/).withMessage('Mã OTP phải gồm 6 chữ số'),
+  body('email').not().exists().withMessage('Xác minh đăng ký không sử dụng email'),
 ];
 
 const requestPasswordReset = [
-  body('identifier').trim().notEmpty().withMessage('identifier is required'),
-  body('channel').isIn(['email', 'sms']).withMessage('channel is invalid'),
+  vietnamesePhone('identifier', 'Số điện thoại tài khoản không hợp lệ'),
+  body('channel').not().exists().withMessage('Kênh OTP được cố định là SMS'),
 ];
 
 const resetPassword = [
   ...requestPasswordReset,
-  body('otp').trim().matches(/^\d{6}$/).withMessage('otp must contain 6 digits'),
-  body('newPassword').isLength({ min: 6 }).withMessage('newPassword must be at least 6 characters'),
+  body('otp').trim().matches(/^\d{6}$/).withMessage('Mã OTP phải gồm 6 chữ số'),
+  body('newPassword').isLength({ min: 6 }).withMessage('Mật khẩu mới phải có ít nhất 6 ký tự'),
 ];
 
 const updateProfile = [
-  body('fullName').optional().trim().notEmpty().withMessage('fullName cannot be empty'),
-  body('phone').optional().trim().isLength({ min: 9, max: 15 }).withMessage('valid phone is required'),
+  body('fullName').optional().trim().notEmpty().withMessage('Họ và tên không được để trống'),
+  body('phone').not().exists().withMessage('Đổi số điện thoại cần một luồng xác minh OTP riêng'),
   body('address').optional().trim(),
   body('avatar').optional().trim(),
 ];
 
 const changePassword = [
-  body('currentPassword').notEmpty().withMessage('currentPassword is required'),
-  body('newPassword').isLength({ min: 6 }).withMessage('newPassword must be at least 6 characters'),
+  body('currentPassword').notEmpty().withMessage('Mật khẩu hiện tại là bắt buộc'),
+  body('newPassword').isLength({ min: 6 }).withMessage('Mật khẩu mới phải có ít nhất 6 ký tự'),
 ];
 
-const refresh = [body('refreshToken').notEmpty().withMessage('refreshToken is required')];
+const refresh = [body('refreshToken').notEmpty().withMessage('Mã làm mới phiên đăng nhập là bắt buộc')];
 const logout = [body('refreshToken').optional().isString()];
 
 module.exports = {

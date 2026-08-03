@@ -5,7 +5,7 @@ const successResponse = (res, data = {}, message = 'Success', statusCode = 200) 
     data,
   });
 
-const errorResponse = (res, message = 'Internal server error', statusCode = 500, errors = null) =>
+const errorResponse = (res, message = 'Đã xảy ra lỗi máy chủ', statusCode = 500, errors = null) =>
   res.status(statusCode).json({
     success: false,
     message,

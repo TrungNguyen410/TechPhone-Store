@@ -8,6 +8,7 @@ const refreshTokenRepository = require('../repositories/refreshTokenRepository')
 const verificationCodeRepository = require('../repositories/verificationCodeRepository');
 const userRepository = require('../repositories/userRepository');
 const otpDeliveryService = require('./otpDeliveryService');
+const { normalizeVietnamesePhone } = require('../utils/phone');
 
 const publicUser = (user) => (typeof user.toJSON === 'function' ? user.toJSON() : user);
 
@@ -22,7 +23,7 @@ class AuthService {
 
   async storeAndDeliverOtp({ target, channel, purpose, payload = null }) {
     const code = this.createOtp();
-    await verificationCodeRepository.replace({
+    const verification = await verificationCodeRepository.replace({
       target,
       purpose,
       channel,
@@ -30,10 +31,17 @@ class AuthService {
       payload,
       expiresAt: new Date(Date.now() + 10 * 60 * 1000),
     });
-    const deliveryTarget = await otpDeliveryService.send(channel, target, code, purpose);
+    let delivery;
+    try {
+      delivery = await otpDeliveryService.send(channel, target, code, purpose);
+    } catch (error) {
+      await verificationCodeRepository.invalidate(verification.id);
+      throw error;
+    }
     return {
-      deliveryTarget,
+      deliveryTarget: delivery.deliveryTarget,
       expiresInSeconds: 600,
+      ...(delivery.trackingId ? { trackingId: delivery.trackingId } : {}),
       ...(env.nodeEnv !== 'production' ? { debugOtp: code } : {}),
     };
   }
@@ -41,16 +49,16 @@ class AuthService {
   async verifyOtp({ target, purpose, otp }) {
     const verification = await verificationCodeRepository.findActive(target, purpose);
     if (!verification || verification.attempts >= 5) {
-      throw new AppError('OTP is invalid or expired', 400);
+      throw new AppError('Mã OTP không hợp lệ hoặc đã hết hạn', 400);
     }
     const expected = Buffer.from(verification.codeHash, 'hex');
     const received = Buffer.from(this.otpHash(otp, target, purpose), 'hex');
     if (expected.length !== received.length || !crypto.timingSafeEqual(expected, received)) {
       await verificationCodeRepository.incrementAttempts(verification.id);
-      throw new AppError('OTP is invalid or expired', 400);
+      throw new AppError('Mã OTP không hợp lệ hoặc đã hết hạn', 400);
     }
     const consumed = await verificationCodeRepository.consume(verification.id);
-    if (!consumed) throw new AppError('OTP is invalid or expired', 400);
+    if (!consumed) throw new AppError('Mã OTP không hợp lệ hoặc đã hết hạn', 400);
     return verification;
   }
 
@@ -75,21 +83,19 @@ class AuthService {
   }
 
   async requestRegistrationOtp(payload) {
-    const [existingEmail, existingPhone] = await Promise.all([
-      userRepository.findByEmail(payload.email),
-      userRepository.findByPhone(payload.phone),
-    ]);
-
-    if (existingEmail) throw new AppError('Email is already registered', 409);
-    if (existingPhone) throw new AppError('Phone number is already registered', 409);
+    const phone = normalizeVietnamesePhone(payload.phone);
+    if (!phone) throw new AppError('Số điện thoại Việt Nam không hợp lệ', 422);
+    const existingPhone = await userRepository.findByPhone(phone);
+    if (existingPhone) throw new AppError('Số điện thoại này đã được đăng ký', 409);
 
     const password = await bcrypt.hash(payload.password, 12);
     return this.storeAndDeliverOtp({
-      target: payload.email.toLowerCase(),
-      channel: 'email',
+      target: phone,
+      channel: 'sms',
       purpose: 'register',
       payload: {
-        ...payload,
+        fullName: payload.fullName,
+        phone,
         password,
         role: 'customer',
         status: 'active',
@@ -101,42 +107,42 @@ class AuthService {
     return this.requestRegistrationOtp(payload);
   }
 
-  async verifyRegistrationOtp({ email, otp }) {
-    const target = email.toLowerCase();
+  async verifyRegistrationOtp({ phone, otp }) {
+    const target = normalizeVietnamesePhone(phone);
+    if (!target) throw new AppError('Số điện thoại Việt Nam không hợp lệ', 422);
     const verification = await this.verifyOtp({ target, purpose: 'register', otp });
     const payload = verification.payload;
-    const [existingEmail, existingPhone] = await Promise.all([
-      userRepository.findByEmail(payload.email),
-      userRepository.findByPhone(payload.phone),
-    ]);
-    if (existingEmail) throw new AppError('Email is already registered', 409);
-    if (existingPhone) throw new AppError('Phone number is already registered', 409);
+    const existingPhone = await userRepository.findByPhone(payload.phone);
+    if (existingPhone) throw new AppError('Số điện thoại này đã được đăng ký', 409);
     const user = await userRepository.create({
       ...payload,
-      emailVerified: true,
-      emailVerifiedAt: new Date(),
+      phoneVerified: true,
+      phoneVerifiedAt: new Date(),
     });
     return this.issueSession(user);
   }
 
-  async requestPasswordReset({ identifier, channel }) {
-    const user = await userRepository.findByIdentifier(identifier);
+  async requestPasswordReset({ identifier }) {
+    const phone = normalizeVietnamesePhone(identifier);
+    const user = await userRepository.findByIdentifier(phone);
     if (!user) return { message: 'If the account exists, an OTP has been sent.' };
-    const target = channel === 'sms' ? user.phone : user.email;
     const delivery = await this.storeAndDeliverOtp({
-      target,
-      channel,
+      target: user.phone,
+      channel: 'sms',
       purpose: 'password-reset',
       payload: { userId: user.id },
     });
-    return { message: 'If the account exists, an OTP has been sent.', ...delivery };
+    return {
+      message: 'If the account exists, an OTP has been sent.',
+      ...(env.nodeEnv !== 'production' ? delivery : {}),
+    };
   }
 
-  async resetPassword({ identifier, channel, otp, newPassword }) {
-    const user = await userRepository.findByIdentifier(identifier);
-    if (!user) throw new AppError('OTP is invalid or expired', 400);
-    const target = channel === 'sms' ? user.phone : user.email;
-    await this.verifyOtp({ target, purpose: 'password-reset', otp });
+  async resetPassword({ identifier, otp, newPassword }) {
+    const phone = normalizeVietnamesePhone(identifier);
+    const user = await userRepository.findByIdentifier(phone);
+    if (!user) throw new AppError('Mã OTP không hợp lệ hoặc đã hết hạn', 400);
+    await this.verifyOtp({ target: user.phone, purpose: 'password-reset', otp });
     const password = await bcrypt.hash(newPassword, 12);
     await userRepository.update(user.id, { password });
     await refreshTokenRepository.revokeUserTokens(user.id);
@@ -146,42 +152,35 @@ class AuthService {
   async login({ identifier, email, phone, password }) {
     const loginIdentifier = identifier || email || phone;
     const user = await userRepository.findByIdentifier(loginIdentifier, true);
-    if (!user) throw new AppError('Invalid credentials', 401);
-    if (user.status === 'locked') throw new AppError('Account is locked', 403);
-    if (user.status !== 'active') throw new AppError('Account is inactive', 403);
-    if (!user.emailVerified) throw new AppError('Email is not verified', 403);
+    if (!user) throw new AppError('Thông tin đăng nhập không chính xác', 401);
+    if (user.status === 'locked') throw new AppError('Tài khoản đã bị khóa', 403);
+    if (user.status !== 'active') throw new AppError('Tài khoản đang ngừng hoạt động', 403);
+    if (user.phoneVerified === false) throw new AppError('Số điện thoại chưa được xác thực', 403);
 
     const passwordMatches = await bcrypt.compare(password, user.password);
-    if (!passwordMatches) throw new AppError('Invalid credentials', 401);
+    if (!passwordMatches) throw new AppError('Thông tin đăng nhập không chính xác', 401);
 
     return this.issueSession(user);
   }
 
   async me(userId) {
     const user = await userRepository.findById(userId);
-    if (!user) throw new AppError('User not found', 404);
+    if (!user) throw new AppError('Không tìm thấy người dùng', 404);
     return user;
   }
 
   async updateProfile(userId, payload) {
-    if (payload.phone) {
-      const existingPhone = await userRepository.findByPhone(payload.phone);
-      if (existingPhone && existingPhone.id !== userId) {
-        throw new AppError('Phone number is already registered', 409);
-      }
-    }
-
-    const allowed = ['fullName', 'phone', 'address', 'avatar'];
+    const allowed = ['fullName', 'address', 'avatar'];
     const updates = Object.fromEntries(Object.entries(payload).filter(([key]) => allowed.includes(key)));
     return userRepository.update(userId, updates);
   }
 
   async changePassword(userId, { currentPassword, newPassword }) {
     const user = await userRepository.findByIdWithPassword(userId);
-    if (!user) throw new AppError('User not found', 404);
+    if (!user) throw new AppError('Không tìm thấy người dùng', 404);
 
     const passwordMatches = await bcrypt.compare(currentPassword, user.password);
-    if (!passwordMatches) throw new AppError('Current password is incorrect', 400);
+    if (!passwordMatches) throw new AppError('Mật khẩu hiện tại không chính xác', 400);
 
     const password = await bcrypt.hash(newPassword, 12);
     await userRepository.update(userId, { password });
@@ -191,7 +190,7 @@ class AuthService {
 
   async getWishlist(userId) {
     const user = await userRepository.findById(userId);
-    if (!user) throw new AppError('User not found', 404);
+    if (!user) throw new AppError('Không tìm thấy người dùng', 404);
     return user.wishlist || [];
   }
 
@@ -202,18 +201,18 @@ class AuthService {
   }
 
   async refresh(refreshToken) {
-    if (!refreshToken) throw new AppError('Refresh token is required', 401);
+    if (!refreshToken) throw new AppError('Mã làm mới phiên đăng nhập là bắt buộc', 401);
     const payload = jwt.verify(refreshToken, env.jwtRefreshSecret);
-    if (payload.type !== 'refresh') throw new AppError('Refresh token is invalid', 401);
+    if (payload.type !== 'refresh') throw new AppError('Mã làm mới phiên đăng nhập không hợp lệ', 401);
     const storedToken = await refreshTokenRepository.consume(hashToken(refreshToken));
     if (!storedToken) {
-      throw new AppError('Refresh token is invalid', 401);
+      throw new AppError('Mã làm mới phiên đăng nhập không hợp lệ', 401);
     }
 
     const user = await userRepository.findById(payload.sub);
-    if (!user) throw new AppError('User not found', 404);
-    if (user.status === 'locked') throw new AppError('Account is locked', 403);
-    if (user.status !== 'active') throw new AppError('Account is inactive', 403);
+    if (!user) throw new AppError('Không tìm thấy người dùng', 404);
+    if (user.status === 'locked') throw new AppError('Tài khoản đã bị khóa', 403);
+    if (user.status !== 'active') throw new AppError('Tài khoản đang ngừng hoạt động', 403);
     return this.issueSession(user);
   }
 
