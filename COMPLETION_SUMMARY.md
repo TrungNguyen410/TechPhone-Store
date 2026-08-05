@@ -92,7 +92,7 @@
 
 ### Docker & Deployment ✅
 
-- ✅ Backend Dockerfile (Node 24 alpine, optimized)
+- ✅ Backend Dockerfile (Node 22 alpine, optimized)
 - ✅ Frontend Dockerfile (multi-stage, Nginx)
 - ✅ Docker Compose orchestration file
 - ✅ Health check endpoints configured

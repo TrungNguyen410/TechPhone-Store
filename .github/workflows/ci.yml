@@ -44,6 +44,11 @@ jobs:
   frontend:
     name: Frontend quality
     runs-on: ubuntu-latest
+    env:
+      VITE_API_URL: https://api.techphone.example/api
+      VITE_USE_MOCK: "false"
+      VITE_SITE_URL: https://shop.techphone.example
+      VITE_DEPLOYMENT_TARGET: render
     defaults:
       run:
         working-directory: frontend
@@ -63,6 +68,9 @@ jobs:
 
       - name: Lint frontend
         run: npm run lint
+
+      - name: Run frontend tests
+        run: npm run test:run
 
       - name: Build frontend
         run: npm run build

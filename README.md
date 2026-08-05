@@ -16,7 +16,7 @@ Frontend React cho website bán điện thoại và phụ kiện TechPhone. Dự
 
 ## Cài đặt và chạy
 
-Yêu cầu Node.js 20.19+ hoặc Node.js 22.12+.
+Yêu cầu Node.js 22 (`>=22 <23`).
 
 ```bash
 cd frontend
@@ -183,7 +183,19 @@ UPLOAD_DIR=/app/uploads
 ```
 
 Production public URLs must be absolute HTTP(S) URLs. Render builds reject
-loopback URLs and do not fall back to localhost; only the explicit `docker`
-target permits localhost in a production-mode frontend build. If VNPay is enabled, also set
+loopback URLs and do not fall back to localhost; only the explicit `docker` and
+`local-preview` targets permit localhost in a production-mode frontend build. If VNPay is enabled, also set
 `VNPAY_RETURN_URL=https://api.techphone.example/api/payments/vnpay/return`.
 See [deployment.md](deployment.md) for the complete Render checklist.
+
+## Security exception: React Router RSC advisory
+
+- Advisory: [GHSA-qwww-vcr4-c8h2](https://github.com/advisories/GHSA-qwww-vcr4-c8h2)
+- Package: `react-router@7.18.2`, installed through `react-router-dom@7.18.2`.
+- Reason: this is a Vite browser SPA using stable `react-router-dom` routing APIs;
+  it does not import or enable the unstable RSC APIs affected by the advisory.
+- Owner: TechPhone maintainers.
+- Review date: 2026-09-05.
+- Compatibility plan: upgrade `react-router-dom` and `react-router` to 8.3.0 or
+  newer in a separate change, then run the route and full frontend test suites.
+  Do not use `npm audit fix --force` or downgrade the packages.
