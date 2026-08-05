@@ -33,6 +33,7 @@ export default function OrderManagement() {
   const [paymentForm, setPaymentForm] = useState({ reference: '', note: '' });
   const [reconcilingPayment, setReconcilingPayment] = useState(false);
   const requestId = useRef(0);
+  const latestLoad = useRef(null);
   const load = useCallback(() => {
     const currentRequest = ++requestId.current;
     return adminApi.getOrders({ page, limit: 20, search: debouncedSearch, status: statusFilter })
@@ -53,6 +54,7 @@ export default function OrderManagement() {
         if (currentRequest === requestId.current) setLoading(false);
       });
   }, [debouncedSearch, page, statusFilter]);
+  useEffect(() => { latestLoad.current = load; }, [load]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
     if (search.trim() === debouncedSearch) return undefined;
@@ -67,10 +69,8 @@ export default function OrderManagement() {
     setMutatingOrderId(order.id);
     try {
       const updated = await orderApi.updateStatus(order.id, status);
-      setOrders((current) => current.map((item) => (
-        item.id === order.id ? updated : item
-      )));
       if (selectedOrder?.id === order.id) setSelectedOrder(updated);
+      await latestLoad.current();
       toast.success(`Đã cập nhật đơn ${order.orderNumber}`);
     } catch (error) {
       toast.error(error.friendlyMessage || error.message);

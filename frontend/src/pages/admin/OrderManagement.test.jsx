@@ -248,4 +248,110 @@ describe('OrderManagement payment method', () => {
     expect(screen.queryByText('TPSTALE01')).not.toBeInTheDocument();
     expect(screen.getByText('TPNEW0001')).toBeInTheDocument();
   });
+
+  it('refetches the active status filter and clamps an emptied last page after status update', async () => {
+    let statusUpdated = false;
+    const remainingPendingOrder = {
+      ...pendingOrder,
+      id: 'remaining-pending',
+      orderNumber: 'TPPENDING2',
+    };
+    adminApi.getOrders.mockImplementation(({ page, status }) => {
+      if (!status) {
+        return Promise.resolve({
+          items: [pendingOrder],
+          pagination: { page: 1, limit: 20, total: 21, totalPages: 2 },
+        });
+      }
+      if (page === 2 && statusUpdated) {
+        return Promise.resolve({
+          items: [],
+          pagination: { page: 2, limit: 20, total: 1, totalPages: 1 },
+        });
+      }
+      if (page === 2) {
+        return Promise.resolve({
+          items: [pendingOrder],
+          pagination: { page: 2, limit: 20, total: 21, totalPages: 2 },
+        });
+      }
+      return Promise.resolve({
+        items: statusUpdated ? [remainingPendingOrder] : [pendingOrder],
+        pagination: {
+          page: 1,
+          limit: 20,
+          total: statusUpdated ? 1 : 21,
+          totalPages: statusUpdated ? 1 : 2,
+        },
+      });
+    });
+    orderApi.updateStatus.mockImplementation(async () => {
+      statusUpdated = true;
+      return { ...pendingOrder, status: 'confirmed' };
+    });
+    const { container } = render(<OrderManagement />);
+    await screen.findByText(pendingOrder.orderNumber);
+    fireEvent.change(container.querySelector('.admin-page-toolbar > select'), {
+      target: { value: 'pending' },
+    });
+    await waitFor(() => expect(adminApi.getOrders).toHaveBeenLastCalledWith({
+      page: 1, limit: 20, search: '', status: 'pending',
+    }));
+    fireEvent.click(screen.getByRole('button', { name: 'Trang 2' }));
+    await waitFor(() => expect(adminApi.getOrders).toHaveBeenLastCalledWith({
+      page: 2, limit: 20, search: '', status: 'pending',
+    }));
+
+    fireEvent.change(screen.getByRole('combobox', { name: /TP260601/ }), {
+      target: { value: 'confirmed' },
+    });
+
+    await waitFor(() => expect(adminApi.getOrders).toHaveBeenLastCalledWith({
+      page: 1, limit: 20, search: '', status: 'pending',
+    }));
+    expect(await screen.findByText(remainingPendingOrder.orderNumber)).toBeInTheDocument();
+    expect(screen.queryByText(pendingOrder.orderNumber)).not.toBeInTheDocument();
+    expect(container.querySelector('.admin-table-title span')).toHaveTextContent(/^1\s/);
+  });
+
+  it('refetches the latest filter when it changes during a status update', async () => {
+    let resolveUpdate;
+    const updatedOrder = { ...pendingOrder, status: 'confirmed' };
+    const confirmedOrder = {
+      ...updatedOrder,
+      id: 'confirmed-order',
+      orderNumber: 'TPCONFIRMED2',
+    };
+    adminApi.getOrders.mockImplementation(({ page, status }) => Promise.resolve({
+      items: status === 'confirmed' ? [confirmedOrder] : [pendingOrder],
+      pagination: { page, limit: 20, total: 1, totalPages: 1 },
+    }));
+    orderApi.updateStatus.mockReturnValue(new Promise((resolve) => { resolveUpdate = resolve; }));
+    const { container } = render(<OrderManagement />);
+    await screen.findByText(pendingOrder.orderNumber);
+    fireEvent.change(container.querySelector('.admin-page-toolbar > select'), {
+      target: { value: 'pending' },
+    });
+    await waitFor(() => expect(adminApi.getOrders).toHaveBeenLastCalledWith({
+      page: 1, limit: 20, search: '', status: 'pending',
+    }));
+    fireEvent.change(screen.getByRole('combobox', { name: /TP260601/ }), {
+      target: { value: 'confirmed' },
+    });
+    fireEvent.change(container.querySelector('.admin-page-toolbar > select'), {
+      target: { value: 'confirmed' },
+    });
+    await waitFor(() => expect(adminApi.getOrders).toHaveBeenLastCalledWith({
+      page: 1, limit: 20, search: '', status: 'confirmed',
+    }));
+    const callsBeforeMutationSettles = adminApi.getOrders.mock.calls.length;
+
+    await act(async () => resolveUpdate(updatedOrder));
+    await waitFor(() => expect(adminApi.getOrders).toHaveBeenCalledTimes(callsBeforeMutationSettles + 1));
+
+    expect(adminApi.getOrders).toHaveBeenLastCalledWith({
+      page: 1, limit: 20, search: '', status: 'confirmed',
+    });
+    expect(screen.getByText(confirmedOrder.orderNumber)).toBeInTheDocument();
+  });
 });
