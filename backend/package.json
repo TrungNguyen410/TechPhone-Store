@@ -9,6 +9,7 @@
     "seed": "node src/seed/seed.js",
     "migrate:taxonomy": "node src/scripts/migrateCatalogTaxonomy.js",
     "migrate:phone-auth": "node src/scripts/migratePhoneAuth.js",
+    "migrate:soft-delete-indexes": "node src/scripts/migrateSoftDeleteIndexes.js",
     "test": "jest --runInBand",
     "test:coverage": "jest --coverage --runInBand"
   },
