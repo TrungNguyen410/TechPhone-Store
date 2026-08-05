@@ -1,6 +1,9 @@
 const fs = require('fs/promises');
+const os = require('os');
 const path = require('path');
 const request = require('supertest');
+const env = require('../src/config/env');
+const uploadService = require('../src/services/uploadService');
 const { app, createUser, login } = require('./helpers');
 
 const onePixelPng = Buffer.from(
@@ -9,6 +12,26 @@ const onePixelPng = Buffer.from(
 );
 
 describe('Admin image uploads', () => {
+  test('writes local uploads directly inside an absolute persistent mount', async () => {
+    const originalUploadDir = env.uploadDir;
+    const uploadDir = await fs.mkdtemp(path.join(os.tmpdir(), 'techphone-uploads-'));
+    env.uploadDir = uploadDir;
+
+    try {
+      const result = await uploadService.save({
+        buffer: onePixelPng,
+        detectedType: { ext: 'png', mime: 'image/png' },
+        fieldname: 'adminImage',
+      });
+      const savedPath = path.join(uploadDir, 'adminImage', result.filename);
+
+      await expect(fs.stat(savedPath)).resolves.toMatchObject({});
+    } finally {
+      env.uploadDir = originalUploadDir;
+      await fs.rm(uploadDir, { recursive: true, force: true });
+    }
+  });
+
   test('allows an admin to upload an image selected from their machine', async () => {
     await createUser({ email: 'upload-admin@test.com', phone: '0900000010', role: 'admin' });
     const token = await login('upload-admin@test.com');

@@ -4,7 +4,18 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_');
-  const siteUrl = (env.VITE_SITE_URL || 'http://localhost:5173').replace(/\/+$/, '');
+  const siteUrl = (env.VITE_SITE_URL || (mode === 'production' ? '' : 'http://localhost:5173'))
+    .trim()
+    .replace(/\/+$/, '');
+  let parsedSiteUrl;
+  try {
+    parsedSiteUrl = new URL(siteUrl);
+  } catch {
+    throw new Error('VITE_SITE_URL must be an absolute HTTP(S) URL for a production build');
+  }
+  if (!['http:', 'https:'].includes(parsedSiteUrl.protocol)) {
+    throw new Error('VITE_SITE_URL must be an absolute HTTP(S) URL for a production build');
+  }
   process.env.VITE_SITE_URL = siteUrl;
 
   return {

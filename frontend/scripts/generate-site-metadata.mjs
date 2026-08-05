@@ -2,8 +2,21 @@ import { writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-export const normalizeSiteUrl = (value = 'http://localhost:5173') =>
-  value.trim().replace(/\/+$/, '');
+export const normalizeSiteUrl = (value = '') => {
+  const normalized = String(value).trim().replace(/\/+$/, '');
+  let parsed;
+
+  try {
+    parsed = new URL(normalized);
+  } catch {
+    throw new Error('VITE_SITE_URL must be an absolute HTTP(S) URL for a production build');
+  }
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    throw new Error('VITE_SITE_URL must be an absolute HTTP(S) URL for a production build');
+  }
+
+  return normalized;
+};
 
 export const staticRoutes = [
   '/', '/products', '/accessories', '/compare', '/reviews',
@@ -15,7 +28,7 @@ const routeEntries = staticRoutes.map((route) => `  <url><loc>{{origin}}${route}
 
 export const generateSiteMetadata = async ({
   outputDir = resolve(dirname(fileURLToPath(import.meta.url)), '../public'),
-  siteUrl = process.env.VITE_SITE_URL || 'http://localhost:5173',
+  siteUrl = process.env.VITE_SITE_URL || '',
 } = {}) => {
   const origin = normalizeSiteUrl(siteUrl);
   const robots = `User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /account\nDisallow: /checkout\n\nSitemap: ${origin}/sitemap.xml\n`;

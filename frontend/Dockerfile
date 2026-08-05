@@ -8,8 +8,10 @@ RUN npm ci
 COPY . .
 ARG VITE_API_URL=http://localhost:5000/api
 ARG VITE_USE_MOCK=true
+ARG VITE_SITE_URL=http://localhost:3000
 ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_USE_MOCK=$VITE_USE_MOCK
+ENV VITE_SITE_URL=$VITE_SITE_URL
 RUN npm run build
 
 FROM nginx:1.29-alpine AS production

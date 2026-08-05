@@ -50,6 +50,7 @@ Mở `http://localhost:8080`.
 docker build \
   --build-arg VITE_USE_MOCK=false \
   --build-arg VITE_API_URL=http://localhost:5000/api \
+  --build-arg VITE_SITE_URL=http://localhost:8080 \
   -t duanwebdidong-frontend .
 ```
 
@@ -60,6 +61,7 @@ Tạo file `.env` từ `.env.example`:
 ```env
 VITE_API_URL=http://localhost:5000/api
 VITE_USE_MOCK=true
+VITE_SITE_URL=http://localhost:5173
 ```
 
 - `VITE_USE_MOCK=true`: dùng dữ liệu mock và lưu tạm thay đổi trong localStorage.
@@ -150,3 +152,28 @@ Mock mode dùng localStorage để mô phỏng thay đổi trong phiên phát tr
 - `mock_products`, `mock_orders`, `mock_reviews` và các collection quản trị khác
 
 Xóa các key `mock_*` trong DevTools để khôi phục dữ liệu mẫu ban đầu.
+
+## Canonical production deployment
+
+Render is the repository's single canonical production target: use a Render
+Static Site for the frontend, a Render Web Service for the backend, and MongoDB
+Atlas. The backend requires a Render persistent disk mounted at `/app/uploads`
+with `UPLOAD_DIR=/app/uploads`; do not deploy the current local-upload routes to
+a serverless filesystem.
+
+Replace these documented domain placeholders with the actual Render domains:
+
+```env
+VITE_SITE_URL=https://shop.techphone.example
+VITE_API_URL=https://api.techphone.example/api
+FRONTEND_URL=https://shop.techphone.example
+PUBLIC_SITE_URL=https://shop.techphone.example
+API_PUBLIC_URL=https://api.techphone.example
+DEPLOYMENT_TARGET=render
+UPLOAD_DIR=/app/uploads
+```
+
+Production public URLs must be absolute HTTP(S) URLs; frontend production builds
+do not fall back to localhost. If VNPay is enabled, also set
+`VNPAY_RETURN_URL=https://api.techphone.example/api/payments/vnpay/return`.
+See [deployment.md](deployment.md) for the complete Render checklist.

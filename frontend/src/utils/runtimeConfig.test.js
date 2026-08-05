@@ -12,4 +12,40 @@ describe('createRuntimeConfig', () => {
     expect(() => createRuntimeConfig({ PROD: true, VITE_USE_MOCK: 'false' }))
       .toThrow('VITE_API_URL');
   });
+
+  it('does not require an API URL for a production mock build', () => {
+    expect(createRuntimeConfig({
+      PROD: true,
+      VITE_USE_MOCK: 'true',
+      VITE_SITE_URL: 'https://shop.techphone.example',
+    }).apiUrl).toBe('');
+  });
+
+  it('requires an absolute site URL instead of localhost fallback in production', () => {
+    expect(() => createRuntimeConfig({
+      PROD: true,
+      VITE_USE_MOCK: 'false',
+      VITE_API_URL: 'https://api.techphone.example/api',
+      VITE_SITE_URL: '',
+    })).toThrow('VITE_SITE_URL');
+
+    expect(() => createRuntimeConfig({
+      PROD: true,
+      VITE_USE_MOCK: 'false',
+      VITE_API_URL: '/api',
+      VITE_SITE_URL: 'https://shop.techphone.example',
+    })).toThrow('VITE_API_URL');
+  });
+
+  it('normalizes configured production URLs', () => {
+    const config = createRuntimeConfig({
+      PROD: true,
+      VITE_USE_MOCK: 'false',
+      VITE_API_URL: 'https://api.techphone.example/api/',
+      VITE_SITE_URL: 'https://shop.techphone.example///',
+    });
+
+    expect(config.apiUrl).toBe('https://api.techphone.example/api');
+    expect(config.siteUrl).toBe('https://shop.techphone.example');
+  });
 });

@@ -18,7 +18,7 @@ app.use(cors({ origin: env.frontendUrl === '*' ? true : env.frontendUrl, credent
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan(env.nodeEnv === 'test' ? 'tiny' : 'dev'));
-app.use('/uploads', express.static(path.join(process.cwd(), env.uploadDir)));
+app.use('/uploads', express.static(path.resolve(process.cwd(), env.uploadDir)));
 
 app.get('/api/health', (_req, res) => {
   successResponse(res, { status: 'ok', uptime: process.uptime() }, 'API is healthy');

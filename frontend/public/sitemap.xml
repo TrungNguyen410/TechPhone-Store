@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>http://localhost:5173/</loc></url>
-  <url><loc>http://localhost:5173/products</loc></url>
-  <url><loc>http://localhost:5173/accessories</loc></url>
-  <url><loc>http://localhost:5173/compare</loc></url>
-  <url><loc>http://localhost:5173/reviews</loc></url>
-  <url><loc>http://localhost:5173/contact</loc></url>
-  <url><loc>http://localhost:5173/order-lookup</loc></url>
-  <url><loc>http://localhost:5173/policies/warranty</loc></url>
-  <url><loc>http://localhost:5173/policies/returns</loc></url>
-  <url><loc>http://localhost:5173/policies/shipping</loc></url>
-  <url><loc>http://localhost:5173/policies/payment</loc></url>
+  <url><loc>https://shop.techphone.example/</loc></url>
+  <url><loc>https://shop.techphone.example/products</loc></url>
+  <url><loc>https://shop.techphone.example/accessories</loc></url>
+  <url><loc>https://shop.techphone.example/compare</loc></url>
+  <url><loc>https://shop.techphone.example/reviews</loc></url>
+  <url><loc>https://shop.techphone.example/contact</loc></url>
+  <url><loc>https://shop.techphone.example/order-lookup</loc></url>
+  <url><loc>https://shop.techphone.example/policies/warranty</loc></url>
+  <url><loc>https://shop.techphone.example/policies/returns</loc></url>
+  <url><loc>https://shop.techphone.example/policies/shipping</loc></url>
+  <url><loc>https://shop.techphone.example/policies/payment</loc></url>
 </urlset>
