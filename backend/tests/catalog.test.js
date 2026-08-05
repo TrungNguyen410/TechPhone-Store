@@ -75,6 +75,40 @@ describe('Product API', () => {
     const invalid = await request(app).post('/api/products').set('Authorization', `Bearer ${adminToken}`).send({ ...payload, brandId: 'missing' });
     expect(invalid.status).toBe(422);
   });
+
+  it('allows catalog fields without persisting injected document ownership fields', async () => {
+    const { google, phones } = await seedTaxonomy();
+    const adminToken = await loginAdmin();
+
+    const response = await request(app)
+      .post('/api/admin/products')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        _id: 'forged-product-id',
+        name: 'Pixel Audit Edition',
+        brandId: google.id,
+        categoryId: phones.id,
+        price: 19990000,
+        ram: '12GB',
+        storage: '256GB',
+        specifications: { color: 'Black' },
+        isDeleted: true,
+        deletedAt: '2026-01-01T00:00:00.000Z',
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.data).toMatchObject({
+      name: 'Pixel Audit Edition',
+      brandId: google.id,
+      categoryId: phones.id,
+      ram: '12GB',
+      storage: '256GB',
+      specifications: { color: 'Black' },
+      isDeleted: false,
+      deletedAt: null,
+    });
+    expect(response.body.data.id).not.toBe('forged-product-id');
+  });
 });
 
 describe('public catalog visibility', () => {

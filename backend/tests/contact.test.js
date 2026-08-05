@@ -1,5 +1,7 @@
 const request = require('supertest');
 const Contact = require('../src/models/Contact');
+const Setting = require('../src/models/Setting');
+const User = require('../src/models/User');
 const { app, createUser, login } = require('./helpers');
 
 describe('Contact support workflow', () => {
@@ -27,5 +29,71 @@ describe('Contact support workflow', () => {
     expect(resolved.status).toBe(200);
     expect(resolved.body.data.status).toBe('resolved');
     expect((await Contact.findById(created.body.data.id)).adminNote).toBe('Customer contacted.');
+  });
+
+  test('ignores server-owned fields on public contact creation', async () => {
+    const response = await request(app).post('/api/contacts').send({
+      fullName: 'Audit User',
+      email: 'audit@example.com',
+      phone: '0912345678',
+      subject: 'Audit message',
+      message: 'A valid contact message',
+      status: 'resolved',
+      adminNote: 'forged',
+      isDeleted: true,
+    });
+
+    expect(response.status).toBe(201);
+    expect(response.body.data).toMatchObject({ status: 'new', adminNote: '', isDeleted: false });
+  });
+
+  test('preserves supported admin customer fields, blocks server fields, and rejects an empty DTO', async () => {
+    const customer = await createUser({ email: 'customer-update@test.com', phone: '0922222222' });
+    await createUser({ email: 'customer-admin@test.com', phone: '0900000002', role: 'admin' });
+    const token = await login('customer-admin@test.com');
+
+    const updated = await request(app)
+      .put(`/api/admin/customers/${customer.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        fullName: 'Updated Customer',
+        email: 'updated-customer@test.com',
+        status: 'locked',
+        role: 'admin',
+        emailVerified: false,
+        isDeleted: true,
+      });
+
+    expect(updated.status).toBe(200);
+    const persisted = (await User.findById(customer.id)).toJSON();
+    expect(persisted).toMatchObject({
+      fullName: 'Updated Customer',
+      email: 'updated-customer@test.com',
+      status: 'locked',
+      role: 'admin',
+      emailVerified: true,
+      isDeleted: false,
+    });
+
+    const empty = await request(app)
+      .put(`/api/admin/customers/${customer.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ emailVerified: false, isDeleted: true });
+    expect(empty.status).toBe(422);
+  });
+
+  test('allows only supported setting update fields', async () => {
+    const setting = await Setting.create({ key: 'store_name', value: 'TechPhone', group: 'general', label: 'Store name' });
+    await createUser({ email: 'setting-admin@test.com', phone: '0900000003', role: 'admin' });
+    const token = await login('setting-admin@test.com');
+
+    const response = await request(app)
+      .put(`/api/admin/settings/${setting.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ value: 'TechPhone Plus', key: 'forged_key', isDeleted: true });
+
+    expect(response.status).toBe(200);
+    const persisted = (await Setting.findById(setting.id)).toJSON();
+    expect(persisted).toMatchObject({ key: 'store_name', value: 'TechPhone Plus', isDeleted: false });
   });
 });

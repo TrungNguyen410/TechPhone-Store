@@ -1,6 +1,10 @@
 const Order = require('../models/Order');
 const User = require('../models/User');
+const userRepository = require('../repositories/userRepository');
 const AppError = require('../utils/AppError');
+const pick = require('../utils/pick');
+
+const customerUpdateFields = ['fullName', 'email', 'phone', 'address', 'role', 'status'];
 
 class CustomerService {
   async list() {
@@ -23,13 +27,11 @@ class CustomerService {
   }
 
   async update(id, payload) {
-    const user = await User.findOneAndUpdate(
-      { _id: id, role: 'customer', isDeleted: false },
-      payload,
-      { returnDocument: 'after', runValidators: true },
-    );
-    if (!user) throw new AppError('Không tìm thấy khách hàng', 404);
-    return user.toJSON();
+    const dto = pick(payload, customerUpdateFields);
+    if (Object.keys(dto).length === 0) throw new AppError('Dữ liệu cập nhật không hợp lệ', 422);
+    const existing = await userRepository.findById(id);
+    if (!existing || existing.role !== 'customer') throw new AppError('Không tìm thấy khách hàng', 404);
+    return userRepository.update(id, dto);
   }
 }
 

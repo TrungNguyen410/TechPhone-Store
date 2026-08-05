@@ -20,6 +20,9 @@ class BaseCrudService {
   }
 
   async update(id, payload) {
+    if (!payload || Object.keys(payload).length === 0) {
+      throw new AppError('Dữ liệu cập nhật không hợp lệ', 422);
+    }
     return this.repository.update(id, payload);
   }
 

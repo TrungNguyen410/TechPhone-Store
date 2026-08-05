@@ -2,9 +2,28 @@ const request = require('supertest');
 const Voucher = require('../src/models/Voucher');
 const Order = require('../src/models/Order');
 const Review = require('../src/models/Review');
+const Accessory = require('../src/models/Accessory');
+const Brand = require('../src/models/Brand');
+const Category = require('../src/models/Category');
+const Product = require('../src/models/Product');
 const { app, createUser, login } = require('./helpers');
 
 describe('Voucher and review APIs', () => {
+  beforeEach(async () => {
+    const brand = await Brand.create({ name: 'Review Brand', slug: 'review-brand', active: true });
+    const category = await Category.create({ name: 'Review Category', slug: 'review-category', active: true });
+    const target = { brandId: brand.id, categoryId: category.id, price: 1000000, status: 'active' };
+    await Product.insertMany([
+      { ...target, _id: 'phone-1', name: 'Phone 1' },
+      { ...target, _id: 'phone-2', name: 'Phone 2' },
+      { ...target, _id: 'verified-phone', name: 'Verified Phone' },
+      { ...target, _id: 'other-phone', name: 'Other Phone' },
+      { ...target, _id: 'phone-concurrent', name: 'Concurrent Phone' },
+      { ...target, _id: 'inactive-phone', name: 'Inactive Phone', status: 'inactive' },
+    ]);
+    await Accessory.create({ ...target, _id: 'accessory-1', name: 'Accessory 1' });
+  });
+
   it('validates an active voucher', async () => {
     await Voucher.create({
       code: 'TECH10',
@@ -162,5 +181,50 @@ describe('Voucher and review APIs', () => {
       productId: 'phone-concurrent',
       isDeleted: false,
     })).toBe(1);
+  });
+
+  it('requires exactly one review target', async () => {
+    await createUser({ email: 'review-xor@test.com', phone: '0955555555' });
+    const token = await login('review-xor@test.com');
+
+    const both = await request(app)
+      .post('/api/reviews')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        productId: 'phone-1',
+        accessoryId: 'accessory-1',
+        rating: 5,
+        comment: 'A review cannot belong to two targets.',
+      });
+    const neither = await request(app)
+      .post('/api/reviews')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ rating: 5, comment: 'A review must belong to one target.' });
+
+    expect(both.status).toBe(422);
+    expect(neither.status).toBe(422);
+  });
+
+  it('rejects missing, inactive, and soft-deleted review targets', async () => {
+    await createUser({ email: 'review-target@test.com', phone: '0966666666' });
+    const token = await login('review-target@test.com');
+    const deleted = await Product.create({
+      _id: 'deleted-phone',
+      name: 'Deleted Phone',
+      brandId: (await Brand.findOne()).id,
+      categoryId: (await Category.findOne()).id,
+      price: 1000000,
+      status: 'active',
+    });
+    await deleted.softDelete();
+
+    const submit = (productId) => request(app)
+      .post('/api/reviews')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ productId, rating: 5, comment: 'This target must be active and available.' });
+
+    expect((await submit('missing-product')).status).toBe(404);
+    expect((await submit('inactive-phone')).status).toBe(404);
+    expect((await submit('deleted-phone')).status).toBe(404);
   });
 });

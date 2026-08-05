@@ -1,7 +1,10 @@
 const customerService = require('../services/customerService');
 const dashboardService = require('../services/dashboardService');
+const { mutationFields } = require('./crudController');
 const asyncHandler = require('../utils/asyncHandler');
 const { successResponse } = require('../utils/apiResponse');
+const AppError = require('../utils/AppError');
+const pick = require('../utils/pick');
 
 const dashboard = asyncHandler(async (_req, res) => {
   const data = await dashboardService.statistics();
@@ -14,7 +17,9 @@ const customers = asyncHandler(async (_req, res) => {
 });
 
 const updateCustomer = asyncHandler(async (req, res) => {
-  const data = await customerService.update(req.params.id, req.body);
+  const dto = pick(req.body, mutationFields.customerUpdate);
+  if (Object.keys(dto).length === 0) throw new AppError('Dữ liệu cập nhật không hợp lệ', 422);
+  const data = await customerService.update(req.params.id, dto);
   successResponse(res, data, 'Customer updated');
 });
 
