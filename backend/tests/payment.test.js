@@ -846,6 +846,14 @@ describe('Manual payment reconciliation', () => {
     }).expect(422);
     await reconcile(order.id, { status: 'refunded', reference: 'BANK-01' }).expect(422);
     await reconcile(order.id, { status: 'paid', reference: '   ' }).expect(422);
+    await reconcile(order.id, {
+      status: 'paid',
+      reference: 'R'.repeat(151),
+    }).expect(422);
+    await reconcile(order.id, {
+      status: 'failed',
+      note: 'N'.repeat(1001),
+    }).expect(422);
 
     const unchanged = await Order.findById(order.id);
     expect(unchanged.paymentStatus).toBe('pending');

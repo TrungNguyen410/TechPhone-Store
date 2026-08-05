@@ -55,10 +55,11 @@ const createId = (prefix) => `${prefix}-${Date.now()}-${Math.random().toString(3
 const readOtpRequests = () => storage.get(STORAGE_KEYS.mockOtpRequests, []);
 const writeOtpRequests = (items) => storage.set(STORAGE_KEYS.mockOtpRequests, items);
 const mockOtp = '123456';
-const currentMockUserId = () => {
+const currentMockUser = () => {
   const currentUser = storage.get(STORAGE_KEYS.currentUser);
-  return currentUser?.id && storage.get(STORAGE_KEYS.token) ? currentUser.id : null;
+  return currentUser?.id && storage.get(STORAGE_KEYS.token) ? currentUser : null;
 };
+const currentMockUserId = () => currentMockUser()?.id || null;
 const scopedCheckoutKey = (payload, idempotencyKey) => {
   const key = String(idempotencyKey || '').trim().slice(0, 120);
   if (!key) return '';
@@ -420,6 +421,31 @@ export const mockDb = {
   },
 
   async reconcileManualPayment(id, payload) {
+    const actor = currentMockUser();
+    if (!actor || actor.role !== 'admin') {
+      fail('Bạn không có đủ quyền để thực hiện thao tác này', 403);
+    }
+    const allowedFields = ['status', 'reference', 'note'];
+    if (
+      !payload
+      || typeof payload !== 'object'
+      || Array.isArray(payload)
+      || Object.keys(payload).some((field) => !allowedFields.includes(field))
+      || !['paid', 'failed'].includes(payload.status)
+      || (payload.reference !== undefined && typeof payload.reference !== 'string')
+      || (payload.note !== undefined && typeof payload.note !== 'string')
+    ) {
+      fail('Dữ liệu đối soát không hợp lệ', 422);
+    }
+    const reference = String(payload.reference || '').trim();
+    const note = String(payload.note || '').trim();
+    if (reference.length > 150 || note.length > 1000) {
+      fail('Dữ liệu đối soát vượt quá độ dài cho phép', 422);
+    }
+    if (payload.status === 'paid' && !reference) {
+      fail('Mã tham chiếu là bắt buộc', 422);
+    }
+
     const orders = read('orders');
     const order = orders.find((item) => item.id === id);
     if (!order) fail('Không tìm thấy đơn hàng', 404);
@@ -429,14 +455,12 @@ export const mockDb = {
     if (!['pending', 'failed'].includes(order.paymentStatus) || order.paymentStatus === payload.status) {
       fail('Thanh toán đã được đối soát', 409);
     }
-    const reference = String(payload.reference || '').trim();
-    if (payload.status === 'paid' && !reference) fail('Mã tham chiếu là bắt buộc');
     order.paymentStatus = payload.status;
     order.paymentReference = reference;
     order.paymentAudit = {
-      confirmedBy: currentMockUserId(),
+      confirmedBy: actor.id,
       confirmedAt: new Date().toISOString(),
-      note: String(payload.note || '').trim(),
+      note,
     };
     if (payload.status === 'paid' && order.status === 'pending') order.status = 'confirmed';
     order.updatedAt = new Date().toISOString();
