@@ -12,6 +12,7 @@ coverage/
 backend/coverage/
 dist/
 frontend/dist/
+.worktrees/
 
 # Logs
 npm-debug.log*
