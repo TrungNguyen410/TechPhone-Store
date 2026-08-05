@@ -52,8 +52,11 @@ Configure the SPA rewrite `/* -> /index.html` and attach the storefront custom
 domain before the final build. `VITE_SITE_URL` is compiled into canonical tags,
 `robots.txt`, and `sitemap.xml` during the Vite build; production builds fail if
 it is missing, is not an HTTP(S) origin, or points to loopback on Render. The
-allowlisted frontend targets are `local` (development only), `docker` (the local
-production-mode container build), and `render`.
+allowlisted frontend targets are `local` (development server only),
+`local-preview` (explicit localhost preview build), `docker` (local container
+build), and `render`. These checks apply to every `vite build` command, including
+custom modes such as `--mode staging`; the mode selects the matching `.env` file
+but does not weaken build validation or metadata generation.
 
 ## Render backend Web Service
 
@@ -91,6 +94,9 @@ Backend `DEPLOYMENT_TARGET` values are `local`, `docker`, `render`, `vercel`,
 `netlify`, `serverless`, and `aws-lambda`. Production supports `render` and the
 local `docker` stack. Serverless values are recognized but fail startup because
 the current upload routes require durable local storage; unknown values also fail.
+Actual `VERCEL`, `NETLIFY`, and `AWS_LAMBDA_FUNCTION_NAME` platform markers take
+precedence over `DEPLOYMENT_TARGET`, so an explicit Render/Docker value cannot
+hide a serverless runtime.
 
 VNPay remains disabled when either merchant credential is empty. To enable it,
 set the provider values and an absolute callback URL:

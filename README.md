@@ -26,12 +26,18 @@ npm run dev
 
 Ứng dụng mặc định chạy tại `http://localhost:5173`.
 
-## Build production
+## Local preview build
 
 ```bash
 npm run build
 npm run preview
 ```
+
+Copy `.env.example` to `.env` before this local preview workflow. It uses the
+explicit `local-preview` target so localhost URLs are intentional. A Render
+production build must instead use the non-loopback variables documented below.
+
+The local preview is available at `http://localhost:5173`.
 
 Thư mục build được tạo tại `dist/`.
 
@@ -63,7 +69,7 @@ Tạo file `.env` từ `.env.example`:
 VITE_API_URL=http://localhost:5000/api
 VITE_USE_MOCK=true
 VITE_SITE_URL=http://localhost:5173
-VITE_DEPLOYMENT_TARGET=local
+VITE_DEPLOYMENT_TARGET=local-preview
 ```
 
 - `VITE_USE_MOCK=true`: dùng dữ liệu mock và lưu tạm thay đổi trong localStorage.

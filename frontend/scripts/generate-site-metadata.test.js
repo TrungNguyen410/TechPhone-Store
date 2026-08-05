@@ -96,6 +96,80 @@ describe('generateSiteMetadata', () => {
 
     await expectBuildMetadata(projectDir, 'https://production-local.example');
   });
+
+  it('enforces production invariants and emits metadata for an actual staging-mode build', async () => {
+    projectDir = await createBuildFixture({
+      '.env.staging': [
+        'VITE_DEPLOYMENT_TARGET=render',
+        'VITE_USE_MOCK=false',
+        'VITE_API_URL=https://api.staging.example/api',
+        'VITE_SITE_URL=https://staging.example',
+      ].join('\n'),
+    });
+
+    await runViteBuild(projectDir, 'staging');
+
+    await expectBuildMetadata(projectDir, 'https://staging.example');
+  });
+
+  it('rejects loopback Render URLs in a staging-mode build', async () => {
+    projectDir = await createBuildFixture({
+      '.env.staging': [
+        'VITE_DEPLOYMENT_TARGET=render',
+        'VITE_USE_MOCK=false',
+        'VITE_API_URL=http://localhost:5000/api',
+        'VITE_SITE_URL=https://staging.example',
+      ].join('\n'),
+    });
+
+    await expectBuildFailure(projectDir, 'staging', /VITE_API_URL.*loopback/i);
+  });
+
+  it('rejects an unknown target in a staging-mode build', async () => {
+    projectDir = await createBuildFixture({
+      '.env.staging': [
+        'VITE_DEPLOYMENT_TARGET=rendr',
+        'VITE_USE_MOCK=false',
+        'VITE_API_URL=https://api.staging.example/api',
+        'VITE_SITE_URL=https://staging.example',
+      ].join('\n'),
+    });
+
+    await expectBuildFailure(projectDir, 'staging', /VITE_DEPLOYMENT_TARGET.*rendr.*not supported/i);
+  });
+
+  it('builds after copying the committed frontend environment example', async () => {
+    const example = await readFile(resolve(frontendDir, '.env.example'), 'utf8');
+    projectDir = await createBuildFixture({ '.env': example });
+
+    await runViteBuild(projectDir);
+
+    await expectBuildMetadata(projectDir, 'http://localhost:5173');
+  });
+
+  it('keeps the bare Docker quickstart port aligned with its canonical site URL', async () => {
+    const [dockerfile, readme] = await Promise.all([
+      readFile(resolve(frontendDir, 'Dockerfile'), 'utf8'),
+      readFile(resolve(frontendDir, '../README.md'), 'utf8'),
+    ]);
+    const sitePort = dockerfile.match(/^ARG VITE_SITE_URL=http:\/\/localhost:(\d+)$/m)?.[1];
+    const publishedPort = readme.match(/docker run -p (\d+):80 duanwebdidong-frontend/)?.[1];
+
+    expect(sitePort).toBeDefined();
+    expect(sitePort).toBe(publishedPort);
+  });
+
+  it('keeps the committed example site URL aligned with the Vite preview port', async () => {
+    const [example, config] = await Promise.all([
+      readFile(resolve(frontendDir, '.env.example'), 'utf8'),
+      readFile(resolve(frontendDir, 'vite.config.js'), 'utf8'),
+    ]);
+    const sitePort = example.match(/^VITE_SITE_URL=http:\/\/localhost:(\d+)$/m)?.[1];
+    const previewPort = config.match(/preview:\s*\{[^}]*port:\s*(\d+)/s)?.[1];
+
+    expect(sitePort).toBeDefined();
+    expect(previewPort).toBe(sitePort);
+  });
 });
 
 const createBuildFixture = async (envFiles) => {
@@ -116,16 +190,25 @@ const createBuildFixture = async (envFiles) => {
   return root;
 };
 
-const runViteBuild = async (root) => {
+const runViteBuild = async (root, mode = 'production') => {
   const childEnv = { ...process.env };
   for (const name of Object.keys(childEnv)) {
     if (name.startsWith('VITE_')) delete childEnv[name];
   }
   await execFileAsync(
     process.execPath,
-    [viteBin, 'build', '--config', viteConfig, '--mode', 'production'],
+    [viteBin, 'build', '--config', viteConfig, '--mode', mode],
     { cwd: root, env: childEnv },
   );
+};
+
+const expectBuildFailure = async (root, mode, expectedError) => {
+  try {
+    await runViteBuild(root, mode);
+    throw new Error('Expected Vite build to fail');
+  } catch (error) {
+    expect(String(error.stderr || error.message)).toMatch(expectedError);
+  }
 };
 
 const expectBuildMetadata = async (root, origin) => {

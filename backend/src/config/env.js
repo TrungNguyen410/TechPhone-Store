@@ -24,10 +24,14 @@ const parseHttpUrl = (name, developmentFallback = '') => {
 };
 
 const isLoopbackHostname = (hostname) => {
-  const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  const normalized = hostname
+    .toLowerCase()
+    .replace(/^\[|\]$/g, '')
+    .replace(/\.+$/u, '');
   return normalized === 'localhost'
     || normalized.endsWith('.localhost')
     || normalized === '::1'
+    || /^::ffff:7f[0-9a-f]{2}:/u.test(normalized)
     || /^127\./.test(normalized);
 };
 
@@ -71,17 +75,17 @@ const getJwtSecret = (name, developmentFallback) => {
 const vnpayTmnCode = String(process.env.VNPAY_TMN_CODE || '').trim();
 const vnpayHashSecret = String(process.env.VNPAY_HASH_SECRET || '').trim();
 const vnpayEnabled = Boolean(vnpayTmnCode && vnpayHashSecret);
-const inferredDeploymentTarget = process.env.VERCEL
+const detectedPlatformTarget = process.env.VERCEL
   ? 'vercel'
   : process.env.NETLIFY
     ? 'netlify'
     : process.env.AWS_LAMBDA_FUNCTION_NAME
-      ? 'serverless'
-      : isProduction
-        ? 'render'
-        : 'local';
+      ? 'aws-lambda'
+      : '';
 const deploymentTarget = String(
-  process.env.DEPLOYMENT_TARGET || inferredDeploymentTarget,
+  detectedPlatformTarget
+    || process.env.DEPLOYMENT_TARGET
+    || (isProduction ? 'render' : 'local'),
 ).trim().toLowerCase();
 const deploymentTargets = new Set([
   'local',

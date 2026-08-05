@@ -1,4 +1,4 @@
-const deploymentTargets = new Set(['local', 'docker', 'render']);
+const deploymentTargets = new Set(['local', 'local-preview', 'docker', 'render']);
 
 export const normalizeDeploymentTarget = (env = {}, production = Boolean(env.PROD)) => {
   const target = String(
@@ -7,7 +7,7 @@ export const normalizeDeploymentTarget = (env = {}, production = Boolean(env.PRO
 
   if (!deploymentTargets.has(target)) {
     throw new Error(
-      `VITE_DEPLOYMENT_TARGET "${target}" is not supported; use render, docker, or local`,
+      `VITE_DEPLOYMENT_TARGET "${target}" is not supported; use render, docker, local-preview, or local`,
     );
   }
   if (production && target === 'local') {
@@ -18,10 +18,14 @@ export const normalizeDeploymentTarget = (env = {}, production = Boolean(env.PRO
 };
 
 const isLoopbackHostname = (hostname) => {
-  const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  const normalized = hostname
+    .toLowerCase()
+    .replace(/^\[|\]$/g, '')
+    .replace(/\.+$/u, '');
   return normalized === 'localhost'
     || normalized.endsWith('.localhost')
     || normalized === '::1'
+    || /^::ffff:7f[0-9a-f]{2}:/u.test(normalized)
     || /^127\./.test(normalized);
 };
 

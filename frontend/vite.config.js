@@ -4,8 +4,8 @@ import react from '@vitejs/plugin-react';
 import { createSiteMetadataAssets } from './scripts/generate-site-metadata.mjs';
 import { normalizeDeploymentTarget, normalizePublicUrl } from './src/utils/deploymentConfig.js';
 
-export default defineConfig(({ mode }) => {
-  const production = mode === 'production';
+export default defineConfig(({ command, mode }) => {
+  const production = command === 'build';
   const env = loadEnv(mode, process.cwd(), 'VITE_');
   const deploymentTarget = normalizeDeploymentTarget(env, production);
   const options = { production, deploymentTarget };
@@ -65,6 +65,10 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
+      port: 5173,
+      host: true,
+    },
+    preview: {
       port: 5173,
       host: true,
     },

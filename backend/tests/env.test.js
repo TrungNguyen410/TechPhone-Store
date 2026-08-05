@@ -58,8 +58,11 @@ describe('production environment configuration', () => {
 
   it.each([
     'http://localhost:5000',
+    'http://localhost.:5000',
     'http://127.0.0.2:5000',
     'http://[::1]:5000',
+    'http://[::ffff:127.0.0.1]:5000',
+    'http://[::ffff:7f00:2]:5000',
   ])('rejects a loopback API_PUBLIC_URL on Render: %s', (apiPublicUrl) => {
     expect(() => loadEnv(productionEnv({ API_PUBLIC_URL: apiPublicUrl })))
       .toThrow(/API_PUBLIC_URL.*loopback/i);
@@ -106,6 +109,23 @@ describe('production environment configuration', () => {
         DEPLOYMENT_TARGET: deploymentTarget,
         UPLOAD_DIR: '/tmp/uploads',
       }))).toThrow(/serverless.*local uploads/i);
+    },
+  );
+
+  it.each([
+    ['VERCEL', 'render', 'vercel'],
+    ['VERCEL', 'docker', 'vercel'],
+    ['NETLIFY', 'render', 'netlify'],
+    ['NETLIFY', 'docker', 'netlify'],
+    ['AWS_LAMBDA_FUNCTION_NAME', 'render', 'aws-lambda'],
+    ['AWS_LAMBDA_FUNCTION_NAME', 'docker', 'aws-lambda'],
+  ])(
+    'does not let the %s marker be hidden by DEPLOYMENT_TARGET=%s',
+    (marker, explicitTarget, platformTarget) => {
+      expect(() => loadEnv(productionEnv({
+        [marker]: 'active-platform-marker',
+        DEPLOYMENT_TARGET: explicitTarget,
+      }))).toThrow(new RegExp(`serverless.*${platformTarget}|${platformTarget}.*local uploads`, 'i'));
     },
   );
 

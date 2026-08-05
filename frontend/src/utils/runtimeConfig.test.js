@@ -65,6 +65,20 @@ describe('createRuntimeConfig', () => {
     })).toThrow(/VITE_SITE_URL.*loopback/i);
   });
 
+  it.each([
+    'http://localhost.:5000/api',
+    'http://[::ffff:127.0.0.1]:5000/api',
+    'http://[::ffff:7f00:2]:5000/api',
+  ])('rejects normalized loopback API forms on Render: %s', (apiUrl) => {
+    expect(() => createRuntimeConfig({
+      PROD: true,
+      VITE_DEPLOYMENT_TARGET: 'render',
+      VITE_USE_MOCK: 'false',
+      VITE_API_URL: apiUrl,
+      VITE_SITE_URL: 'https://shop.techphone.example',
+    })).toThrow(/VITE_API_URL.*loopback/i);
+  });
+
   it('allows intentional localhost URLs only for the Docker production target', () => {
     const config = createRuntimeConfig({
       PROD: true,
@@ -77,6 +91,18 @@ describe('createRuntimeConfig', () => {
     expect(config.deploymentTarget).toBe('docker');
     expect(config.apiUrl).toBe('http://localhost:5000/api');
     expect(config.siteUrl).toBe('http://localhost:3000');
+  });
+
+  it('allows an explicit local-preview target for a local production build', () => {
+    const config = createRuntimeConfig({
+      PROD: true,
+      VITE_DEPLOYMENT_TARGET: 'local-preview',
+      VITE_USE_MOCK: 'true',
+      VITE_SITE_URL: 'http://localhost:5173',
+    });
+
+    expect(config.deploymentTarget).toBe('local-preview');
+    expect(config.siteUrl).toBe('http://localhost:5173');
   });
 
   it('rejects unknown and local deployment targets in production', () => {
