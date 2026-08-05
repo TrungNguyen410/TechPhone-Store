@@ -46,7 +46,7 @@ export default function OrderLookup() {
               <div className="order-timeline">{ORDER_TIMELINE.map((item, index) => <div className={index <= currentIndex ? 'active' : ''} key={item}><span>{index <= currentIndex ? <FiCheck /> : index + 1}</span><strong>{getOrderStatus(item).label}</strong></div>)}</div>
             )}
             <div className="lookup-details">
-              <div><h3>Người nhận</h3><p>{order.customer.fullName}</p><p>{order.customer.phone}</p><p>{order.customer.address}</p></div>
+              <div><h3>Người nhận</h3><p>{order.customer.fullName}</p><p>{order.customer.phone}</p></div>
               <div><h3>Sản phẩm</h3>{order.items.map((item) => <div className="lookup-item" key={item.id}><img src={item.image} alt="" /><span>{item.name} × {item.quantity}</span><strong>{formatCurrency(item.price * item.quantity)}</strong></div>)}</div>
             </div>
             <div className="success-total"><span>Tổng thanh toán</span><strong>{formatCurrency(order.total)}</strong></div>

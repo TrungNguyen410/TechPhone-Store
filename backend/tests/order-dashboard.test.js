@@ -152,7 +152,7 @@ describe('Orders and dashboard APIs', () => {
     expect((await Product.findById(product.id)).stock).toBe(1);
   });
 
-  it('creates an order and allows lookup by order number and phone', async () => {
+  it('stores a canonical phone and returns a masked minimal public lookup DTO', async () => {
     await createUser({ email: 'customer@test.com', phone: '0911111111' });
     const token = await login('customer@test.com');
     const taxonomy = await seedTaxonomy();
@@ -173,7 +173,7 @@ describe('Orders and dashboard APIs', () => {
         customer: {
           fullName: 'Test Customer',
           email: 'customer@test.com',
-          phone: '0911111111',
+          phone: '0911 111 111',
           address: 'Test address',
           province: 'Ho Chi Minh',
           ward: 'Ben Nghe',
@@ -182,6 +182,7 @@ describe('Orders and dashboard APIs', () => {
 
     expect(created.status).toBe(201);
     expect(created.body.data.orderNumber).toMatch(/^TP/);
+    expect(created.body.data.customer.phone).toBe('0911111111');
     expect(created.body.data.subtotal).toBe(product.price);
     expect(created.body.data.total).toBe(product.price);
     const updatedProduct = await Product.findById(product.id);
@@ -190,10 +191,91 @@ describe('Orders and dashboard APIs', () => {
 
     const lookup = await request(app).get('/api/orders/lookup').query({
       orderNumber: created.body.data.orderNumber,
-      phone: '0911111111',
+      phone: '+84 911 111 111',
     });
     expect(lookup.status).toBe(200);
     expect(lookup.body.data.id).toBe(created.body.data.id);
+    expect(lookup.body.data.customer).toEqual({
+      fullName: 'T***',
+      phone: '091****111',
+    });
+    expect(lookup.body.data.customer.address).toBeUndefined();
+    expect(lookup.body.data.customer.email).toBeUndefined();
+    expect(lookup.body.data.items[0]).toEqual({
+      id: product.id,
+      name: product.name,
+      image: '',
+      price: product.price,
+      quantity: 1,
+      type: 'product',
+    });
+    expect(Object.keys(lookup.body.data).sort()).toEqual([
+      'createdAt',
+      'customer',
+      'estimatedDelivery',
+      'id',
+      'items',
+      'orderNumber',
+      'shippingProvider',
+      'status',
+      'total',
+      'trackingNumber',
+    ]);
+  });
+
+  it('rate limits repeated public lookup failures at the configured boundary', async () => {
+    const lookup = () => request(app).get('/api/orders/lookup').query({
+      orderNumber: 'TP2601019999',
+      phone: '0912345678',
+    });
+
+    for (let index = 0; index < 10; index += 1) {
+      await lookup().expect(404);
+    }
+
+    const blocked = await lookup();
+    expect(blocked.status).toBe(429);
+    expect(Number(blocked.headers['retry-after'])).toBeGreaterThan(0);
+  });
+
+  it('atomically allows exactly max concurrent bucket consumers', async () => {
+    const { consumeRateLimit } = require('../src/repositories/rateLimitRepository');
+    const attempts = await Promise.all(
+      Array.from({ length: 15 }, () => consumeRateLimit({
+        key: 'order-lookup:203.0.113.8:TP2601019999:0912345678',
+        windowMs: 60000,
+        max: 10,
+      })),
+    );
+
+    expect(attempts.filter(({ allowed }) => allowed)).toHaveLength(10);
+    expect(attempts.filter(({ allowed }) => !allowed)).toHaveLength(5);
+  });
+
+  it('safely rejects an already exhausted persistent bucket', async () => {
+    const { consumeRateLimit } = require('../src/repositories/rateLimitRepository');
+    const options = { key: 'exhausted-bucket', windowMs: 60000, max: 1 };
+
+    await expect(consumeRateLimit(options)).resolves.toMatchObject({ allowed: true });
+    await expect(consumeRateLimit(options)).resolves.toMatchObject({ allowed: false });
+  });
+
+  it('persists only hashed rate-limit identities', async () => {
+    const RateLimitBucket = require('../src/models/RateLimitBucket');
+    const { consumeRateLimit } = require('../src/repositories/rateLimitRepository');
+    const rawIdentity = 'order-lookup:203.0.113.8:TP2601019999:0912345678';
+
+    await consumeRateLimit({ key: rawIdentity, windowMs: 60000, max: 10 });
+
+    const bucket = await RateLimitBucket.findOne().lean();
+    expect(bucket._id).toMatch(/^[a-f0-9]{64}$/);
+    expect(bucket._id).not.toContain('0912345678');
+    expect(bucket._id).not.toContain('TP2601019999');
+    expect(bucket._id).not.toContain('203.0.113.8');
+  });
+
+  it('trusts exactly one reverse-proxy hop', () => {
+    expect(app.get('trust proxy')).toBe(1);
   });
 
   it('rejects orders that exceed product stock', async () => {
@@ -261,7 +343,10 @@ describe('Orders and dashboard APIs', () => {
       .post('/api/orders')
       .set('Authorization', `Bearer ${token}`)
       .set('Idempotency-Key', 'checkout-attempt-1')
-      .send(payload);
+      .send({
+        ...payload,
+        customer: { ...payload.customer, phone: '+84 944 444 444' },
+      });
 
     expect(first.status).toBe(201);
     expect(second.status).toBe(201);
@@ -940,6 +1025,23 @@ describe('Orders and dashboard APIs', () => {
       shippingProvider: 'Safe Express',
       trackingNumber: 'SAFE-001',
     }));
+
+    const customerUpdate = await request(app)
+      .put(`/api/admin/orders/${order.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        customer: {
+          fullName: 'Safe Update Customer',
+          email: 'safe-update@test.com',
+          phone: '+84 904 343 434',
+          address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
+        },
+      })
+      .expect(200);
+
+    expect(customerUpdate.body.data.customer.phone).toBe('0904343434');
   });
 
   it('allocates unique order numbers for concurrent different checkout keys', async () => {

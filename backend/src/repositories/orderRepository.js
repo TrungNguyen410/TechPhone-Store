@@ -1,6 +1,7 @@
 const BaseRepository = require('./baseRepository');
 const Order = require('../models/Order');
 const OrderCounter = require('../models/OrderCounter');
+const { normalizeVietnamesePhone } = require('../utils/phone');
 
 class OrderRepository extends BaseRepository {
   constructor() {
@@ -19,10 +20,12 @@ class OrderRepository extends BaseRepository {
   }
 
   async findByOrderNumberAndPhone(orderNumber, phone) {
+    const canonicalPhone = normalizeVietnamesePhone(phone);
+    if (!canonicalPhone) return null;
     const order = await Order.findOne({
       isDeleted: false,
-      orderNumber: orderNumber.toUpperCase(),
-      'customer.phone': phone,
+      orderNumber: String(orderNumber).toUpperCase(),
+      'customer.phone': canonicalPhone,
     });
     return order?.toJSON() || null;
   }
