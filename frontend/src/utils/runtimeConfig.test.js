@@ -48,4 +48,62 @@ describe('createRuntimeConfig', () => {
     expect(config.apiUrl).toBe('https://api.techphone.example/api');
     expect(config.siteUrl).toBe('https://shop.techphone.example');
   });
+
+  it('defaults production to Render and rejects loopback canonical or API URLs', () => {
+    expect(() => createRuntimeConfig({
+      PROD: true,
+      VITE_USE_MOCK: 'false',
+      VITE_API_URL: 'http://127.0.0.2:5000/api',
+      VITE_SITE_URL: 'https://shop.techphone.example',
+    })).toThrow(/VITE_API_URL.*loopback/i);
+
+    expect(() => createRuntimeConfig({
+      PROD: true,
+      VITE_USE_MOCK: 'false',
+      VITE_API_URL: 'https://api.techphone.example/api',
+      VITE_SITE_URL: 'http://localhost:3000',
+    })).toThrow(/VITE_SITE_URL.*loopback/i);
+  });
+
+  it('allows intentional localhost URLs only for the Docker production target', () => {
+    const config = createRuntimeConfig({
+      PROD: true,
+      VITE_DEPLOYMENT_TARGET: '  DOCKER ',
+      VITE_USE_MOCK: 'false',
+      VITE_API_URL: 'http://localhost:5000/api',
+      VITE_SITE_URL: 'http://localhost:3000/',
+    });
+
+    expect(config.deploymentTarget).toBe('docker');
+    expect(config.apiUrl).toBe('http://localhost:5000/api');
+    expect(config.siteUrl).toBe('http://localhost:3000');
+  });
+
+  it('rejects unknown and local deployment targets in production', () => {
+    const baseEnv = {
+      PROD: true,
+      VITE_USE_MOCK: 'false',
+      VITE_API_URL: 'https://api.techphone.example/api',
+      VITE_SITE_URL: 'https://shop.techphone.example',
+    };
+
+    expect(() => createRuntimeConfig({
+      ...baseEnv,
+      VITE_DEPLOYMENT_TARGET: 'rendr',
+    })).toThrow(/VITE_DEPLOYMENT_TARGET.*rendr.*not supported/i);
+    expect(() => createRuntimeConfig({
+      ...baseEnv,
+      VITE_DEPLOYMENT_TARGET: 'local',
+    })).toThrow(/VITE_DEPLOYMENT_TARGET.*local.*production/i);
+  });
+
+  it('requires the canonical site URL to be an origin', () => {
+    expect(() => createRuntimeConfig({
+      PROD: true,
+      VITE_DEPLOYMENT_TARGET: 'render',
+      VITE_USE_MOCK: 'false',
+      VITE_API_URL: 'https://api.techphone.example/api',
+      VITE_SITE_URL: 'https://shop.techphone.example/storefront',
+    })).toThrow(/VITE_SITE_URL.*origin/i);
+  });
 });

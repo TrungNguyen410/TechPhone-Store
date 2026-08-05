@@ -45,12 +45,15 @@ Set these build variables:
 VITE_USE_MOCK=false
 VITE_API_URL=https://api.techphone.example/api
 VITE_SITE_URL=https://shop.techphone.example
+VITE_DEPLOYMENT_TARGET=render
 ```
 
 Configure the SPA rewrite `/* -> /index.html` and attach the storefront custom
 domain before the final build. `VITE_SITE_URL` is compiled into canonical tags,
-`robots.txt`, and `sitemap.xml`; production builds fail if it is missing or is
-not an absolute HTTP(S) URL.
+`robots.txt`, and `sitemap.xml` during the Vite build; production builds fail if
+it is missing, is not an HTTP(S) origin, or points to loopback on Render. The
+allowlisted frontend targets are `local` (development only), `docker` (the local
+production-mode container build), and `render`.
 
 ## Render backend Web Service
 
@@ -79,9 +82,15 @@ UPLOAD_DIR=/app/uploads
 ```
 
 All three public URL variables are required absolute HTTP(S) URLs in production.
-Trailing slashes are normalized. Swagger advertises
+They must be origins without credentials, paths, queries, or fragments, and
+Render rejects loopback hosts. Trailing slashes are normalized. Swagger advertises
 `https://api.techphone.example/api`, sitemap entries use the storefront origin,
 and uploaded file URLs use the API origin.
+
+Backend `DEPLOYMENT_TARGET` values are `local`, `docker`, `render`, `vercel`,
+`netlify`, `serverless`, and `aws-lambda`. Production supports `render` and the
+local `docker` stack. Serverless values are recognized but fail startup because
+the current upload routes require durable local storage; unknown values also fail.
 
 VNPay remains disabled when either merchant credential is empty. To enable it,
 set the provider values and an absolute callback URL:

@@ -26,6 +26,8 @@ describe('Admin image uploads', () => {
       const savedPath = path.join(uploadDir, 'adminImage', result.filename);
 
       await expect(fs.stat(savedPath)).resolves.toMatchObject({});
+      expect(result.url).toMatch(/^http:\/\/localhost:5000\/uploads\/adminImage\//);
+      expect(result.url).not.toContain('/api/uploads/');
     } finally {
       env.uploadDir = originalUploadDir;
       await fs.rm(uploadDir, { recursive: true, force: true });

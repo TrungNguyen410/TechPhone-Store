@@ -51,6 +51,7 @@ docker build \
   --build-arg VITE_USE_MOCK=false \
   --build-arg VITE_API_URL=http://localhost:5000/api \
   --build-arg VITE_SITE_URL=http://localhost:8080 \
+  --build-arg VITE_DEPLOYMENT_TARGET=docker \
   -t duanwebdidong-frontend .
 ```
 
@@ -62,6 +63,7 @@ Tạo file `.env` từ `.env.example`:
 VITE_API_URL=http://localhost:5000/api
 VITE_USE_MOCK=true
 VITE_SITE_URL=http://localhost:5173
+VITE_DEPLOYMENT_TARGET=local
 ```
 
 - `VITE_USE_MOCK=true`: dùng dữ liệu mock và lưu tạm thay đổi trong localStorage.
@@ -166,6 +168,7 @@ Replace these documented domain placeholders with the actual Render domains:
 ```env
 VITE_SITE_URL=https://shop.techphone.example
 VITE_API_URL=https://api.techphone.example/api
+VITE_DEPLOYMENT_TARGET=render
 FRONTEND_URL=https://shop.techphone.example
 PUBLIC_SITE_URL=https://shop.techphone.example
 API_PUBLIC_URL=https://api.techphone.example
@@ -173,7 +176,8 @@ DEPLOYMENT_TARGET=render
 UPLOAD_DIR=/app/uploads
 ```
 
-Production public URLs must be absolute HTTP(S) URLs; frontend production builds
-do not fall back to localhost. If VNPay is enabled, also set
+Production public URLs must be absolute HTTP(S) URLs. Render builds reject
+loopback URLs and do not fall back to localhost; only the explicit `docker`
+target permits localhost in a production-mode frontend build. If VNPay is enabled, also set
 `VNPAY_RETURN_URL=https://api.techphone.example/api/payments/vnpay/return`.
 See [deployment.md](deployment.md) for the complete Render checklist.

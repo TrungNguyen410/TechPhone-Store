@@ -1,10 +1,12 @@
-require('dotenv').config();
+const path = require('path');
+
+require('dotenv').config({ quiet: true });
 
 const nodeEnv = process.env.NODE_ENV || 'development';
 const isProduction = nodeEnv === 'production';
 const port = Number(process.env.PORT || 5000);
 
-const requiredUrl = (name, developmentFallback = '') => {
+const parseHttpUrl = (name, developmentFallback = '') => {
   const value = String(process.env[name] || (isProduction ? '' : developmentFallback)).trim();
   let parsed;
 
@@ -18,7 +20,42 @@ const requiredUrl = (name, developmentFallback = '') => {
     throw new Error(`${name} must be an absolute HTTP(S) URL`);
   }
 
-  return value.replace(/\/+$/, '');
+  return parsed;
+};
+
+const isLoopbackHostname = (hostname) => {
+  const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  return normalized === 'localhost'
+    || normalized.endsWith('.localhost')
+    || normalized === '::1'
+    || /^127\./.test(normalized);
+};
+
+const requiredOrigin = (name, developmentFallback = '', { rejectLoopback = false } = {}) => {
+  const parsed = parseHttpUrl(name, developmentFallback);
+  if (
+    parsed.username
+    || parsed.password
+    || !/^\/+$/u.test(parsed.pathname)
+    || parsed.search
+    || parsed.hash
+  ) {
+    throw new Error(`${name} must be an HTTP(S) origin without credentials, path, query, or fragment`);
+  }
+  if (rejectLoopback && isLoopbackHostname(parsed.hostname)) {
+    throw new Error(`${name} must not use a loopback host on Render`);
+  }
+
+  return parsed.origin;
+};
+
+const requiredUrl = (name, developmentFallback = '') => {
+  const parsed = parseHttpUrl(name, developmentFallback);
+  if (parsed.username || parsed.password) {
+    throw new Error(`${name} must not contain credentials`);
+  }
+
+  return parsed.href.replace(/\/+$/, '');
 };
 
 const getJwtSecret = (name, developmentFallback) => {
@@ -46,13 +83,47 @@ const inferredDeploymentTarget = process.env.VERCEL
 const deploymentTarget = String(
   process.env.DEPLOYMENT_TARGET || inferredDeploymentTarget,
 ).trim().toLowerCase();
+const deploymentTargets = new Set([
+  'local',
+  'docker',
+  'render',
+  'vercel',
+  'netlify',
+  'serverless',
+  'aws-lambda',
+]);
 const serverlessTargets = new Set(['vercel', 'netlify', 'serverless', 'aws-lambda']);
 
-if (isProduction && serverlessTargets.has(deploymentTarget)) {
-  throw new Error(
-    `Serverless production target "${deploymentTarget}" cannot use the local uploads routes; deploy on Render with a persistent disk`,
-  );
+if (isProduction) {
+  if (!deploymentTargets.has(deploymentTarget)) {
+    throw new Error(
+      `DEPLOYMENT_TARGET "${deploymentTarget}" is not supported; use render or docker`,
+    );
+  }
+  if (serverlessTargets.has(deploymentTarget)) {
+    throw new Error(
+      `Serverless production target "${deploymentTarget}" cannot use the local uploads routes; deploy on Render with a persistent disk`,
+    );
+  }
+  if (deploymentTarget === 'local') {
+    throw new Error('DEPLOYMENT_TARGET "local" is not supported in production; use docker for local containers');
+  }
 }
+
+const configuredUploadDir = String(process.env.UPLOAD_DIR || '').trim();
+if (isProduction && deploymentTarget === 'render') {
+  if (!configuredUploadDir) {
+    throw new Error('UPLOAD_DIR is required for Render production');
+  }
+  if (!path.posix.isAbsolute(configuredUploadDir)) {
+    throw new Error('UPLOAD_DIR must be an absolute persistent mount on Render');
+  }
+  if (configuredUploadDir !== '/app/uploads') {
+    throw new Error('UPLOAD_DIR must use the approved Render persistent mount /app/uploads');
+  }
+}
+
+const rejectRenderLoopback = isProduction && deploymentTarget === 'render';
 
 const env = {
   nodeEnv,
@@ -63,13 +134,22 @@ const env = {
   jwtRefreshSecret: getJwtSecret('JWT_REFRESH_SECRET', 'dev-refresh-secret'),
   jwtAccessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
   jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
-  frontendUrl: requiredUrl('FRONTEND_URL', 'http://localhost:5173'),
-  publicSiteUrl: requiredUrl(
+  frontendUrl: requiredOrigin(
+    'FRONTEND_URL',
+    'http://localhost:5173',
+    { rejectLoopback: rejectRenderLoopback },
+  ),
+  publicSiteUrl: requiredOrigin(
     'PUBLIC_SITE_URL',
     process.env.FRONTEND_URL || 'http://localhost:5173',
+    { rejectLoopback: rejectRenderLoopback },
   ),
-  apiPublicUrl: requiredUrl('API_PUBLIC_URL', `http://localhost:${port}`),
-  uploadDir: process.env.UPLOAD_DIR || 'uploads',
+  apiPublicUrl: requiredOrigin(
+    'API_PUBLIC_URL',
+    `http://localhost:${port}`,
+    { rejectLoopback: rejectRenderLoopback },
+  ),
+  uploadDir: configuredUploadDir || 'uploads',
   bank: {
     name: process.env.BANK_NAME || '',
     bin: process.env.BANK_BIN || '',

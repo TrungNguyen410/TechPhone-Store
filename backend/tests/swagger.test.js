@@ -56,4 +56,32 @@ describe('Swagger OpenAPI document', () => {
       jest.resetModules();
     }
   });
+
+  it('adds the Express /api mount exactly once', () => {
+    const originalEnv = process.env;
+    process.env = {
+      ...originalEnv,
+      NODE_ENV: 'production',
+      JWT_ACCESS_SECRET: 'production-access-secret-at-least-32-characters',
+      JWT_REFRESH_SECRET: 'production-refresh-secret-at-least-32-characters',
+      FRONTEND_URL: 'https://shop.techphone.example',
+      PUBLIC_SITE_URL: 'https://shop.techphone.example',
+      API_PUBLIC_URL: 'https://api.techphone.example/',
+      DEPLOYMENT_TARGET: 'render',
+      UPLOAD_DIR: '/app/uploads',
+      VNPAY_TMN_CODE: '',
+      VNPAY_HASH_SECRET: '',
+      VNPAY_RETURN_URL: '',
+    };
+    jest.resetModules();
+
+    try {
+      const productionSwagger = require('../src/config/swagger');
+      expect(productionSwagger.servers[0].url).toBe('https://api.techphone.example/api');
+      expect(productionSwagger.servers[0].url).not.toMatch(/\/api\/api\/?$/);
+    } finally {
+      process.env = originalEnv;
+      jest.resetModules();
+    }
+  });
 });

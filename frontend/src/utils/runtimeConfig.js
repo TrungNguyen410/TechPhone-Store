@@ -1,44 +1,38 @@
+import { normalizeDeploymentTarget, normalizePublicUrl } from './deploymentConfig';
+
 export const createRuntimeConfig = (env = {}) => {
   const useMock = env.VITE_USE_MOCK === 'true';
-  const normalizeHttpUrl = (name, value, fallback = '') => {
-    const resolved = String(value || fallback).trim();
-
-    if (!resolved) return '';
-
-    if (env.PROD) {
-      let parsed;
-      try {
-        parsed = new URL(resolved);
-      } catch {
-        throw new Error(`${name} must be an absolute HTTP(S) URL in production`);
-      }
-      if (!['http:', 'https:'].includes(parsed.protocol)) {
-        throw new Error(`${name} must be an absolute HTTP(S) URL in production`);
-      }
-    }
-
-    return resolved.replace(/\/+$/, '');
-  };
-  const apiUrl = normalizeHttpUrl(
+  const production = Boolean(env.PROD);
+  const deploymentTarget = normalizeDeploymentTarget(env, production);
+  const normalizationOptions = { production, deploymentTarget };
+  const apiUrl = normalizePublicUrl(
     'VITE_API_URL',
     env.VITE_API_URL,
-    env.PROD ? '' : 'http://localhost:5000/api',
+    {
+      ...normalizationOptions,
+      fallback: production ? '' : 'http://localhost:5000/api',
+    },
   );
-  const siteUrl = normalizeHttpUrl(
+  const siteUrl = normalizePublicUrl(
     'VITE_SITE_URL',
     env.VITE_SITE_URL,
-    env.PROD ? '' : 'http://localhost:5173',
+    {
+      ...normalizationOptions,
+      fallback: production ? '' : 'http://localhost:5173',
+      originOnly: true,
+    },
   );
 
-  if (env.PROD && !useMock && !apiUrl) {
-    throw new Error('VITE_API_URL là bắt buộc khi VITE_USE_MOCK được đặt thành false');
+  if (production && !useMock && !apiUrl) {
+    throw new Error('VITE_API_URL is required when VITE_USE_MOCK is false in production');
   }
-  if (env.PROD && !siteUrl) {
+  if (production && !siteUrl) {
     throw new Error('VITE_SITE_URL is required in production');
   }
 
   return {
     useMock,
+    deploymentTarget,
     apiUrl,
     siteUrl,
     cloudinary: {
