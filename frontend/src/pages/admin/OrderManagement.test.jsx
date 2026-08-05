@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { adminApi } from '../../api/adminApi';
 import { orderApi } from '../../api/orderApi';
@@ -33,7 +33,10 @@ const pendingOrder = {
 };
 
 describe('OrderManagement payment method', () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    vi.useRealTimers();
+    cleanup();
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     adminApi.getOrders.mockResolvedValue({
@@ -185,6 +188,64 @@ describe('OrderManagement payment method', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Trang 2' }));
 
-    await waitFor(() => expect(adminApi.getOrders).toHaveBeenLastCalledWith({ page: 2, limit: 20 }));
+    await waitFor(() => expect(adminApi.getOrders).toHaveBeenLastCalledWith({
+      page: 2, limit: 20, search: '', status: '',
+    }));
+  });
+
+  it('debounces search and resets page when search or status changes', async () => {
+    adminApi.getOrders.mockResolvedValue({
+      items: [pendingOrder],
+      pagination: { page: 1, limit: 20, total: 21, totalPages: 2 },
+    });
+    const { container } = render(<OrderManagement />);
+    await screen.findByText(pendingOrder.orderNumber);
+    fireEvent.click(screen.getByRole('button', { name: 'Trang 2' }));
+    await waitFor(() => expect(adminApi.getOrders).toHaveBeenLastCalledWith({
+      page: 2, limit: 20, search: '', status: '',
+    }));
+    vi.useFakeTimers();
+
+    fireEvent.change(container.querySelector('.admin-search input'), { target: { value: 'TP26' } });
+    await act(() => vi.advanceTimersByTimeAsync(300));
+    expect(adminApi.getOrders).toHaveBeenLastCalledWith({
+      page: 1, limit: 20, search: 'TP26', status: '',
+    });
+    vi.useRealTimers();
+
+    fireEvent.change(container.querySelector('.admin-page-toolbar > select'), { target: { value: 'pending' } });
+    await waitFor(() => expect(adminApi.getOrders).toHaveBeenLastCalledWith({
+      page: 1, limit: 20, search: 'TP26', status: 'pending',
+    }));
+  });
+
+  it('ignores a stale request that resolves after a newer request', async () => {
+    let resolvePageTwo;
+    const stalePage = new Promise((resolve) => { resolvePageTwo = resolve; });
+    adminApi.getOrders
+      .mockResolvedValueOnce({
+        items: [pendingOrder],
+        pagination: { page: 1, limit: 20, total: 21, totalPages: 2 },
+      })
+      .mockReturnValueOnce(stalePage)
+      .mockResolvedValueOnce({
+        items: [{ ...pendingOrder, id: 'new-order', orderNumber: 'TPNEW0001' }],
+        pagination: { page: 1, limit: 20, total: 1, totalPages: 1 },
+      });
+    const { container } = render(<OrderManagement />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Trang 2' }));
+    vi.useFakeTimers();
+    fireEvent.change(container.querySelector('.admin-search input'), { target: { value: 'new' } });
+    await act(() => vi.advanceTimersByTimeAsync(300));
+    vi.useRealTimers();
+    expect(await screen.findByText('TPNEW0001')).toBeInTheDocument();
+
+    await act(async () => resolvePageTwo({
+      items: [{ ...pendingOrder, id: 'stale-order', orderNumber: 'TPSTALE01' }],
+      pagination: { page: 2, limit: 20, total: 21, totalPages: 2 },
+    }));
+
+    expect(screen.queryByText('TPSTALE01')).not.toBeInTheDocument();
+    expect(screen.getByText('TPNEW0001')).toBeInTheDocument();
   });
 });

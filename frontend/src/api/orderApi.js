@@ -1,6 +1,7 @@
 import { USE_MOCK } from '../utils/constants';
 import { mockDb } from '../mock/mockDb';
 import axiosClient from './axiosClient';
+import { adminApi } from './adminApi';
 
 export const orderApi = {
   create: (payload, idempotencyKey) =>
@@ -18,7 +19,7 @@ export const orderApi = {
     USE_MOCK
       ? mockDb.findOrder(orderNumber, phone)
       : axiosClient.get('/orders/lookup', { params: { orderNumber, phone } }),
-  getAllAdmin: () => (USE_MOCK ? mockDb.list('orders') : axiosClient.get('/admin/orders')),
+  getAllAdmin: (params) => adminApi.getOrders(params),
   updateStatus: (id, status) =>
     USE_MOCK
       ? mockDb.updateOrderStatus(id, status)

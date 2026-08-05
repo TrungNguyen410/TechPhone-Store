@@ -33,11 +33,12 @@ const adminPagination = [
   query('page').optional().isInt({ min: 1, max: 1000000 }),
   query('limit').optional().isInt({ min: 1, max: 100 }),
 ];
-const dashboardYear = [query('year').optional().isInt({ min: 1970, max: 9998 })];
+const adminSearch = [query('search').optional().trim().isLength({ max: 100 })];
+const dashboardYear = [query('year').optional().isInt({ min: 1970, max: 9999 })];
 
 router.get('/dashboard', dashboardYear, validate, adminController.dashboard);
 
-router.get('/customers', adminPagination, validate, adminController.customers);
+router.get('/customers', [...adminPagination, ...adminSearch], validate, adminController.customers);
 router.put('/customers/:id', idParam, customerValidators.update, validate, adminController.updateCustomer);
 
 router.get('/products', catalogValidators.list, validate, productController.list);
@@ -60,7 +61,16 @@ router.post('/brands', taxonomyValidators.create, validate, brandController.crea
 router.put('/brands/:id', idParam, taxonomyValidators.update, validate, brandController.update);
 router.delete('/brands/:id', idParam, validate, brandController.remove);
 
-router.get('/orders', adminPagination, validate, orderController.list);
+router.get(
+  '/orders',
+  [
+    ...adminPagination,
+    ...adminSearch,
+    query('status').optional().isIn(['pending', 'confirmed', 'shipping', 'delivered', 'completed', 'cancelled']),
+  ],
+  validate,
+  orderController.list,
+);
 router.put('/orders/:id/payment', idParam, orderValidators.reconcilePayment, validate, paymentController.reconcileManualPayment);
 router.put('/orders/:id/status', idParam, orderValidators.updateStatus, validate, orderController.updateStatus);
 router.put('/orders/:id', idParam, orderValidators.update, validate, orderController.update);

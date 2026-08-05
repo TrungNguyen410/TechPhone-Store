@@ -308,7 +308,13 @@ class OrderService {
 
     const page = Math.min(Math.max(Number(query.page) || 1, 1), 1000000);
     const limit = Math.min(Math.max(Number(query.limit) || 20, 1), 100);
-    const { items, total } = await orderRepository.findPage(filter, { page, limit });
+    const search = String(query.search || '').trim().slice(0, 100);
+    const { items, total } = await orderRepository.findAdminPage({
+      page,
+      limit,
+      search,
+      status: query.status || '',
+    });
     return {
       items,
       pagination: {

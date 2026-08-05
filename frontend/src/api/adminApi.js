@@ -31,9 +31,9 @@ const resourceApi = (name, endpoint) => ({
 
 export const adminApi = {
   getDashboard: () => (USE_MOCK ? mockDb.dashboard() : axiosClient.get('/admin/dashboard')),
-  getCustomers: async ({ page = 1, limit = DEFAULT_PAGE_SIZE } = {}) => {
+  getCustomers: async ({ page = 1, limit = DEFAULT_PAGE_SIZE, search = '' } = {}) => {
     if (!USE_MOCK) {
-      const response = await axiosClient.get('/admin/customers', { params: { page, limit } });
+      const response = await axiosClient.get('/admin/customers', { params: { page, limit, search } });
       return normalizePage(response, { page, limit });
     }
     const users = await mockDb.list('users');
@@ -49,13 +49,19 @@ export const adminApi = {
             .filter((order) => ['completed', 'delivered'].includes(order.status))
             .reduce((sum, order) => sum + order.total, 0),
         };
-      });
+      })
+      .filter((user) => !search || `${user.fullName || ''} ${user.email || ''} ${user.phone || ''}`
+        .toLowerCase().includes(search.toLowerCase()));
     return normalizePage(customers, { page, limit });
   },
-  getOrders: async ({ page = 1, limit = DEFAULT_PAGE_SIZE } = {}) => {
+  getOrders: async ({ page = 1, limit = DEFAULT_PAGE_SIZE, search = '', status = '' } = {}) => {
     const response = USE_MOCK
-      ? await mockDb.list('orders')
-      : await axiosClient.get('/admin/orders', { params: { page, limit } });
+      ? (await mockDb.list('orders')).filter((order) => (
+          (!status || order.status === status)
+          && (!search || `${order.orderNumber || ''} ${order.customer?.fullName || ''} ${order.customer?.email || ''} ${order.customer?.phone || ''}`
+            .toLowerCase().includes(search.toLowerCase()))
+        ))
+      : await axiosClient.get('/admin/orders', { params: { page, limit, search, status } });
     return normalizePage(response, { page, limit });
   },
   updateCustomer: (id, payload) =>

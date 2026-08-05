@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { FiEye, FiSearch, FiTruck } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import { adminApi } from '../../api/adminApi';
@@ -20,6 +20,7 @@ export default function OrderManagement() {
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 0 });
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [trackingForm, setTrackingForm] = useState({
@@ -31,21 +32,36 @@ export default function OrderManagement() {
   const [mutatingOrderId, setMutatingOrderId] = useState(null);
   const [paymentForm, setPaymentForm] = useState({ reference: '', note: '' });
   const [reconcilingPayment, setReconcilingPayment] = useState(false);
+  const requestId = useRef(0);
   const load = useCallback(() => {
-    setLoading(true);
-    return adminApi.getOrders({ page, limit: 20 })
+    const currentRequest = ++requestId.current;
+    return adminApi.getOrders({ page, limit: 20, search: debouncedSearch, status: statusFilter })
       .then((response) => {
+        if (currentRequest !== requestId.current) return;
+        const totalPages = Number.isFinite(response.pagination.totalPages)
+          ? Math.max(0, Math.trunc(response.pagination.totalPages))
+          : 0;
+        const lastPage = Math.max(totalPages, 1);
+        if (page > lastPage) {
+          setPage(lastPage);
+          return;
+        }
         setOrders(response.items);
-        setPagination(response.pagination);
+        setPagination({ ...response.pagination, totalPages });
       })
-      .finally(() => setLoading(false));
-  }, [page]);
+      .finally(() => {
+        if (currentRequest === requestId.current) setLoading(false);
+      });
+  }, [debouncedSearch, page, statusFilter]);
   useEffect(() => { load(); }, [load]);
-
-  const visible = useMemo(() => orders.filter((order) =>
-    (!search || `${order.orderNumber} ${order.customer.phone} ${order.customer.fullName}`.toLowerCase().includes(search.toLowerCase())) &&
-    (!statusFilter || order.status === statusFilter)
-  ), [orders, search, statusFilter]);
+  useEffect(() => {
+    if (search.trim() === debouncedSearch) return undefined;
+    const timeout = setTimeout(() => {
+      setPage(1);
+      setDebouncedSearch(search.trim());
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [debouncedSearch, search]);
   const updateStatus = async (order, status) => {
     if (mutatingOrderId || status === order.status) return;
     setMutatingOrderId(order.id);
@@ -144,8 +160,8 @@ export default function OrderManagement() {
   if (loading) return <Loading />;
   return (
     <>
-      <div className="admin-page-toolbar"><div className="admin-search"><FiSearch /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm mã đơn, khách hàng, số điện thoại..." /></div><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">Tất cả trạng thái</option>{ORDER_STATUSES.map((status) => <option value={status} key={status}>{getOrderStatus(status).label}</option>)}</select></div>
-      <div className="admin-table-card"><div className="admin-table-title"><div><h2>Danh sách đơn hàng</h2><span>{pagination.total} đơn hàng</span></div></div><DataTable columns={columns} rows={visible} /><Pagination currentPage={pagination.page} totalPages={pagination.totalPages} onPageChange={setPage} /></div>
+      <div className="admin-page-toolbar"><div className="admin-search"><FiSearch /><input maxLength={100} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm mã đơn, khách hàng, số điện thoại..." /></div><select aria-label="Lọc trạng thái đơn hàng" value={statusFilter} onChange={(event) => { setPage(1); setStatusFilter(event.target.value); }}><option value="">Tất cả trạng thái</option>{ORDER_STATUSES.map((status) => <option value={status} key={status}>{getOrderStatus(status).label}</option>)}</select></div>
+      <div className="admin-table-card"><div className="admin-table-title"><div><h2>Danh sách đơn hàng</h2><span>{pagination.total} đơn hàng</span></div></div><DataTable columns={columns} rows={orders} /><Pagination currentPage={page} totalPages={pagination.totalPages} onPageChange={setPage} /></div>
       {selectedOrder && (
         <AccessibleDialog
           open

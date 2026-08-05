@@ -3,7 +3,7 @@ const productRepository = require('../repositories/productRepository');
 const userRepository = require('../repositories/userRepository');
 
 const MIN_YEAR = 1970;
-const MAX_YEAR = 9998;
+const MAX_YEAR = 9999;
 const statusKeys = ['pending', 'confirmed', 'shipping', 'completed', 'cancelled'];
 
 class DashboardService {

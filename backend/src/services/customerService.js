@@ -6,12 +6,14 @@ const pick = require('../utils/pick');
 const customerUpdateFields = ['fullName', 'email', 'phone', 'address', 'role', 'status'];
 
 class CustomerService {
-  async list({ page = 1, limit = 20 } = {}) {
+  async list({ page = 1, limit = 20, search = '' } = {}) {
     const boundedPage = Math.min(Math.max(Number(page) || 1, 1), 1000000);
     const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
+    const boundedSearch = String(search || '').trim().slice(0, 100);
     const { items: customers, total } = await userRepository.findCustomersPage({
       page: boundedPage,
       limit: boundedLimit,
+      search: boundedSearch,
     });
     const totals = await orderRepository.customerOrderTotals(customers.map((customer) => customer.id));
     const totalsByUser = new Map(totals.map((item) => [item._id, item]));

@@ -1,6 +1,7 @@
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const Order = require('../src/models/Order');
+const User = require('../src/models/User');
 const OrderItem = require('../src/models/OrderItem');
 const Product = require('../src/models/Product');
 const Accessory = require('../src/models/Accessory');
@@ -1396,5 +1397,140 @@ describe('Orders and dashboard APIs', () => {
     expect(response.status).toBe(200);
     expect(response.body.data.items).toHaveLength(1);
     expect(response.body.data.pagination).toEqual({ page: 2, limit: 2, total: 3, totalPages: 2 });
+  });
+
+  it('filters admin customers before pagination and escapes literal search text', async () => {
+    const admin = await createUser({
+      email: 'customer-filter-admin@test.com',
+      phone: '0900000005',
+      role: 'admin',
+    });
+    const token = jwt.sign({ sub: admin.id, role: 'admin' }, env.jwtAccessSecret, {
+      expiresIn: '15m',
+    });
+    const matchingCustomers = await Promise.all([1, 2, 3].map((number) => createUser({
+      email: `literal.${number}@test.com`,
+      phone: `091500000${number}`,
+      fullName: `Literal.Customer ${number}`,
+    })));
+    await createUser({
+      email: 'plain-customer@test.com',
+      phone: '0915000004',
+      fullName: 'Plain Customer',
+    });
+    const deleted = await createUser({
+      email: 'deleted.literal@test.com',
+      phone: '0915000005',
+      fullName: 'Deleted Literal.Customer',
+    });
+    await User.updateOne({ _id: deleted.id }, { isDeleted: true, deletedAt: new Date() });
+
+    const response = await request(app)
+      .get('/api/admin/customers?search=Literal.Customer&page=2&limit=2')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.items).toHaveLength(1);
+    expect(matchingCustomers.map((customer) => customer.id)).toContain(response.body.data.items[0].id);
+    expect(response.body.data.pagination).toEqual({ page: 2, limit: 2, total: 3, totalPages: 2 });
+
+    await request(app)
+      .get(`/api/admin/customers?search=${'x'.repeat(101)}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(422);
+  });
+
+  it('filters admin orders and count with the same escaped search and status', async () => {
+    const admin = await createUser({
+      email: 'order-filter-admin@test.com',
+      phone: '0900000006',
+      role: 'admin',
+    });
+    const token = jwt.sign({ sub: admin.id, role: 'admin' }, env.jwtAccessSecret, {
+      expiresIn: '15m',
+    });
+    const customer = {
+      fullName: 'Order Filter Customer',
+      email: 'order-filter@test.com',
+      phone: '0916000000',
+      address: 'Test address',
+    };
+    const plainCustomer = {
+      fullName: 'Plain Customer',
+      email: 'plain',
+      phone: '0916000001',
+      address: 'Test address',
+    };
+    await Order.create([
+      { orderNumber: 'TP.LITERAL1', status: 'pending', items: [], subtotal: 1, total: 1, customer },
+      { orderNumber: 'TPPLAIN001', status: 'pending', items: [], subtotal: 2, total: 2, customer: plainCustomer },
+      { orderNumber: 'TP.LITERAL2', status: 'completed', items: [], subtotal: 3, total: 3, customer },
+      {
+        orderNumber: 'TP.LITERAL3',
+        status: 'pending',
+        items: [],
+        subtotal: 4,
+        total: 4,
+        customer,
+        isDeleted: true,
+        deletedAt: new Date(),
+      },
+    ]);
+
+    const response = await request(app)
+      .get('/api/admin/orders?search=.&status=pending&page=1&limit=20')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.items.map((order) => order.orderNumber)).toEqual(['TP.LITERAL1']);
+    expect(response.body.data.pagination).toEqual({ page: 1, limit: 20, total: 1, totalPages: 1 });
+
+    await request(app)
+      .get('/api/admin/orders?status=not-a-status')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(422);
+    await request(app)
+      .get(`/api/admin/orders?search=${'x'.repeat(101)}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(422);
+  });
+
+  it('accepts dashboard year 9999 and defaults omitted year to the current UTC year', async () => {
+    const admin = await createUser({
+      email: 'dashboard-boundary-admin@test.com',
+      phone: '0900000007',
+      role: 'admin',
+    });
+    const token = jwt.sign({ sub: admin.id, role: 'admin' }, env.jwtAccessSecret, {
+      expiresIn: '15m',
+    });
+    const currentYear = new Date().getUTCFullYear();
+    await Order.create({
+      orderNumber: 'TPCURRENTYEAR1',
+      status: 'completed',
+      items: [],
+      subtotal: 7000000,
+      total: 7000000,
+      customer: {
+        fullName: 'Current Year Customer',
+        email: 'current-year@test.com',
+        phone: '0917000000',
+        address: 'Test address',
+      },
+      createdAt: new Date(Date.UTC(currentYear, 5, 1)),
+    });
+
+    const boundary = await request(app)
+      .get('/api/admin/dashboard?year=9999')
+      .set('Authorization', `Bearer ${token}`);
+    const omitted = await request(app)
+      .get('/api/admin/dashboard')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(boundary.status).toBe(200);
+    expect(boundary.body.data.stats.revenue).toBe(0);
+    expect(omitted.status).toBe(200);
+    expect(omitted.body.data.stats.revenue).toBe(7000000);
+    expect(omitted.body.data.monthlyRevenue[5]).toBe(7);
   });
 });

@@ -2,6 +2,7 @@ const BaseRepository = require('./baseRepository');
 const Order = require('../models/Order');
 const OrderCounter = require('../models/OrderCounter');
 const { normalizeVietnamesePhone } = require('../utils/phone');
+const { buildRegex } = require('../utils/query');
 
 class OrderRepository extends BaseRepository {
   constructor() {
@@ -108,6 +109,21 @@ class OrderRepository extends BaseRepository {
       this.count(filter),
     ]);
     return { items, total };
+  }
+
+  async findAdminPage({ page, limit, search = '', status = '' }) {
+    const filter = {};
+    if (status) filter.status = status;
+    if (search) {
+      const pattern = buildRegex(search);
+      filter.$or = [
+        { orderNumber: pattern },
+        { 'customer.fullName': pattern },
+        { 'customer.email': pattern },
+        { 'customer.phone': pattern },
+      ];
+    }
+    return this.findPage(filter, { page, limit });
   }
 
   async revenueByMonth(year) {
