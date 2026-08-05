@@ -74,8 +74,18 @@ class CatalogService {
     return { items: await this.denormalize(rawItems), pagination: { ...pagination, total, totalPages: Math.ceil(total / pagination.limit) } };
   }
 
+  async listPublic(query = {}) {
+    return this.list({ ...query, status: 'active' });
+  }
+
   async getById(id) {
     const item = await this.repository.findById(id);
+    if (!item) throw new AppError('Không tìm thấy dữ liệu yêu cầu', 404);
+    return this.denormalize(item);
+  }
+
+  async getPublicById(id) {
+    const item = await this.repository.findOne({ _id: id, status: 'active' });
     if (!item) throw new AppError('Không tìm thấy dữ liệu yêu cầu', 404);
     return this.denormalize(item);
   }

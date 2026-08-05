@@ -2,6 +2,7 @@ const request = require('supertest');
 const Brand = require('../src/models/Brand');
 const Category = require('../src/models/Category');
 const Product = require('../src/models/Product');
+const Accessory = require('../src/models/Accessory');
 const { app, createUser, login } = require('./helpers');
 
 const seedTaxonomy = async () => {
@@ -12,6 +13,11 @@ const seedTaxonomy = async () => {
   ]);
   const phones = await Category.create({ name: 'Dien thoai', slug: 'dien-thoai', active: true });
   return { apple, samsung, google, phones };
+};
+
+const loginAdmin = async () => {
+  await createUser({ email: 'admin@test.com', phone: '0900000000', role: 'admin' });
+  return login('admin@test.com');
 };
 
 describe('Product API', () => {
@@ -68,5 +74,101 @@ describe('Product API', () => {
     expect(tooManyImages.status).toBe(422);
     const invalid = await request(app).post('/api/products').set('Authorization', `Bearer ${adminToken}`).send({ ...payload, brandId: 'missing' });
     expect(invalid.status).toBe(422);
+  });
+});
+
+describe('public catalog visibility', () => {
+  it('forces active status for the public product list', async () => {
+    const { apple, phones } = await seedTaxonomy();
+    const visible = await Product.create({ name: 'Visible Phone', brandId: apple.id, categoryId: phones.id, price: 1000000, status: 'active' });
+    await Product.create({ name: 'Hidden Phone', brandId: apple.id, categoryId: phones.id, price: 1000000, status: 'inactive' });
+
+    const response = await request(app).get('/api/products?status=inactive');
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.map((item) => item.id)).toEqual([visible.id]);
+  });
+
+  it('does not disclose inactive product details publicly', async () => {
+    const { apple, phones } = await seedTaxonomy();
+    const hidden = await Product.create({ name: 'Hidden Phone', brandId: apple.id, categoryId: phones.id, price: 1000000, status: 'inactive' });
+
+    expect((await request(app).get(`/api/products/${hidden.id}`)).status).toBe(404);
+  });
+
+  it('forces active status for the public accessory list', async () => {
+    const { apple, phones } = await seedTaxonomy();
+    const visible = await Accessory.create({ name: 'Visible Charger', brandId: apple.id, categoryId: phones.id, price: 1000000, status: 'active' });
+    await Accessory.create({ name: 'Hidden Charger', brandId: apple.id, categoryId: phones.id, price: 1000000, status: 'inactive' });
+
+    const response = await request(app).get('/api/accessories?status=inactive');
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.map((item) => item.id)).toEqual([visible.id]);
+  });
+
+  it('does not disclose inactive accessory details publicly', async () => {
+    const { apple, phones } = await seedTaxonomy();
+    const hidden = await Accessory.create({ name: 'Hidden Charger', brandId: apple.id, categoryId: phones.id, price: 1000000, status: 'inactive' });
+
+    expect((await request(app).get(`/api/accessories/${hidden.id}`)).status).toBe(404);
+  });
+
+  it('retains inactive catalog records in admin lists', async () => {
+    const { apple, phones } = await seedTaxonomy();
+    const hiddenProduct = await Product.create({ name: 'Hidden Phone', brandId: apple.id, categoryId: phones.id, price: 1000000, status: 'inactive' });
+    const hiddenAccessory = await Accessory.create({ name: 'Hidden Charger', brandId: apple.id, categoryId: phones.id, price: 1000000, status: 'inactive' });
+    const token = await loginAdmin();
+
+    const [products, accessories] = await Promise.all([
+      request(app).get('/api/admin/products?status=inactive').set('Authorization', `Bearer ${token}`),
+      request(app).get('/api/admin/accessories?status=inactive').set('Authorization', `Bearer ${token}`),
+    ]);
+
+    expect(products.body.data.map((item) => item.id)).toEqual([hiddenProduct.id]);
+    expect(accessories.body.data.map((item) => item.id)).toEqual([hiddenAccessory.id]);
+  });
+});
+
+describe('taxonomy reference integrity', () => {
+  it('refuses category deletion when an active product references it', async () => {
+    const { apple, phones } = await seedTaxonomy();
+    await Product.create({ name: 'Referenced Phone', brandId: apple.id, categoryId: phones.id, price: 1000000 });
+    const token = await loginAdmin();
+
+    expect((await request(app).delete(`/api/admin/categories/${phones.id}`).set('Authorization', `Bearer ${token}`)).status).toBe(409);
+  });
+
+  it('refuses category deletion when an active accessory references it', async () => {
+    const { apple, phones } = await seedTaxonomy();
+    await Accessory.create({ name: 'Referenced Charger', brandId: apple.id, categoryId: phones.id, price: 1000000 });
+    const token = await loginAdmin();
+
+    expect((await request(app).delete(`/api/admin/categories/${phones.id}`).set('Authorization', `Bearer ${token}`)).status).toBe(409);
+  });
+
+  it('refuses brand deletion when an active product references it', async () => {
+    const { apple, phones } = await seedTaxonomy();
+    await Product.create({ name: 'Referenced Phone', brandId: apple.id, categoryId: phones.id, price: 1000000 });
+    const token = await loginAdmin();
+
+    expect((await request(app).delete(`/api/admin/brands/${apple.id}`).set('Authorization', `Bearer ${token}`)).status).toBe(409);
+  });
+
+  it('refuses brand deletion when an active accessory references it', async () => {
+    const { apple, phones } = await seedTaxonomy();
+    await Accessory.create({ name: 'Referenced Charger', brandId: apple.id, categoryId: phones.id, price: 1000000 });
+    const token = await loginAdmin();
+
+    expect((await request(app).delete(`/api/admin/brands/${apple.id}`).set('Authorization', `Bearer ${token}`)).status).toBe(409);
+  });
+
+  it('allows taxonomy deletion when its only catalog reference is soft deleted', async () => {
+    const { apple, phones } = await seedTaxonomy();
+    const product = await Product.create({ name: 'Deleted Phone', brandId: apple.id, categoryId: phones.id, price: 1000000 });
+    await product.softDelete();
+    const token = await loginAdmin();
+
+    expect((await request(app).delete(`/api/admin/categories/${phones.id}`).set('Authorization', `Bearer ${token}`)).status).toBe(200);
   });
 });

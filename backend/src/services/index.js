@@ -12,8 +12,8 @@ const settingRepository = require('../repositories/settingRepository');
 module.exports = {
   productService: new CatalogService(productRepository, { brandRepository, categoryRepository }),
   accessoryService: new CatalogService(accessoryRepository, { brandRepository, categoryRepository }),
-  categoryService: new TaxonomyService(categoryRepository),
-  brandService: new TaxonomyService(brandRepository),
+  categoryService: new TaxonomyService(categoryRepository, { productRepository, accessoryRepository }),
+  brandService: new TaxonomyService(brandRepository, { productRepository, accessoryRepository }),
   bannerService: new BaseCrudService(bannerRepository),
   contactService: new BaseCrudService(contactRepository),
   settingService: new BaseCrudService(settingRepository),

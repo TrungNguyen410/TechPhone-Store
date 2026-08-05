@@ -7,8 +7,18 @@ const createCrudController = (service, resourceName) => ({
     successResponse(res, data, `${resourceName} list retrieved`);
   }),
 
+  listPublic: asyncHandler(async (req, res) => {
+    const data = await service.listPublic(req.query);
+    successResponse(res, data, `${resourceName} list retrieved`);
+  }),
+
   getById: asyncHandler(async (req, res) => {
     const data = await service.getById(req.params.id);
+    successResponse(res, data, `${resourceName} retrieved`);
+  }),
+
+  getPublicById: asyncHandler(async (req, res) => {
+    const data = await service.getPublicById(req.params.id);
     successResponse(res, data, `${resourceName} retrieved`);
   }),
 
