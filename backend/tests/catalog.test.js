@@ -109,6 +109,84 @@ describe('Product API', () => {
     });
     expect(response.body.data.id).not.toBe('forged-product-id');
   });
+
+  it('ignores transaction-owned sold values on product creation', async () => {
+    const { google, phones } = await seedTaxonomy();
+    const adminToken = await loginAdmin();
+
+    const response = await request(app)
+      .post('/api/admin/products')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        name: 'Product Sold Create Audit',
+        brandId: google.id,
+        categoryId: phones.id,
+        price: 1000000,
+        sold: 999,
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.data.sold).toBe(0);
+  });
+
+  it('does not overwrite transaction-owned product sold values on update', async () => {
+    const { google, phones } = await seedTaxonomy();
+    const product = await Product.create({
+      name: 'Product Sold Update Audit',
+      brandId: google.id,
+      categoryId: phones.id,
+      price: 1000000,
+      sold: 7,
+    });
+    const adminToken = await loginAdmin();
+
+    const response = await request(app)
+      .put(`/api/admin/products/${product.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: 'Updated Product Name', sold: 999 });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toMatchObject({ name: 'Updated Product Name', sold: 7 });
+  });
+
+  it('ignores transaction-owned sold values on accessory creation', async () => {
+    const { google, phones } = await seedTaxonomy();
+    const adminToken = await loginAdmin();
+
+    const response = await request(app)
+      .post('/api/admin/accessories')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        name: 'Accessory Sold Create Audit',
+        brandId: google.id,
+        categoryId: phones.id,
+        price: 500000,
+        sold: 999,
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.data.sold).toBe(0);
+  });
+
+  it('does not overwrite transaction-owned accessory sold values on update', async () => {
+    const { google, phones } = await seedTaxonomy();
+    const accessory = await Accessory.create({
+      name: 'Accessory Sold Update Audit',
+      brandId: google.id,
+      categoryId: phones.id,
+      price: 500000,
+      sold: 4,
+    });
+    const adminToken = await loginAdmin();
+
+    const response = await request(app)
+      .put(`/api/admin/accessories/${accessory.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: 'Updated Accessory Name', sold: 999 });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toMatchObject({ name: 'Updated Accessory Name', sold: 4 });
+  });
 });
 
 describe('public catalog visibility', () => {

@@ -183,6 +183,32 @@ describe('Voucher and review APIs', () => {
     })).toBe(1);
   });
 
+  it('rejects an accessory review duplicated against the legacy general product sentinel', async () => {
+    const customer = await createUser({ email: 'legacy-review@test.com', phone: '0977777777' });
+    const token = await login('legacy-review@test.com');
+    await Review.create({
+      userId: customer.id,
+      userName: customer.fullName,
+      productId: 'general',
+      accessoryId: 'accessory-1',
+      rating: 4,
+      comment: 'Existing accessory review using the legacy target tuple.',
+      status: 'pending',
+    });
+
+    const response = await request(app)
+      .post('/api/reviews')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        accessoryId: 'accessory-1',
+        rating: 5,
+        comment: 'A duplicate accessory review must be rejected.',
+      });
+
+    expect(response.status).toBe(409);
+    expect(await Review.countDocuments({ userId: customer.id, accessoryId: 'accessory-1' })).toBe(1);
+  });
+
   it('requires exactly one review target', async () => {
     await createUser({ email: 'review-xor@test.com', phone: '0955555555' });
     const token = await login('review-xor@test.com');

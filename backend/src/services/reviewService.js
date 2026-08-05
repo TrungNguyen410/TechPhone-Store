@@ -28,7 +28,7 @@ class ReviewService {
   async create(payload, user) {
     const dto = pick(payload, reviewCreateFields);
     const userId = user?.id;
-    const productId = dto.productId || null;
+    const productId = dto.productId || 'general';
     const accessoryId = dto.accessoryId || null;
     const target = accessoryId
       ? await accessoryRepository.findById(accessoryId)

@@ -18,20 +18,20 @@ const mutationFields = {
   productCreate: [
     'name', 'brandId', 'categoryId', 'price', 'oldPrice', 'discountPercent', 'image', 'images',
     'ram', 'storage', 'screen', 'battery', 'camera', 'chip', 'description', 'specifications',
-    'stock', 'sold', 'rating', 'status',
+    'stock', 'rating', 'status',
   ],
   productUpdate: [
     'name', 'brandId', 'categoryId', 'price', 'oldPrice', 'discountPercent', 'image', 'images',
     'ram', 'storage', 'screen', 'battery', 'camera', 'chip', 'description', 'specifications',
-    'stock', 'sold', 'rating', 'status',
+    'stock', 'rating', 'status',
   ],
   accessoryCreate: [
     'name', 'brandId', 'categoryId', 'price', 'oldPrice', 'discountPercent', 'image', 'images',
-    'description', 'specifications', 'stock', 'sold', 'rating', 'status',
+    'description', 'specifications', 'stock', 'rating', 'status',
   ],
   accessoryUpdate: [
     'name', 'brandId', 'categoryId', 'price', 'oldPrice', 'discountPercent', 'image', 'images',
-    'description', 'specifications', 'stock', 'sold', 'rating', 'status',
+    'description', 'specifications', 'stock', 'rating', 'status',
   ],
   reviewCreate: ['productId', 'accessoryId', 'rating', 'comment', 'images'],
   reviewAdminUpdate: ['rating', 'comment', 'images', 'status'],
