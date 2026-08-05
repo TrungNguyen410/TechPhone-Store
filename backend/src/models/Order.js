@@ -54,6 +54,11 @@ const orderSchema = new mongoose.Schema(
       default: 'pending',
     },
     paymentReference: { type: String, default: '' },
+    paymentAudit: {
+      confirmedBy: { type: String, ref: 'User', default: null },
+      confirmedAt: { type: Date, default: null },
+      note: { type: String, default: '' },
+    },
     shippingProvider: { type: String, default: 'TechPhone Express' },
     trackingNumber: { type: String, default: '' },
     estimatedDelivery: { type: Date, default: null },

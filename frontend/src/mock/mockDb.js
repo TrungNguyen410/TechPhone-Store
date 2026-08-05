@@ -419,6 +419,31 @@ export const mockDb = {
     return wait(clone(order));
   },
 
+  async reconcileManualPayment(id, payload) {
+    const orders = read('orders');
+    const order = orders.find((item) => item.id === id);
+    if (!order) fail('Không tìm thấy đơn hàng', 404);
+    if (!['bank', 'momo'].includes(order.paymentMethod)) {
+      fail('Đơn hàng không dùng thanh toán thủ công', 409);
+    }
+    if (!['pending', 'failed'].includes(order.paymentStatus) || order.paymentStatus === payload.status) {
+      fail('Thanh toán đã được đối soát', 409);
+    }
+    const reference = String(payload.reference || '').trim();
+    if (payload.status === 'paid' && !reference) fail('Mã tham chiếu là bắt buộc');
+    order.paymentStatus = payload.status;
+    order.paymentReference = reference;
+    order.paymentAudit = {
+      confirmedBy: currentMockUserId(),
+      confirmedAt: new Date().toISOString(),
+      note: String(payload.note || '').trim(),
+    };
+    if (payload.status === 'paid' && order.status === 'pending') order.status = 'confirmed';
+    order.updatedAt = new Date().toISOString();
+    write('orders', orders);
+    return wait(clone(order));
+  },
+
   async checkVoucher(code, subtotal) {
     const voucher = read('vouchers').find(
       (item) => item.code.toLowerCase() === code.trim().toLowerCase() && item.active,

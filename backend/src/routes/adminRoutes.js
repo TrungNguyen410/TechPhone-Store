@@ -2,6 +2,7 @@ const express = require('express');
 const adminController = require('../controllers/adminController');
 const createCrudController = require('../controllers/crudController');
 const orderController = require('../controllers/orderController');
+const paymentController = require('../controllers/paymentController');
 const reviewController = require('../controllers/reviewController');
 const voucherController = require('../controllers/voucherController');
 const { accessoryService, bannerService, brandService, categoryService, productService, settingService } = require('../services');
@@ -53,6 +54,7 @@ router.put('/brands/:id', idParam, taxonomyValidators.update, validate, brandCon
 router.delete('/brands/:id', idParam, validate, brandController.remove);
 
 router.get('/orders', orderController.list);
+router.put('/orders/:id/payment', idParam, orderValidators.reconcilePayment, validate, paymentController.reconcileManualPayment);
 router.put('/orders/:id/status', idParam, orderValidators.updateStatus, validate, orderController.updateStatus);
 router.put('/orders/:id', idParam, orderValidators.update, validate, orderController.update);
 router.delete('/orders/:id', idParam, validate, orderController.remove);

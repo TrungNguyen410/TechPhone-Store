@@ -91,9 +91,28 @@ const update = [
 
 const updateStatus = [body('status').isIn(statuses).withMessage('Trạng thái đơn hàng không hợp lệ')];
 
+const reconcilePayment = [
+  body().custom((payload) => {
+    const safeFields = ['status', 'reference', 'note'];
+    if (!hasOnlyFields(payload, safeFields)) {
+      throw new Error('Dữ liệu đối soát chứa trường không được phép');
+    }
+    return true;
+  }),
+  body('status').isIn(['paid', 'failed']).withMessage('Trạng thái thanh toán không hợp lệ'),
+  body('reference').optional().trim().isLength({ max: 150 }),
+  body('reference').custom((value, { req }) => {
+    if (req.body.status === 'paid' && !String(value || '').trim()) {
+      throw new Error('Mã tham chiếu là bắt buộc khi xác nhận đã thanh toán');
+    }
+    return true;
+  }),
+  body('note').optional().trim().isLength({ max: 1000 }),
+];
+
 const lookup = [
   query('orderNumber').trim().notEmpty().withMessage('Mã đơn hàng là bắt buộc'),
   query('phone').trim().notEmpty().withMessage('Số điện thoại là bắt buộc'),
 ];
 
-module.exports = { createDirect, createVnpay, update, updateStatus, lookup };
+module.exports = { createDirect, createVnpay, update, updateStatus, reconcilePayment, lookup };

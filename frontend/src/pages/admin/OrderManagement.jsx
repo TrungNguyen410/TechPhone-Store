@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { FiEye, FiSearch, FiTruck } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import { orderApi } from '../../api/orderApi';
+import { paymentApi } from '../../api/paymentApi';
 import DataTable from '../../components/admin/DataTable';
 import Loading from '../../components/common/Loading';
 import AccessibleDialog from '../../components/common/AccessibleDialog';
@@ -24,6 +25,8 @@ export default function OrderManagement() {
   });
   const [savingTracking, setSavingTracking] = useState(false);
   const [mutatingOrderId, setMutatingOrderId] = useState(null);
+  const [paymentForm, setPaymentForm] = useState({ reference: '', note: '' });
+  const [reconcilingPayment, setReconcilingPayment] = useState(false);
   const load = () => orderApi.getAllAdmin().then(setOrders).finally(() => setLoading(false));
   useEffect(() => { load(); }, []);
 
@@ -49,11 +52,36 @@ export default function OrderManagement() {
   };
   const openOrder = (order) => {
     setSelectedOrder(order);
+    setPaymentForm({ reference: order.paymentReference || '', note: '' });
     setTrackingForm({
       shippingProvider: order.shippingProvider || 'TechPhone Express',
       trackingNumber: order.trackingNumber || '',
       estimatedDelivery: order.estimatedDelivery?.slice(0, 10) || '',
     });
+  };
+  const reconcilePayment = async (status) => {
+    if (reconcilingPayment) return;
+    const payload = {
+      status,
+      reference: paymentForm.reference.trim(),
+      note: paymentForm.note.trim(),
+    };
+    if (status === 'paid' && !payload.reference) {
+      toast.error('Vui lòng nhập mã tham chiếu thanh toán');
+      return;
+    }
+    setReconcilingPayment(true);
+    try {
+      const updated = await paymentApi.reconcileManualPayment(selectedOrder.id, payload);
+      setSelectedOrder(updated);
+      setOrders((current) => current.map((order) => (order.id === updated.id ? updated : order)));
+      setPaymentForm({ reference: updated.paymentReference || '', note: '' });
+      toast.success(`Đã đối soát thanh toán đơn ${updated.orderNumber}`);
+    } catch (error) {
+      toast.error(error.friendlyMessage || error.message);
+    } finally {
+      setReconcilingPayment(false);
+    }
   };
   const saveTracking = async (event) => {
     event.preventDefault();
@@ -130,6 +158,57 @@ export default function OrderManagement() {
               <b>{formatCurrency(item.price * item.quantity)}</b>
             </div>
           ))}
+          {selectedOrder.paymentAudit?.confirmedAt && (
+            <section className="admin-payment-audit" aria-label="Payment reconciliation audit">
+              <h3>Lịch sử đối soát thanh toán</h3>
+              <div><small>Mã tham chiếu</small><strong>{selectedOrder.paymentReference || '—'}</strong></div>
+              <div><small>Người xác nhận</small><strong>{selectedOrder.paymentAudit.confirmedBy || '—'}</strong></div>
+              <div><small>Thời gian</small><strong>{formatDate(selectedOrder.paymentAudit.confirmedAt, true)}</strong></div>
+              <div><small>Ghi chú</small><strong>{selectedOrder.paymentAudit.note || '—'}</strong></div>
+            </section>
+          )}
+          {['bank', 'momo'].includes(selectedOrder.paymentMethod)
+            && ['pending', 'failed'].includes(selectedOrder.paymentStatus) && (
+              <section className="admin-payment-reconciliation" aria-label="Manual payment reconciliation">
+                <h3>Đối soát thanh toán</h3>
+                <div className="form-grid">
+                  <label className="form-field full">
+                    <span>Mã tham chiếu thanh toán</span>
+                    <input
+                      aria-label="Payment reference"
+                      maxLength={150}
+                      value={paymentForm.reference}
+                      onChange={(event) => setPaymentForm((current) => ({ ...current, reference: event.target.value }))}
+                    />
+                  </label>
+                  <label className="form-field full">
+                    <span>Ghi chú đối soát</span>
+                    <textarea
+                      aria-label="Reconciliation note"
+                      maxLength={1000}
+                      value={paymentForm.note}
+                      onChange={(event) => setPaymentForm((current) => ({ ...current, note: event.target.value }))}
+                    />
+                  </label>
+                </div>
+                <div className="admin-payment-actions">
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    aria-label="Confirm paid payment"
+                    disabled={reconcilingPayment}
+                    onClick={() => reconcilePayment('paid')}
+                  >Xác nhận đã thanh toán</button>
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    aria-label="Mark payment failed"
+                    disabled={reconcilingPayment}
+                    onClick={() => reconcilePayment('failed')}
+                  >Đánh dấu thất bại</button>
+                </div>
+              </section>
+            )}
           <form className="admin-tracking-form" onSubmit={saveTracking}>
             <h3><FiTruck /> Thông tin vận chuyển</h3>
             <div className="form-grid">
