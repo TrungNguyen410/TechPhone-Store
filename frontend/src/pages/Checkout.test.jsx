@@ -147,7 +147,7 @@ describe('Checkout payment confirmations', () => {
       .toBe('checkout-existing-attempt');
   });
 
-  it('recalculates a shipping voucher against the selected province fee', async () => {
+  it('keeps pricing fields out of the checkout request', async () => {
     cart.discount = 30000;
     cart.voucher = { code: 'SHIP', type: 'shipping', value: 30000 };
     render(<MemoryRouter><Checkout /></MemoryRouter>);
@@ -156,9 +156,14 @@ describe('Checkout payment confirmations', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận đặt hàng' }));
 
     await waitFor(() => expect(orderApi.create).toHaveBeenCalledTimes(1));
-    expect(orderApi.create.mock.calls[0][0]).toEqual(
-      expect.objectContaining({ shippingFee: 20000, discount: 20000, total: 1000000 }),
-    );
+    const payload = orderApi.create.mock.calls[0][0];
+    expect(payload.voucherCode).toBe('SHIP');
+    expect(payload).not.toHaveProperty('userId');
+    expect(payload).not.toHaveProperty('paymentReference');
+    expect(payload).not.toHaveProperty('subtotal');
+    expect(payload).not.toHaveProperty('shippingFee');
+    expect(payload).not.toHaveProperty('discount');
+    expect(payload).not.toHaveProperty('total');
   });
 
   it('uses one stable idempotency key and synchronously blocks duplicate submits', async () => {

@@ -3,16 +3,45 @@ const { normalizeVietnamesePhone } = require('../utils/phone');
 
 const statuses = ['pending', 'confirmed', 'shipping', 'delivered', 'completed', 'cancelled'];
 const MAX_ORDER_ITEMS = 50;
+const MAX_ITEM_ID_LENGTH = 100;
+const checkoutFields = ['items', 'customer', 'note', 'paymentMethod', 'voucherCode'];
+const customerFields = ['fullName', 'email', 'phone', 'address', 'province', 'district', 'ward'];
+const itemFields = ['id', 'productId', 'accessoryId', 'type', 'quantity'];
+
+const isRecord = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+const hasOnlyFields = (value, fields) => (
+  isRecord(value) && Object.keys(value).every((field) => fields.includes(field))
+);
+
+const checkoutDto = body().custom((payload) => {
+  if (!hasOnlyFields(payload, checkoutFields)) {
+    throw new Error('Dữ liệu đơn hàng chứa trường không được phép');
+  }
+  if (!hasOnlyFields(payload.customer, customerFields)) {
+    throw new Error('Thông tin khách hàng chứa trường không được phép');
+  }
+  if (!Array.isArray(payload.items) || payload.items.some((item) => !hasOnlyFields(item, itemFields))) {
+    throw new Error('Sản phẩm trong đơn hàng chứa trường không được phép');
+  }
+  return true;
+});
 
 const commonCreate = [
+  checkoutDto,
   body('items').isArray({ min: 1, max: MAX_ORDER_ITEMS })
     .withMessage(`Đơn hàng phải có từ 1 đến ${MAX_ORDER_ITEMS} dòng sản phẩm`),
   body('items.*').custom((item) => {
-    if (!item.id && !item.productId && !item.accessoryId) {
+    if (!isRecord(item) || (!item.id && !item.productId && !item.accessoryId)) {
       throw new Error('Mỗi sản phẩm trong đơn hàng phải có mã định danh');
     }
     return true;
   }),
+  body('items.*.id').optional({ checkFalsy: true }).isString().trim()
+    .isLength({ min: 1, max: MAX_ITEM_ID_LENGTH }),
+  body('items.*.productId').optional({ checkFalsy: true }).isString().trim()
+    .isLength({ min: 1, max: MAX_ITEM_ID_LENGTH }),
+  body('items.*.accessoryId').optional({ checkFalsy: true }).isString().trim()
+    .isLength({ min: 1, max: MAX_ITEM_ID_LENGTH }),
   body('items.*.type').optional().isIn(['product', 'accessory']).withMessage('Loại mặt hàng không hợp lệ'),
   body('items.*.quantity').isInt({ min: 1, max: 20 }).withMessage('Số lượng mặt hàng không hợp lệ'),
   body('customer.fullName').trim().notEmpty().isLength({ max: 120 }),

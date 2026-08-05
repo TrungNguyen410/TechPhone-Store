@@ -86,6 +86,31 @@ describe('Orders and dashboard APIs', () => {
     expect((await Product.findById(product.id)).stock).toBe(2);
   });
 
+  it('rejects unknown direct-order fields before inventory changes', async () => {
+    await createUser({ email: 'direct-allowlist@test.com', phone: '0915151515' });
+    const token = await login('direct-allowlist@test.com');
+    const taxonomy = await seedTaxonomy();
+    const product = await Product.create({
+      _id: 'direct-allowlist',
+      name: 'Allowlisted Direct Phone',
+      ...taxonomy,
+      price: 1000000,
+      stock: 2,
+      status: 'active',
+    });
+
+    const response = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send(orderPayload(product.id, {
+        items: [{ productId: product.id, quantity: 1, suppliedPrice: 1 }],
+        internalStatus: 'confirmed',
+      }));
+
+    expect(response.status).toBe(422);
+    expect((await Product.findById(product.id)).stock).toBe(2);
+  });
+
   it('rejects more than 50 line items', async () => {
     await createUser({ email: 'line-limit@test.com', phone: '0913131313' });
     const token = await login('line-limit@test.com');
@@ -144,7 +169,7 @@ describe('Orders and dashboard APIs', () => {
       .post('/api/orders')
       .set('Authorization', `Bearer ${token}`)
       .send({
-        items: [{ id: product.id, productId: product.id, name: product.name, price: 1, quantity: 1 }],
+        items: [{ id: product.id, productId: product.id, quantity: 1 }],
         customer: {
           fullName: 'Test Customer',
           email: 'customer@test.com',
@@ -153,10 +178,6 @@ describe('Orders and dashboard APIs', () => {
           province: 'Ho Chi Minh',
           ward: 'Ben Nghe',
         },
-        subtotal: product.price,
-        shippingFee: 0,
-        discount: 0,
-        total: product.price,
       });
 
     expect(created.status).toBe(201);
@@ -220,7 +241,7 @@ describe('Orders and dashboard APIs', () => {
       status: 'active',
     });
     const payload = {
-      items: [{ productId: product.id, price: 1, quantity: 1 }],
+      items: [{ productId: product.id, quantity: 1 }],
       customer: {
         fullName: 'Idempotent Customer',
         email: 'idempotent@test.com',
@@ -229,10 +250,6 @@ describe('Orders and dashboard APIs', () => {
           province: 'Ho Chi Minh',
           ward: 'Ben Nghe',
       },
-      subtotal: 1,
-      shippingFee: 0,
-      discount: 999999,
-      total: 1,
     };
 
     const first = await request(app)
@@ -393,7 +410,7 @@ describe('Orders and dashboard APIs', () => {
     expect(second.body.data.userId).not.toBe(first.body.data.userId);
   });
 
-  it('ignores a payload userId and assigns the authenticated customer as owner', async () => {
+  it('assigns the authenticated customer as order owner', async () => {
     const user = await createUser({ email: 'owned-order@test.com', phone: '0988888888' });
     const token = jwt.sign({ sub: user.id, role: user.role }, env.jwtAccessSecret);
     const taxonomy = await seedTaxonomy();
@@ -406,7 +423,6 @@ describe('Orders and dashboard APIs', () => {
       status: 'active',
     });
     const payload = {
-      userId: 'victim-user',
       items: [{ productId: product.id, quantity: 1 }],
       customer: {
         fullName: 'Customer',
@@ -774,8 +790,8 @@ describe('Orders and dashboard APIs', () => {
   });
 
   it('processes mixed product and accessory transaction operations sequentially', async () => {
-    await createUser({ email: 'mixed@test.com', phone: '0904141414' });
-    const token = await login('mixed@test.com');
+    const user = await createUser({ email: 'mixed@test.com', phone: '0904141414' });
+    const token = jwt.sign({ sub: user.id, role: user.role }, env.jwtAccessSecret);
     const taxonomy = await seedTaxonomy();
     const product = await Product.create({
       _id: 'mixed-phone',

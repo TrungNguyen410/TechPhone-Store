@@ -139,6 +139,28 @@ describe('VNPay checkout and IPN', () => {
     expect((await Product.findById(product.id)).stock).toBe(2);
   });
 
+  it('rejects unknown VNPay checkout fields before inventory changes', async () => {
+    const product = await Product.create({
+      name: 'Allowlisted VNPay Phone',
+      slug: 'allowlisted-vnpay-phone',
+      categoryId: 'category-test',
+      brandId: 'brand-test',
+      price: 1000000,
+      stock: 2,
+      status: 'active',
+    });
+
+    const response = await checkoutRequest().send({
+      items: [{ id: product.id, type: 'product', quantity: 1, suppliedPrice: 1 }],
+      customer,
+      paymentMethod: 'card',
+      internalStatus: 'confirmed',
+    });
+
+    expect(response.status).toBe(422);
+    expect((await Product.findById(product.id)).stock).toBe(2);
+  });
+
   it('creates an authenticated VNPay order and confirms it only after a valid IPN', async () => {
     const product = await Product.create({
       name: 'Test Phone',
