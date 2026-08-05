@@ -33,7 +33,9 @@ vi.mock('../api/orderApi', () => ({ orderApi: orderApiMock }));
 vi.mock('../api/productApi', () => ({ productApi: productApiMock }));
 vi.mock('../api/accessoryApi', () => ({ accessoryApi: accessoryApiMock }));
 vi.mock('../components/order/OrderLookupPanel', () => ({ default: () => null }));
-vi.mock('../components/common/ConfirmModal', () => ({ default: () => null }));
+vi.mock('../components/common/ConfirmModal', () => ({
+  default: ({ open, onConfirm }) => open && <button type="button" onClick={onConfirm}>Confirm cancellation</button>,
+}));
 vi.mock('../components/common/EmptyState', () => ({ default: () => null }));
 vi.mock('../components/common/Loading', () => ({ default: () => null }));
 vi.mock('react-toastify', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
@@ -136,5 +138,48 @@ describe('Account profile', () => {
     expect(await screen.findByText('TPX123456')).toBeInTheDocument();
     expect(screen.getByText('TechPhone Express')).toBeInTheDocument();
     expect(screen.getByText(/Dự kiến giao:/)).toBeInTheDocument();
+  });
+  it('does not offer self-cancel for a paid confirmed order', async () => {
+    orderApiMock.getMyOrders.mockResolvedValue([{
+      id: 'order-paid',
+      orderNumber: 'TPPAID',
+      createdAt: '2026-08-01T08:00:00.000Z',
+      paymentStatus: 'paid',
+      status: 'confirmed',
+      total: 12000000,
+      items: [{
+        id: 'phone-1',
+        image: '/phone.png',
+        name: 'Paid phone',
+        price: 12000000,
+        quantity: 1,
+        type: 'product',
+      }],
+    }]);
+
+    render(<MemoryRouter initialEntries={['/account?tab=orders']}><Account /></MemoryRouter>);
+
+    expect(await screen.findByText('TPPAID')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Hủy đơn/i })).not.toBeInTheDocument();
+  });
+
+  it('shows the friendly cancellation error from the server', async () => {
+    const user = userEvent.setup();
+    orderApiMock.getMyOrders.mockResolvedValue([{
+      id: 'order-pending',
+      orderNumber: 'TPPENDING',
+      createdAt: '2026-08-01T08:00:00.000Z',
+      paymentStatus: 'pending',
+      status: 'pending',
+      total: 12000000,
+      items: [{ id: 'phone-1', image: '/phone.png', name: 'Phone', price: 12000000, quantity: 1, type: 'product' }],
+    }]);
+    orderApiMock.cancel.mockRejectedValue({ friendlyMessage: 'Đơn hàng không còn có thể hủy' });
+    render(<MemoryRouter initialEntries={['/account?tab=orders']}><Account /></MemoryRouter>);
+
+    await user.click(await screen.findByRole('button', { name: /Hủy đơn/i }));
+    await user.click(screen.getByRole('button', { name: 'Confirm cancellation' }));
+
+    expect(toast.error).toHaveBeenCalledWith('Đơn hàng không còn có thể hủy');
   });
 });

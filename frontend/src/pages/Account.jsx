@@ -17,6 +17,10 @@ import { formatCurrency, formatDate } from '../utils/formatCurrency';
 import { getOrderStatus } from '../utils/orderStatus';
 import { isStrongEnoughPassword, validateRequired } from '../utils/validators';
 
+const canSelfCancel = (order) =>
+  ['pending', 'confirmed'].includes(order.status)
+  && !['paid', 'refund_required', 'refunded'].includes(order.paymentStatus);
+
 export default function Account() {
   const [searchParams] = useSearchParams();
   const { user, updateProfile, changePassword, logout } = useAuth();
@@ -84,10 +88,14 @@ export default function Account() {
     }
   };
   const cancelOrder = async () => {
-    await orderApi.cancel(cancelOrderId);
-    setCancelOrderId(null);
-    loadOrders();
-    toast.success('Đã hủy đơn hàng');
+    try {
+      await orderApi.cancel(cancelOrderId);
+      setCancelOrderId(null);
+      await loadOrders();
+      toast.success('Đã hủy đơn hàng');
+    } catch (error) {
+      toast.error(error.friendlyMessage || error.message);
+    }
   };
   const reorder = async (order) => {
     if (reorderingId) return;
@@ -168,7 +176,7 @@ export default function Account() {
                            <div className="order-card-head"><span><small>Mã đơn</small><strong>{order.orderNumber}</strong></span><span><small>Ngày đặt</small><strong>{formatDate(order.createdAt)}</strong></span><span className={`status-badge ${status.className}`}>{status.label}</span></div>
                            <div className="order-preview"><img src={order.items[0].image} alt="" /><div><strong>{order.items[0].name}</strong><small>{order.items.length > 1 ? `và ${order.items.length - 1} sản phẩm khác` : `${order.items[0].quantity} sản phẩm`}</small></div><b>{formatCurrency(order.total)}</b></div>
                            {order.trackingNumber && <div className="order-shipping-note"><strong>{order.shippingProvider || 'Đơn vị giao hàng'}</strong><span>Mã vận đơn: <b>{order.trackingNumber}</b></span>{order.estimatedDelivery && <span>Dự kiến giao: {formatDate(order.estimatedDelivery, true)}</span>}</div>}
-                           <div className="order-card-actions"><button onClick={() => setSelectedOrder(order)}><FiEye /> Chi tiết</button><button disabled={reorderingId === order.id} onClick={() => reorder(order)}><FiRefreshCcw /> {reorderingId === order.id ? 'Đang thêm…' : 'Đặt lại'}</button>{['pending', 'confirmed'].includes(order.status) && <button className="danger" onClick={() => setCancelOrderId(order.id)}><FiXCircle /> Hủy đơn</button>}</div>
+                           <div className="order-card-actions"><button onClick={() => setSelectedOrder(order)}><FiEye /> Chi tiết</button><button disabled={reorderingId === order.id} onClick={() => reorder(order)}><FiRefreshCcw /> {reorderingId === order.id ? 'Đang thêm…' : 'Đặt lại'}</button>{canSelfCancel(order) && <button className="danger" onClick={() => setCancelOrderId(order.id)}><FiXCircle /> Hủy đơn</button>}</div>
                         </article>
                       );
                     })}

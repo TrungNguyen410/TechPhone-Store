@@ -22,6 +22,7 @@ function AuthHarness() {
   return (
     <>
       <span>{auth.user ? auth.user.email : 'guest'}</span>
+      {auth.user?.phone && <span>{auth.user.phone}</span>}
       <button type="button" onClick={() => auth.login({ identifier: 'user@test.com', password: '123456' })}>
         Log in
       </button>
@@ -54,6 +55,24 @@ describe('AuthProvider session lifecycle', () => {
 
     expect(await screen.findByText('user@test.com')).toBeInTheDocument();
     expect(storage.get(STORAGE_KEYS.refreshToken)).toBe('refresh');
+  });
+
+  it('keeps a successful login when remote wishlist sync fails', async () => {
+    const session = {
+      token: 'access',
+      refreshToken: 'refresh',
+      user: { id: 'u1', email: 'user@test.com', phone: '0911111111', wishlist: [] },
+    };
+    authApiMock.login.mockResolvedValue(session);
+    authApiMock.updateWishlist.mockRejectedValue(new Error('offline'));
+    storage.set(STORAGE_KEYS.wishlist, ['product-1']);
+    const user = userEvent.setup();
+    render(<AuthProvider><AuthHarness /></AuthProvider>);
+
+    await user.click(screen.getByRole('button', { name: 'Log in' }));
+
+    expect(await screen.findByText(session.user.phone)).toBeInTheDocument();
+    expect(storage.get(STORAGE_KEYS.token)).toBe(session.token);
   });
 
   it('clears local state immediately and revokes the refresh token best-effort', async () => {

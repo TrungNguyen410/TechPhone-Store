@@ -55,7 +55,11 @@ export default function Cart() {
               />
             ))}
           </section>
-          <CartSummary {...cart} onCheckout={checkout} />
+          <CartSummary
+            subtotal={cart.subtotal}
+            discount={cart.discount}
+            onCheckout={checkout}
+          />
         </div>
       </div>
       <ConfirmModal
