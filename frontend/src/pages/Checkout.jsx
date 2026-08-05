@@ -157,8 +157,21 @@ export default function Checkout() {
     return true;
   };
 
+  const checkoutItems = cart.cartItems.map((item) => {
+    const type = item.type === 'accessory' || item.accessoryId ? 'accessory' : 'product';
+    const id = type === 'accessory'
+      ? item.accessoryId || item.productId || item.id
+      : item.productId || item.id;
+    return {
+      id,
+      ...(type === 'accessory' ? { accessoryId: id } : { productId: id }),
+      type,
+      quantity: item.quantity,
+    };
+  });
+
   const orderPayload = () => ({
-    items: cart.cartItems,
+    items: checkoutItems,
     customer: {
       fullName: form.fullName.trim(),
       email: form.email.trim(),
