@@ -1,61 +1,203 @@
-const { connectDB, disconnectDB } = require('../config/database');
-const Brand = require('../models/Brand');
-const Category = require('../models/Category');
-const Voucher = require('../models/Voucher');
-const Setting = require('../models/Setting');
-const User = require('../models/User');
-
-const migrations = [
+const migrationPlan = [
   {
-    Model: Brand,
+    model: 'Brand',
     drop: ['name_1', 'slug_1'],
-    create: ['brand_name_active_unique', 'brand_slug_active_unique'],
+    create: [
+      {
+        key: { name: 1 },
+        options: {
+          name: 'brand_name_active_unique',
+          unique: true,
+          partialFilterExpression: { isDeleted: false },
+        },
+      },
+      {
+        key: { slug: 1 },
+        options: {
+          name: 'brand_slug_active_unique',
+          unique: true,
+          partialFilterExpression: { isDeleted: false },
+        },
+      },
+    ],
   },
   {
-    Model: Category,
+    model: 'Category',
     drop: ['name_1', 'slug_1'],
-    create: ['category_name_active_unique', 'category_slug_active_unique'],
+    create: [
+      {
+        key: { name: 1 },
+        options: {
+          name: 'category_name_active_unique',
+          unique: true,
+          partialFilterExpression: { isDeleted: false },
+        },
+      },
+      {
+        key: { slug: 1 },
+        options: {
+          name: 'category_slug_active_unique',
+          unique: true,
+          partialFilterExpression: { isDeleted: false },
+        },
+      },
+    ],
   },
-  { Model: Voucher, drop: ['code_1'], create: ['voucher_code_active_unique'] },
-  { Model: Setting, drop: ['key_1'], create: ['setting_key_active_unique'] },
   {
-    Model: User,
+    model: 'Voucher',
+    drop: ['code_1'],
+    create: [
+      {
+        key: { code: 1 },
+        options: {
+          name: 'voucher_code_active_unique',
+          unique: true,
+          partialFilterExpression: { isDeleted: false },
+        },
+      },
+    ],
+  },
+  {
+    model: 'Setting',
+    drop: ['key_1'],
+    create: [
+      {
+        key: { key: 1 },
+        options: {
+          name: 'setting_key_active_unique',
+          unique: true,
+          partialFilterExpression: { isDeleted: false },
+        },
+      },
+    ],
+  },
+  {
+    model: 'User',
     drop: ['phone_1', 'email_optional_unique'],
-    create: ['user_phone_active_unique', 'user_email_active_unique'],
+    create: [
+      {
+        key: { phone: 1 },
+        options: {
+          name: 'user_phone_active_unique',
+          unique: true,
+          partialFilterExpression: { isDeleted: false },
+        },
+      },
+      {
+        key: { email: 1 },
+        options: {
+          name: 'user_email_active_unique',
+          unique: true,
+          partialFilterExpression: { email: { $type: 'string' }, isDeleted: false },
+        },
+      },
+    ],
   },
 ];
 
-const migrationPlan = migrations.map(({ Model, drop, create }) => ({
-  model: Model.modelName,
-  drop,
-  create,
-}));
+const connectionOptions = { autoIndex: false, autoCreate: false };
 
-const migrateSoftDeleteIndexes = async ({ write = false, log = console.log } = {}) => {
+const loadModels = () => ({
+  Brand: require('../models/Brand'),
+  Category: require('../models/Category'),
+  Voucher: require('../models/Voucher'),
+  Setting: require('../models/Setting'),
+  User: require('../models/User'),
+});
+
+const loadWriteDependencies = () => {
+  const { connectDB, disconnectDB } = require('../config/database');
+  const mongoose = require('mongoose');
+  return { connectDB, disconnectDB, mongoose, models: loadModels() };
+};
+
+const printPlan = (write, log) => {
   log(JSON.stringify({ mode: write ? 'write' : 'dry-run', migrations: migrationPlan }, null, 2));
-  if (!write) {
-    log('Dry run only. Re-run with --write after reviewing this plan.');
-    return migrationPlan;
+  if (!write) log('Dry run only. Re-run with --write after reviewing this plan.');
+};
+
+const duplicateGroupId = (key) => Object.fromEntries(
+  Object.keys(key).map((field) => [field, `$${field}`]),
+);
+
+const assertNoActiveDuplicates = async (models) => {
+  for (const migration of migrationPlan) {
+    const Model = models[migration.model];
+    for (const replacement of migration.create) {
+      const cursor = Model.collection.aggregate([
+        { $match: replacement.options.partialFilterExpression },
+        { $group: { _id: duplicateGroupId(replacement.key), count: { $sum: 1 } } },
+        { $match: { count: { $gt: 1 } } },
+        { $limit: 1 },
+      ]);
+      try {
+        if (await cursor.hasNext()) {
+          throw new Error(
+            `Unsafe soft-delete index migration: ${migration.model} index `
+            + `${replacement.options.name} has duplicate active records; no indexes changed.`,
+          );
+        }
+      } finally {
+        await cursor.close();
+      }
+    }
+  }
+};
+
+const migrateSoftDeleteIndexes = async ({ write = false, log = console.log, models } = {}) => {
+  printPlan(write, log);
+  if (!write) return migrationPlan;
+
+  const migrationModels = models || loadModels();
+  await assertNoActiveDuplicates(migrationModels);
+
+  for (const migration of migrationPlan) {
+    const Model = migrationModels[migration.model];
+    for (const replacement of migration.create) {
+      try {
+        await Model.collection.createIndex(replacement.key, replacement.options);
+      } catch (error) {
+        if (error.code === 11000) {
+          throw new Error(
+            `Unsafe soft-delete index migration: ${migration.model} index `
+            + `${replacement.options.name} detected active duplicates during creation; `
+            + 'legacy indexes were not dropped.',
+          );
+        }
+        throw error;
+      }
+    }
   }
 
-  for (const { Model, drop } of migrations) {
+  for (const migration of migrationPlan) {
+    const Model = migrationModels[migration.model];
     const existing = new Set((await Model.collection.indexes()).map((index) => index.name));
-    for (const name of drop) {
+    for (const name of migration.drop) {
       if (existing.has(name)) await Model.collection.dropIndex(name);
     }
-    await Model.syncIndexes();
   }
 
   log('Soft-delete index migration completed.');
   return migrationPlan;
 };
 
-const run = async ({ write = process.argv.includes('--write') } = {}) => {
-  await connectDB();
+const run = async ({
+  write = process.argv.includes('--write'),
+  log = console.log,
+  dependencies,
+} = {}) => {
+  if (!write) return migrateSoftDeleteIndexes({ write: false, log });
+
+  const writeDependencies = dependencies || loadWriteDependencies();
+  await writeDependencies.connectDB(undefined, writeDependencies.mongoose, connectionOptions);
   try {
-    return await migrateSoftDeleteIndexes({ write });
+    return await migrateSoftDeleteIndexes({
+      write: true,
+      log,
+      models: writeDependencies.models,
+    });
   } finally {
-    await disconnectDB();
+    await writeDependencies.disconnectDB();
   }
 };
 
@@ -66,4 +208,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { migrateSoftDeleteIndexes, migrationPlan, migrations, run };
+module.exports = { migrateSoftDeleteIndexes, migrationPlan, run };

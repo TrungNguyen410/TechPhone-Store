@@ -94,6 +94,12 @@ describe('soft-delete unique indexes', () => {
 
     await expect(User.create(userPayload({ phone: '0900000005' }))).resolves.toBeDefined();
   });
+
+  it('allows multiple active users with a null email address', async () => {
+    await User.create(userPayload({ email: null, phone: '0900000006' }));
+
+    await expect(User.create(userPayload({ email: null, phone: '0900000007' }))).resolves.toBeDefined();
+  });
 });
 
 describe('soft-delete index migration', () => {
@@ -118,19 +124,96 @@ describe('soft-delete index migration', () => {
     {
       model: 'Brand',
       drop: ['name_1', 'slug_1'],
-      create: ['brand_name_active_unique', 'brand_slug_active_unique'],
+      create: [
+        {
+          key: { name: 1 },
+          options: {
+            name: 'brand_name_active_unique',
+            unique: true,
+            partialFilterExpression: { isDeleted: false },
+          },
+        },
+        {
+          key: { slug: 1 },
+          options: {
+            name: 'brand_slug_active_unique',
+            unique: true,
+            partialFilterExpression: { isDeleted: false },
+          },
+        },
+      ],
     },
     {
       model: 'Category',
       drop: ['name_1', 'slug_1'],
-      create: ['category_name_active_unique', 'category_slug_active_unique'],
+      create: [
+        {
+          key: { name: 1 },
+          options: {
+            name: 'category_name_active_unique',
+            unique: true,
+            partialFilterExpression: { isDeleted: false },
+          },
+        },
+        {
+          key: { slug: 1 },
+          options: {
+            name: 'category_slug_active_unique',
+            unique: true,
+            partialFilterExpression: { isDeleted: false },
+          },
+        },
+      ],
     },
-    { model: 'Voucher', drop: ['code_1'], create: ['voucher_code_active_unique'] },
-    { model: 'Setting', drop: ['key_1'], create: ['setting_key_active_unique'] },
+    {
+      model: 'Voucher',
+      drop: ['code_1'],
+      create: [
+        {
+          key: { code: 1 },
+          options: {
+            name: 'voucher_code_active_unique',
+            unique: true,
+            partialFilterExpression: { isDeleted: false },
+          },
+        },
+      ],
+    },
+    {
+      model: 'Setting',
+      drop: ['key_1'],
+      create: [
+        {
+          key: { key: 1 },
+          options: {
+            name: 'setting_key_active_unique',
+            unique: true,
+            partialFilterExpression: { isDeleted: false },
+          },
+        },
+      ],
+    },
     {
       model: 'User',
       drop: ['phone_1', 'email_optional_unique'],
-      create: ['user_phone_active_unique', 'user_email_active_unique'],
+      create: [
+        {
+          key: { phone: 1 },
+          options: {
+            name: 'user_phone_active_unique',
+            unique: true,
+            partialFilterExpression: { isDeleted: false },
+          },
+        },
+        {
+          key: { email: 1 },
+          options: {
+            name: 'user_email_active_unique',
+            unique: true,
+            partialFilterExpression: { email: { $type: 'string' }, isDeleted: false },
+          },
+        },
+      ],
     },
   ];
 
@@ -140,6 +223,10 @@ describe('soft-delete index migration', () => {
       for (const { key, ...options } of indexes) {
         await Model.collection.createIndex(key, { ...options, unique: true });
       }
+      await Model.collection.createIndex(
+        { deletedAt: 1 },
+        { name: `${Model.modelName.toLowerCase()}_migration_sentinel` },
+      );
     }
   };
 
@@ -186,10 +273,73 @@ describe('soft-delete index migration', () => {
     await expect(migrateSoftDeleteIndexes({ write: true, log: () => {} })).resolves.toBeDefined();
 
     for (const { Model } of legacyIndexes) {
-      const names = (await Model.collection.indexes()).map((index) => index.name);
+      const indexes = await Model.collection.indexes();
+      const names = indexes.map((index) => index.name);
       const plan = expectedPlan.find(({ model }) => model === Model.modelName);
-      expect(names).toEqual(expect.arrayContaining(plan.create));
       expect(names).not.toEqual(expect.arrayContaining(plan.drop));
+      expect(names).toContain(`${Model.modelName.toLowerCase()}_migration_sentinel`);
+      for (const replacement of plan.create) {
+        const index = indexes.find(({ name }) => name === replacement.options.name);
+        expect(index).toMatchObject({
+          key: replacement.key,
+          unique: true,
+          partialFilterExpression: replacement.options.partialFilterExpression,
+        });
+      }
     }
+  });
+
+  it('aborts before changing indexes when active duplicate values exist', async () => {
+    const { migrateSoftDeleteIndexes } = require('../src/scripts/migrateSoftDeleteIndexes');
+    await installLegacyIndexes();
+    await Brand.collection.dropIndex('name_1');
+    await Brand.collection.insertMany([
+      { _id: 'dirty-brand-1', name: 'Dirty Brand', slug: 'dirty-brand-1', isDeleted: false },
+      { _id: 'dirty-brand-2', name: 'Dirty Brand', slug: 'dirty-brand-2', isDeleted: false },
+    ]);
+    const before = await indexState();
+
+    await expect(migrateSoftDeleteIndexes({ write: true, log: () => {} }))
+      .rejects.toThrow(/Brand.*brand_name_active_unique.*no indexes changed/i);
+
+    expect(await indexState()).toEqual(before);
+  });
+
+  it('keeps all legacy indexes when creating a replacement index fails', async () => {
+    const { migrateSoftDeleteIndexes } = require('../src/scripts/migrateSoftDeleteIndexes');
+    await installLegacyIndexes();
+    await Brand.collection.createIndex(
+      { deletedAt: -1 },
+      { name: 'brand_name_active_unique' },
+    );
+    const before = await indexState();
+
+    await expect(migrateSoftDeleteIndexes({ write: true, log: () => {} })).rejects.toBeDefined();
+
+    expect(await indexState()).toEqual(before);
+  });
+
+  it('sanitizes duplicate errors raised while creating a replacement index', async () => {
+    const { migrateSoftDeleteIndexes } = require('../src/scripts/migrateSoftDeleteIndexes');
+    await installLegacyIndexes();
+    const before = await indexState();
+    const duplicateError = Object.assign(
+      new Error('E11000 duplicate key: private-customer-value'),
+      { code: 11000 },
+    );
+    const createIndex = jest.spyOn(Brand.collection, 'createIndex').mockRejectedValueOnce(duplicateError);
+    let migrationError;
+
+    try {
+      await migrateSoftDeleteIndexes({ write: true, log: () => {} });
+    } catch (error) {
+      migrationError = error;
+    } finally {
+      createIndex.mockRestore();
+    }
+
+    expect(migrationError.message).toMatch(/Brand.*brand_name_active_unique.*legacy indexes were not dropped/i);
+    expect(migrationError.message).not.toMatch(/private-customer-value/i);
+    expect(await indexState()).toEqual(before);
   });
 });
