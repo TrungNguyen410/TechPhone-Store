@@ -6,6 +6,10 @@ class ProductRepository extends BaseRepository {
     const product = await this.model.findOne({ ...filter, isDeleted: false });
     return product?.toJSON();
   }
+
+  async findTopSelling(limit = 5) {
+    return this.findAll({}, { sort: { sold: -1, createdAt: -1 }, limit });
+  }
 }
 
 module.exports = new ProductRepository(Product);

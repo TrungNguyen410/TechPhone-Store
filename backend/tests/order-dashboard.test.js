@@ -1224,4 +1224,177 @@ describe('Orders and dashboard APIs', () => {
     );
     expect(response.body.data.monthlyRevenue).toHaveLength(12);
   });
+
+  it('does not merge the same month from different years', async () => {
+    const admin = await createUser({
+      email: 'year-admin@test.com',
+      phone: '0900000001',
+      role: 'admin',
+    });
+    const token = jwt.sign({ sub: admin.id, role: 'admin' }, env.jwtAccessSecret, {
+      expiresIn: '15m',
+    });
+    const customer = {
+      fullName: 'Revenue Customer',
+      email: 'revenue@test.com',
+      phone: '0912000000',
+      address: 'Test address',
+    };
+
+    await Order.create([
+      {
+        orderNumber: 'TP25011001',
+        status: 'completed',
+        items: [],
+        subtotal: 1000000,
+        total: 1000000,
+        customer,
+        createdAt: new Date('2025-01-10T00:00:00.000Z'),
+      },
+      {
+        orderNumber: 'TP26011001',
+        status: 'delivered',
+        items: [],
+        subtotal: 2000000,
+        total: 2000000,
+        customer,
+        createdAt: new Date('2026-01-10T00:00:00.000Z'),
+      },
+      {
+        orderNumber: 'TP26011002',
+        status: 'pending',
+        items: [],
+        subtotal: 4000000,
+        total: 4000000,
+        customer,
+        createdAt: new Date('2026-01-11T00:00:00.000Z'),
+      },
+      {
+        orderNumber: 'TP26011003',
+        status: 'completed',
+        items: [],
+        subtotal: 8000000,
+        total: 8000000,
+        customer,
+        isDeleted: true,
+        deletedAt: new Date('2026-01-12T00:00:00.000Z'),
+        createdAt: new Date('2026-01-12T00:00:00.000Z'),
+      },
+    ]);
+
+    const response = await request(app)
+      .get('/api/admin/dashboard?year=2026')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.stats.revenue).toBe(2000000);
+    expect(response.body.data.monthlyRevenue[0]).toBe(2);
+  });
+
+  it('returns zero revenue for an empty year and rejects unsafe years', async () => {
+    const admin = await createUser({
+      email: 'empty-year-admin@test.com',
+      phone: '0900000002',
+      role: 'admin',
+    });
+    const token = jwt.sign({ sub: admin.id, role: 'admin' }, env.jwtAccessSecret, {
+      expiresIn: '15m',
+    });
+
+    const empty = await request(app)
+      .get('/api/admin/dashboard?year=2024')
+      .set('Authorization', `Bearer ${token}`);
+    expect(empty.status).toBe(200);
+    expect(empty.body.data.stats.revenue).toBe(0);
+    expect(empty.body.data.monthlyRevenue).toEqual(Array(12).fill(0));
+
+    await request(app)
+      .get('/api/admin/dashboard?year=1899')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(422);
+    await request(app)
+      .get('/api/admin/dashboard?year=10000')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(422);
+  });
+
+  it('paginates admin customers with aggregate order totals', async () => {
+    const admin = await createUser({
+      email: 'customer-page-admin@test.com',
+      phone: '0900000003',
+      role: 'admin',
+    });
+    const token = jwt.sign({ sub: admin.id, role: 'admin' }, env.jwtAccessSecret, {
+      expiresIn: '15m',
+    });
+    const customers = await Promise.all([
+      createUser({ email: 'page-1@test.com', phone: '0913000001', fullName: 'Page One' }),
+      createUser({ email: 'page-2@test.com', phone: '0913000002', fullName: 'Page Two' }),
+      createUser({ email: 'page-3@test.com', phone: '0913000003', fullName: 'Page Three' }),
+    ]);
+    await Order.create({
+      orderNumber: 'TPCUSTOMER01',
+      userId: customers[0].id,
+      status: 'delivered',
+      items: [],
+      subtotal: 1500000,
+      total: 1500000,
+      customer: {
+        fullName: customers[0].fullName,
+        email: customers[0].email,
+        phone: customers[0].phone,
+        address: 'Test address',
+      },
+    });
+
+    const firstPage = await request(app)
+      .get('/api/admin/customers?page=1&limit=2')
+      .set('Authorization', `Bearer ${token}`);
+    const secondPage = await request(app)
+      .get('/api/admin/customers?page=2&limit=2')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(firstPage.status).toBe(200);
+    expect(firstPage.body.data.items).toHaveLength(2);
+    expect(firstPage.body.data.pagination).toEqual({ page: 1, limit: 2, total: 3, totalPages: 2 });
+    expect(secondPage.body.data.items).toHaveLength(1);
+    expect(secondPage.body.data.pagination).toEqual({ page: 2, limit: 2, total: 3, totalPages: 2 });
+    const enrichedCustomer = [...firstPage.body.data.items, ...secondPage.body.data.items]
+      .find((item) => item.id === customers[0].id);
+    expect(enrichedCustomer).toEqual(expect.objectContaining({ orderCount: 1, totalSpent: 1500000 }));
+  });
+
+  it('paginates admin orders while preserving the response envelope', async () => {
+    const admin = await createUser({
+      email: 'order-page-admin@test.com',
+      phone: '0900000004',
+      role: 'admin',
+    });
+    const token = jwt.sign({ sub: admin.id, role: 'admin' }, env.jwtAccessSecret, {
+      expiresIn: '15m',
+    });
+    const customer = {
+      fullName: 'Paged Order Customer',
+      email: 'paged-order@test.com',
+      phone: '0914000000',
+      address: 'Test address',
+    };
+    await Order.create([1, 2, 3].map((number) => ({
+      orderNumber: `TPPAGE000${number}`,
+      status: 'pending',
+      items: [],
+      subtotal: number,
+      total: number,
+      customer,
+      createdAt: new Date(`2026-01-0${number}T00:00:00.000Z`),
+    })));
+
+    const response = await request(app)
+      .get('/api/admin/orders?page=2&limit=2')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.items).toHaveLength(1);
+    expect(response.body.data.pagination).toEqual({ page: 2, limit: 2, total: 3, totalPages: 2 });
+  });
 });

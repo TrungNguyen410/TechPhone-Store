@@ -1,17 +1,28 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FiLock, FiSearch, FiUnlock } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import { adminApi } from '../../api/adminApi';
 import DataTable from '../../components/admin/DataTable';
 import Loading from '../../components/common/Loading';
+import Pagination from '../../components/common/Pagination';
 import { formatCurrency, formatDate } from '../../utils/formatCurrency';
 
 export default function CustomerManagement() {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const load = () => adminApi.getCustomers().then(setCustomers).finally(() => setLoading(false));
-  useEffect(() => { load(); }, []);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 0 });
+  const load = useCallback(() => {
+    setLoading(true);
+    return adminApi.getCustomers({ page, limit: 20 })
+      .then((response) => {
+        setCustomers(response.items);
+        setPagination(response.pagination);
+      })
+      .finally(() => setLoading(false));
+  }, [page]);
+  useEffect(() => { load(); }, [load]);
   const visible = useMemo(() => customers.filter((user) => !search || `${user.fullName} ${user.email} ${user.phone}`.toLowerCase().includes(search.toLowerCase())), [customers, search]);
   const toggle = async (user) => {
     const status = user.status === 'active' ? 'locked' : 'active';
@@ -29,5 +40,5 @@ export default function CustomerManagement() {
     { key: 'actions', label: 'Thao tác', render: (user) => <button className={`lock-button ${user.status === 'active' ? 'danger' : ''}`} onClick={() => toggle(user)}>{user.status === 'active' ? <><FiLock /> Khóa</> : <><FiUnlock /> Mở khóa</>}</button> },
   ];
   if (loading) return <Loading />;
-  return <><div className="admin-page-toolbar"><div className="admin-search"><FiSearch /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm khách hàng..." /></div></div><div className="admin-table-card"><div className="admin-table-title"><div><h2>Danh sách khách hàng</h2><span>{visible.length} tài khoản</span></div></div><DataTable columns={columns} rows={visible} /></div></>;
+  return <><div className="admin-page-toolbar"><div className="admin-search"><FiSearch /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm khách hàng..." /></div></div><div className="admin-table-card"><div className="admin-table-title"><div><h2>Danh sách khách hàng</h2><span>{pagination.total} tài khoản</span></div></div><DataTable columns={columns} rows={visible} /><Pagination currentPage={pagination.page} totalPages={pagination.totalPages} onPageChange={setPage} /></div></>;
 }

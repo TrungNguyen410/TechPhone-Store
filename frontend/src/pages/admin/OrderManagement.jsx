@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FiEye, FiSearch, FiTruck } from 'react-icons/fi';
 import { toast } from 'react-toastify';
+import { adminApi } from '../../api/adminApi';
 import { orderApi } from '../../api/orderApi';
 import { paymentApi } from '../../api/paymentApi';
 import DataTable from '../../components/admin/DataTable';
 import Loading from '../../components/common/Loading';
+import Pagination from '../../components/common/Pagination';
 import AccessibleDialog from '../../components/common/AccessibleDialog';
 import { ORDER_STATUSES, PAYMENT_METHODS } from '../../utils/constants';
 import { formatCurrency, formatDate } from '../../utils/formatCurrency';
@@ -15,6 +17,8 @@ const paymentMethodLabel = (value) => PAYMENT_METHODS.find((method) => method.va
 export default function OrderManagement() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 0 });
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -27,8 +31,16 @@ export default function OrderManagement() {
   const [mutatingOrderId, setMutatingOrderId] = useState(null);
   const [paymentForm, setPaymentForm] = useState({ reference: '', note: '' });
   const [reconcilingPayment, setReconcilingPayment] = useState(false);
-  const load = () => orderApi.getAllAdmin().then(setOrders).finally(() => setLoading(false));
-  useEffect(() => { load(); }, []);
+  const load = useCallback(() => {
+    setLoading(true);
+    return adminApi.getOrders({ page, limit: 20 })
+      .then((response) => {
+        setOrders(response.items);
+        setPagination(response.pagination);
+      })
+      .finally(() => setLoading(false));
+  }, [page]);
+  useEffect(() => { load(); }, [load]);
 
   const visible = useMemo(() => orders.filter((order) =>
     (!search || `${order.orderNumber} ${order.customer.phone} ${order.customer.fullName}`.toLowerCase().includes(search.toLowerCase())) &&
@@ -133,7 +145,7 @@ export default function OrderManagement() {
   return (
     <>
       <div className="admin-page-toolbar"><div className="admin-search"><FiSearch /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm mã đơn, khách hàng, số điện thoại..." /></div><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">Tất cả trạng thái</option>{ORDER_STATUSES.map((status) => <option value={status} key={status}>{getOrderStatus(status).label}</option>)}</select></div>
-      <div className="admin-table-card"><div className="admin-table-title"><div><h2>Danh sách đơn hàng</h2><span>{visible.length} đơn hàng</span></div></div><DataTable columns={columns} rows={visible} /></div>
+      <div className="admin-table-card"><div className="admin-table-title"><div><h2>Danh sách đơn hàng</h2><span>{pagination.total} đơn hàng</span></div></div><DataTable columns={columns} rows={visible} /><Pagination currentPage={pagination.page} totalPages={pagination.totalPages} onPageChange={setPage} /></div>
       {selectedOrder && (
         <AccessibleDialog
           open

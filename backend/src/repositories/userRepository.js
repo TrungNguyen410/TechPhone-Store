@@ -37,6 +37,15 @@ class UserRepository extends BaseRepository {
   async findByIdWithPassword(id) {
     return User.findOne({ _id: id, isDeleted: false }).select('+password');
   }
+
+  async findCustomersPage({ page, limit }) {
+    const filter = { role: 'customer' };
+    const [items, total] = await Promise.all([
+      this.findAll(filter, { sort: { createdAt: -1 }, skip: (page - 1) * limit, limit }),
+      this.count(filter),
+    ]);
+    return { items, total };
+  }
 }
 
 module.exports = new UserRepository();

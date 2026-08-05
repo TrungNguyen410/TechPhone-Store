@@ -1,10 +1,12 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { adminApi } from '../../api/adminApi';
 import { orderApi } from '../../api/orderApi';
 import { paymentApi } from '../../api/paymentApi';
 import OrderManagement from './OrderManagement';
 
-vi.mock('../../api/orderApi', () => ({ orderApi: { getAllAdmin: vi.fn(), updateStatus: vi.fn() } }));
+vi.mock('../../api/adminApi', () => ({ adminApi: { getOrders: vi.fn() } }));
+vi.mock('../../api/orderApi', () => ({ orderApi: { updateStatus: vi.fn() } }));
 vi.mock('../../api/paymentApi', () => ({ paymentApi: { reconcileManualPayment: vi.fn() } }));
 vi.mock('react-toastify', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
@@ -34,7 +36,10 @@ describe('OrderManagement payment method', () => {
   afterEach(cleanup);
   beforeEach(() => {
     vi.clearAllMocks();
-    orderApi.getAllAdmin.mockResolvedValue([pendingOrder]);
+    adminApi.getOrders.mockResolvedValue({
+      items: [pendingOrder],
+      pagination: { page: 1, limit: 20, total: 1, totalPages: 1 },
+    });
   });
 
   it('shows payment method in the list and detail', async () => {
@@ -73,12 +78,15 @@ describe('OrderManagement payment method', () => {
     expect(screen.getByRole('button', { name: /mark payment failed/i })).toBeInTheDocument();
 
     cleanup();
-    orderApi.getAllAdmin.mockResolvedValue([{
-      ...pendingOrder,
-      id: 'card-order',
-      orderNumber: 'TP260602',
-      paymentMethod: 'card',
-    }]);
+    adminApi.getOrders.mockResolvedValue({
+      items: [{
+        ...pendingOrder,
+        id: 'card-order',
+        orderNumber: 'TP260602',
+        paymentMethod: 'card',
+      }],
+      pagination: { page: 1, limit: 20, total: 1, totalPages: 1 },
+    });
     const cardView = render(<OrderManagement />);
     await screen.findByText('TP260602');
     fireEvent.click(cardView.container.querySelector('.table-view-button'));
@@ -144,16 +152,19 @@ describe('OrderManagement payment method', () => {
   });
 
   it('shows finalized audit data read-only and hides reconciliation actions', async () => {
-    orderApi.getAllAdmin.mockResolvedValue([{
-      ...pendingOrder,
-      paymentStatus: 'paid',
-      paymentReference: 'MOMO-AUDIT-01',
-      paymentAudit: {
-        confirmedBy: 'admin-auditor',
-        confirmedAt: '2026-08-05T10:00:00.000Z',
-        note: 'Matched statement row 42',
-      },
-    }]);
+    adminApi.getOrders.mockResolvedValue({
+      items: [{
+        ...pendingOrder,
+        paymentStatus: 'paid',
+        paymentReference: 'MOMO-AUDIT-01',
+        paymentAudit: {
+          confirmedBy: 'admin-auditor',
+          confirmedAt: '2026-08-05T10:00:00.000Z',
+          note: 'Matched statement row 42',
+        },
+      }],
+      pagination: { page: 1, limit: 20, total: 1, totalPages: 1 },
+    });
     const { container } = render(<OrderManagement />);
     await screen.findByText(pendingOrder.orderNumber);
     fireEvent.click(container.querySelector('.table-view-button'));
@@ -163,5 +174,17 @@ describe('OrderManagement payment method', () => {
     expect(screen.getByText('Matched statement row 42')).toBeInTheDocument();
     expect(screen.queryByLabelText(/payment reference/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /confirm paid payment/i })).not.toBeInTheDocument();
+  });
+
+  it('loads the selected server page', async () => {
+    adminApi.getOrders.mockResolvedValue({
+      items: [pendingOrder],
+      pagination: { page: 1, limit: 20, total: 21, totalPages: 2 },
+    });
+    render(<OrderManagement />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Trang 2' }));
+
+    await waitFor(() => expect(adminApi.getOrders).toHaveBeenLastCalledWith({ page: 2, limit: 20 }));
   });
 });

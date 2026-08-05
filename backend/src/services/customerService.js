@@ -1,5 +1,4 @@
-const Order = require('../models/Order');
-const User = require('../models/User');
+const orderRepository = require('../repositories/orderRepository');
 const userRepository = require('../repositories/userRepository');
 const AppError = require('../utils/AppError');
 const pick = require('../utils/pick');
@@ -7,23 +6,30 @@ const pick = require('../utils/pick');
 const customerUpdateFields = ['fullName', 'email', 'phone', 'address', 'role', 'status'];
 
 class CustomerService {
-  async list() {
-    const [customers, orders] = await Promise.all([
-      User.find({ isDeleted: false, role: 'customer' }).sort({ createdAt: -1 }),
-      Order.find({ isDeleted: false }),
-    ]);
-
-    return customers.map((customer) => {
-      const user = customer.toJSON();
-      const userOrders = orders.filter((order) => order.userId === user.id);
-      return {
-        ...user,
-        orderCount: userOrders.length,
-        totalSpent: userOrders
-          .filter((order) => ['completed', 'delivered'].includes(order.status))
-          .reduce((sum, order) => sum + order.total, 0),
-      };
+  async list({ page = 1, limit = 20 } = {}) {
+    const boundedPage = Math.min(Math.max(Number(page) || 1, 1), 1000000);
+    const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
+    const { items: customers, total } = await userRepository.findCustomersPage({
+      page: boundedPage,
+      limit: boundedLimit,
     });
+    const totals = await orderRepository.customerOrderTotals(customers.map((customer) => customer.id));
+    const totalsByUser = new Map(totals.map((item) => [item._id, item]));
+    const items = customers.map((customer) => ({
+      ...customer,
+      orderCount: totalsByUser.get(customer.id)?.orderCount || 0,
+      totalSpent: totalsByUser.get(customer.id)?.totalSpent || 0,
+    }));
+
+    return {
+      items,
+      pagination: {
+        page: boundedPage,
+        limit: boundedLimit,
+        total,
+        totalPages: Math.ceil(total / boundedLimit),
+      },
+    };
   }
 
   async update(id, payload) {

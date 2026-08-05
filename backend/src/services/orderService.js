@@ -302,7 +302,22 @@ class OrderService {
     const filter = {};
     if (user.role !== 'admin') filter.userId = user.id;
     if (query.status) filter.status = query.status;
-    return orderRepository.findAll(filter, { sort: { createdAt: -1 } });
+    if (user.role !== 'admin') {
+      return orderRepository.findAll(filter, { sort: { createdAt: -1 } });
+    }
+
+    const page = Math.min(Math.max(Number(query.page) || 1, 1), 1000000);
+    const limit = Math.min(Math.max(Number(query.limit) || 20, 1), 100);
+    const { items, total } = await orderRepository.findPage(filter, { page, limit });
+    return {
+      items,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
   async myOrders(userId) {

@@ -6,13 +6,13 @@ const { successResponse } = require('../utils/apiResponse');
 const AppError = require('../utils/AppError');
 const pick = require('../utils/pick');
 
-const dashboard = asyncHandler(async (_req, res) => {
-  const data = await dashboardService.statistics();
+const dashboard = asyncHandler(async (req, res) => {
+  const data = await dashboardService.statistics({ year: req.query.year });
   successResponse(res, data, 'Dashboard statistics retrieved');
 });
 
-const customers = asyncHandler(async (_req, res) => {
-  const data = await customerService.list();
+const customers = asyncHandler(async (req, res) => {
+  const data = await customerService.list(req.query);
   successResponse(res, data, 'Customers retrieved');
 });
 

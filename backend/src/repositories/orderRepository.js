@@ -101,6 +101,70 @@ class OrderRepository extends BaseRepository {
     const docs = await Order.find({ isDeleted: false }).sort({ createdAt: -1 }).limit(limit);
     return docs.map((doc) => doc.toJSON());
   }
+
+  async findPage(filter = {}, { page, limit, sort = { createdAt: -1 } }) {
+    const [items, total] = await Promise.all([
+      this.findAll(filter, { sort, skip: (page - 1) * limit, limit }),
+      this.count(filter),
+    ]);
+    return { items, total };
+  }
+
+  async revenueByMonth(year) {
+    const start = new Date(Date.UTC(year, 0, 1));
+    const end = new Date(Date.UTC(year + 1, 0, 1));
+    return Order.aggregate([
+      {
+        $match: {
+          isDeleted: false,
+          status: { $in: ['delivered', 'completed'] },
+          createdAt: { $gte: start, $lt: end },
+        },
+      },
+      { $group: { _id: { $month: '$createdAt' }, total: { $sum: '$total' } } },
+      { $sort: { _id: 1 } },
+    ]);
+  }
+
+  async countByStatus() {
+    return Order.aggregate([
+      { $match: { isDeleted: false } },
+      {
+        $group: {
+          _id: {
+            $cond: [
+              { $in: ['$status', ['delivered', 'completed']] },
+              'completed',
+              '$status',
+            ],
+          },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+  }
+
+  async customerOrderTotals(userIds) {
+    if (!userIds.length) return [];
+    return Order.aggregate([
+      { $match: { isDeleted: false, userId: { $in: userIds } } },
+      {
+        $group: {
+          _id: '$userId',
+          orderCount: { $sum: 1 },
+          totalSpent: {
+            $sum: {
+              $cond: [
+                { $in: ['$status', ['delivered', 'completed']] },
+                '$total',
+                0,
+              ],
+            },
+          },
+        },
+      },
+    ]);
+  }
 }
 
 module.exports = new OrderRepository();

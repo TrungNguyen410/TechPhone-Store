@@ -2,6 +2,23 @@ import { USE_MOCK } from '../utils/constants';
 import { mockDb } from '../mock/mockDb';
 import axiosClient from './axiosClient';
 
+const DEFAULT_PAGE_SIZE = 20;
+
+const normalizePage = (response, { page, limit }) => {
+  if (response && Array.isArray(response.items) && response.pagination) return response;
+  const allItems = Array.isArray(response) ? response : [];
+  const start = (page - 1) * limit;
+  return {
+    items: allItems.slice(start, start + limit),
+    pagination: {
+      page,
+      limit,
+      total: allItems.length,
+      totalPages: Math.ceil(allItems.length / limit),
+    },
+  };
+};
+
 const resourceApi = (name, endpoint) => ({
   getAll: () => (USE_MOCK ? mockDb.list(name) : axiosClient.get(`/admin/${endpoint}`)),
   create: (payload) =>
@@ -14,11 +31,14 @@ const resourceApi = (name, endpoint) => ({
 
 export const adminApi = {
   getDashboard: () => (USE_MOCK ? mockDb.dashboard() : axiosClient.get('/admin/dashboard')),
-  getCustomers: async () => {
-    if (!USE_MOCK) return axiosClient.get('/admin/customers');
+  getCustomers: async ({ page = 1, limit = DEFAULT_PAGE_SIZE } = {}) => {
+    if (!USE_MOCK) {
+      const response = await axiosClient.get('/admin/customers', { params: { page, limit } });
+      return normalizePage(response, { page, limit });
+    }
     const users = await mockDb.list('users');
     const orders = await mockDb.list('orders');
-    return users
+    const customers = users
       .filter((user) => user.role === 'customer')
       .map(({ password: _password, ...user }) => {
         const userOrders = orders.filter((order) => order.userId === user.id);
@@ -26,10 +46,17 @@ export const adminApi = {
           ...user,
           orderCount: userOrders.length,
           totalSpent: userOrders
-            .filter((order) => order.status === 'completed')
+            .filter((order) => ['completed', 'delivered'].includes(order.status))
             .reduce((sum, order) => sum + order.total, 0),
         };
       });
+    return normalizePage(customers, { page, limit });
+  },
+  getOrders: async ({ page = 1, limit = DEFAULT_PAGE_SIZE } = {}) => {
+    const response = USE_MOCK
+      ? await mockDb.list('orders')
+      : await axiosClient.get('/admin/orders', { params: { page, limit } });
+    return normalizePage(response, { page, limit });
   },
   updateCustomer: (id, payload) =>
     USE_MOCK ? mockDb.updateUser(id, payload) : axiosClient.put(`/admin/customers/${id}`, payload),
