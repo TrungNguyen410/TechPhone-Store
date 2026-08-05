@@ -35,6 +35,11 @@ const env = {
     phone: process.env.MOMO_PHONE || '',
     accountName: process.env.MOMO_ACCOUNT_NAME || '',
   },
+  sms: {
+    accountSid: process.env.TWILIO_ACCOUNT_SID || '',
+    authToken: process.env.TWILIO_AUTH_TOKEN || '',
+    from: process.env.TWILIO_FROM || '',
+  },
   vnpay: {
     tmnCode: process.env.VNPAY_TMN_CODE || '',
     hashSecret: process.env.VNPAY_HASH_SECRET || '',
