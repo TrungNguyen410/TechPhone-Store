@@ -1,4 +1,5 @@
 const request = require('supertest');
+const jwt = require('jsonwebtoken');
 const { app } = require('./helpers');
 const env = require('../src/config/env');
 const Product = require('../src/models/Product');
@@ -15,15 +16,20 @@ const customer = {
   phone: '0912345678',
   address: '1 Nguyen Hue',
   province: 'Ho Chi Minh',
+  district: 'District 1',
+  ward: 'Ben Nghe',
 };
 
 describe('VNPay checkout and IPN', () => {
+  let checkoutToken;
   env.bank ||= {};
   env.momo ||= {};
   const originalBank = { ...env.bank };
   const originalMomo = { ...env.momo };
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    const user = await createUser({ email: 'payment-customer@test.com', phone: '0912345678' });
+    checkoutToken = jwt.sign({ sub: user.id, role: user.role }, env.jwtAccessSecret);
     env.vnpay.tmnCode = 'TESTCODE';
     env.vnpay.hashSecret = 'test-vnpay-secret';
     env.vnpay.returnUrl = 'http://localhost:5000/api/payments/vnpay/return';
@@ -35,6 +41,13 @@ describe('VNPay checkout and IPN', () => {
     });
     Object.assign(env.momo, { phone: '', accountName: '' });
   });
+
+  const checkoutRequest = () => request(app)
+    .post('/api/payments/vnpay/checkout')
+    .set('Authorization', `Bearer ${checkoutToken}`);
+  const orderRequest = () => request(app)
+    .post('/api/orders')
+    .set('Authorization', `Bearer ${checkoutToken}`);
 
   afterAll(() => {
     Object.assign(env.bank, originalBank);
@@ -93,8 +106,7 @@ describe('VNPay checkout and IPN', () => {
     const config = await request(app).get('/api/payments/config').expect(200);
 
     expect(config.body.data.providers.vnpay.enabled).toBe(false);
-    await request(app)
-      .post('/api/payments/vnpay/checkout')
+    await checkoutRequest()
       .set('Idempotency-Key', 'whitespace-vnpay')
       .send({
         items: [{ id: 'missing', type: 'product', quantity: 1 }],
@@ -104,7 +116,30 @@ describe('VNPay checkout and IPN', () => {
       .expect(503);
   });
 
-  it('creates a guest order and confirms it only after a valid IPN', async () => {
+  it('rejects unauthenticated VNPay checkout without decrementing stock', async () => {
+    const product = await Product.create({
+      name: 'Protected VNPay Phone',
+      slug: 'protected-vnpay-phone',
+      categoryId: 'category-test',
+      brandId: 'brand-test',
+      price: 1000000,
+      stock: 2,
+      status: 'active',
+    });
+
+    const response = await request(app)
+      .post('/api/payments/vnpay/checkout')
+      .send({
+        items: [{ id: product.id, type: 'product', quantity: 1 }],
+        customer,
+        paymentMethod: 'card',
+      });
+
+    expect(response.status).toBe(401);
+    expect((await Product.findById(product.id)).stock).toBe(2);
+  });
+
+  it('creates an authenticated VNPay order and confirms it only after a valid IPN', async () => {
     const product = await Product.create({
       name: 'Test Phone',
       slug: 'test-phone',
@@ -115,8 +150,7 @@ describe('VNPay checkout and IPN', () => {
       status: 'active',
     });
 
-    const checkout = await request(app)
-      .post('/api/payments/vnpay/checkout')
+    const checkout = await checkoutRequest()
       .set('Idempotency-Key', 'checkout-test-1')
       .send({
         items: [{ id: product.id, type: 'product', quantity: 1 }],
@@ -173,8 +207,7 @@ describe('VNPay checkout and IPN', () => {
       .mockImplementation(createPaymentUrl);
 
     try {
-      await request(app)
-        .post('/api/payments/vnpay/checkout')
+      await checkoutRequest()
         .set('Idempotency-Key', 'checkout-retry-1')
         .send(payload)
         .expect(500);
@@ -183,8 +216,7 @@ describe('VNPay checkout and IPN', () => {
       expect(pendingOrder.status).toBe('pending');
       expect((await Product.findById(product.id)).stock).toBe(2);
 
-      const retry = await request(app)
-        .post('/api/payments/vnpay/checkout')
+      const retry = await checkoutRequest()
         .set('Idempotency-Key', 'checkout-retry-1')
         .send(payload)
         .expect(201);
@@ -213,8 +245,7 @@ describe('VNPay checkout and IPN', () => {
       customer,
       paymentMethod: 'card',
     };
-    const post = () => request(app)
-      .post('/api/payments/vnpay/checkout')
+    const post = () => checkoutRequest()
       .set('Idempotency-Key', 'checkout-concurrent-payment')
       .send(payload);
 
@@ -248,13 +279,11 @@ describe('VNPay checkout and IPN', () => {
       customer,
     };
 
-    const codFirst = await request(app)
-      .post('/api/orders')
+    const codFirst = await orderRequest()
       .set('Idempotency-Key', 'cod-then-vnpay')
       .send({ ...basePayload, paymentMethod: 'cod' })
       .expect(201);
-    await request(app)
-      .post('/api/payments/vnpay/checkout')
+    await checkoutRequest()
       .set('Idempotency-Key', 'cod-then-vnpay')
       .send({ ...basePayload, paymentMethod: 'card' })
       .expect(409);
@@ -262,13 +291,11 @@ describe('VNPay checkout and IPN', () => {
     expect(await PaymentTransaction.countDocuments()).toBe(0);
     expect((await Order.findById(codFirst.body.data.id)).paymentMethod).toBe('cod');
 
-    const vnpayFirst = await request(app)
-      .post('/api/payments/vnpay/checkout')
+    const vnpayFirst = await checkoutRequest()
       .set('Idempotency-Key', 'vnpay-then-cod')
       .send({ ...basePayload, paymentMethod: 'card' })
       .expect(201);
-    await request(app)
-      .post('/api/orders')
+    await orderRequest()
       .set('Idempotency-Key', 'vnpay-then-cod')
       .send({ ...basePayload, paymentMethod: 'cod' })
       .expect(409);
@@ -294,8 +321,7 @@ describe('VNPay checkout and IPN', () => {
       customer,
       paymentMethod: 'card',
     };
-    const post = () => request(app)
-      .post('/api/payments/vnpay/checkout')
+    const post = () => checkoutRequest()
       .set('Idempotency-Key', 'checkout-failed-retry')
       .send(payload);
     const initial = await post().expect(201);
@@ -332,8 +358,7 @@ describe('VNPay checkout and IPN', () => {
       customer,
       paymentMethod: 'card',
     };
-    const post = () => request(app)
-      .post('/api/payments/vnpay/checkout')
+    const post = () => checkoutRequest()
       .set('Idempotency-Key', 'checkout-expired-retry')
       .send(payload);
     const initial = await post().expect(201);
@@ -368,8 +393,7 @@ describe('VNPay checkout and IPN', () => {
       customer,
       paymentMethod: 'card',
     };
-    const post = () => request(app)
-      .post('/api/payments/vnpay/checkout')
+    const post = () => checkoutRequest()
       .set('Idempotency-Key', 'checkout-late-failure')
       .send(payload);
     const initial = await post().expect(201);
@@ -409,8 +433,7 @@ describe('VNPay checkout and IPN', () => {
       customer,
       paymentMethod: 'card',
     };
-    const post = () => request(app)
-      .post('/api/payments/vnpay/checkout')
+    const post = () => checkoutRequest()
       .set('Idempotency-Key', 'checkout-late-success')
       .send(payload);
     const initial = await post().expect(201);
@@ -448,8 +471,7 @@ describe('VNPay checkout and IPN', () => {
       stock: 3,
       status: 'active',
     });
-    const checkout = await request(app)
-      .post('/api/payments/vnpay/checkout')
+    const checkout = await checkoutRequest()
       .set('Authorization', `Bearer ${token}`)
       .set('Idempotency-Key', 'cancel-paid-race')
       .send({
@@ -524,8 +546,7 @@ describe('VNPay checkout and IPN', () => {
       stock: 3,
       status: 'active',
     });
-    const checkout = await request(app)
-      .post('/api/payments/vnpay/checkout')
+    const checkout = await checkoutRequest()
       .set('Authorization', `Bearer ${token}`)
       .set('Idempotency-Key', 'paid-before-cancel')
       .send({
@@ -574,8 +595,7 @@ describe('VNPay checkout and IPN', () => {
       customer,
       paymentMethod: 'card',
     };
-    const post = () => request(app)
-      .post('/api/payments/vnpay/checkout')
+    const post = () => checkoutRequest()
       .set('Idempotency-Key', 'replacement-paid-race')
       .send(payload);
     const initial = await post().expect(201);

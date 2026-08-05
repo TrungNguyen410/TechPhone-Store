@@ -110,6 +110,25 @@ class OrderService {
     return `TP${datePart}${String(sequence).padStart(4, '0')}`;
   }
 
+  normalizeRequestedItems(items = []) {
+    const grouped = new Map();
+    for (const item of items) {
+      const type = item.type === 'accessory' || item.accessoryId ? 'accessory' : 'product';
+      const id = String(
+        type === 'accessory'
+          ? item.accessoryId || item.productId || item.id
+          : item.productId || item.id,
+      );
+      const key = `${type}:${id}`;
+      grouped.set(key, {
+        type,
+        id,
+        quantity: (grouped.get(key)?.quantity || 0) + Number(item.quantity),
+      });
+    }
+    return [...grouped.values()];
+  }
+
   async normalizeItems(items = [], session) {
     const normalized = [];
     for (const item of items) {
@@ -222,7 +241,8 @@ class OrderService {
           }
         }
 
-        const items = await this.normalizeItems(payload.items, session);
+        const requestedItems = this.normalizeRequestedItems(payload.items);
+        const items = await this.normalizeItems(requestedItems, session);
         if (!items.length) throw new AppError('Đơn hàng phải có ít nhất một sản phẩm', 422);
         const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
         const shipping = this.shippingQuote(payload.customer, subtotal);

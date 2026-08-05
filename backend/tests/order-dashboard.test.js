@@ -16,6 +16,19 @@ const voucherService = require('../src/services/voucherService');
 const { app, createUser, login } = require('./helpers');
 
 describe('Orders and dashboard APIs', () => {
+  const orderPayload = (productId, overrides = {}) => ({
+    items: [{ productId, quantity: 1 }],
+    customer: {
+      fullName: 'Checkout Customer',
+      email: 'checkout@example.com',
+      phone: '0912345678',
+      address: '1 Nguyen Hue',
+      province: 'Ho Chi Minh',
+      district: 'District 1',
+      ward: 'Ben Nghe',
+    },
+    ...overrides,
+  });
   const seedTaxonomy = async () => {
     const brand = await Brand.create({ name: 'Apple', slug: 'apple', active: true });
     const category = await Category.create({ name: 'Dien thoai', slug: 'dien-thoai', active: true });
@@ -32,6 +45,88 @@ describe('Orders and dashboard APIs', () => {
     endDate: new Date(Date.now() + 24 * 60 * 60 * 1000),
     active: true,
   });
+  it('rejects unauthenticated order creation without decrementing stock', async () => {
+    const taxonomy = await seedTaxonomy();
+    const product = await Product.create({
+      _id: 'protected-stock',
+      name: 'Protected Stock Phone',
+      ...taxonomy,
+      price: 1000000,
+      stock: 2,
+      status: 'active',
+    });
+
+    const response = await request(app)
+      .post('/api/orders')
+      .send(orderPayload(product.id));
+
+    expect(response.status).toBe(401);
+    expect((await Product.findById(product.id)).stock).toBe(2);
+  });
+
+  it('rejects card orders outside the VNPay checkout endpoint', async () => {
+    await createUser({ email: 'direct-card@test.com', phone: '0912121212' });
+    const token = await login('direct-card@test.com');
+    const taxonomy = await seedTaxonomy();
+    const product = await Product.create({
+      _id: 'direct-card',
+      name: 'Direct Card Phone',
+      ...taxonomy,
+      price: 1000000,
+      stock: 2,
+      status: 'active',
+    });
+
+    const response = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send(orderPayload(product.id, { paymentMethod: 'card' }));
+
+    expect(response.status).toBe(422);
+    expect((await Product.findById(product.id)).stock).toBe(2);
+  });
+
+  it('rejects more than 50 line items', async () => {
+    await createUser({ email: 'line-limit@test.com', phone: '0913131313' });
+    const token = await login('line-limit@test.com');
+
+    const response = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send(orderPayload('product-1', {
+        items: Array.from({ length: 51 }, () => ({ productId: 'product-1', quantity: 1 })),
+      }));
+
+    expect(response.status).toBe(422);
+  });
+
+  it('aggregates duplicate line items before checking inventory', async () => {
+    await createUser({ email: 'duplicate-items@test.com', phone: '0914141414' });
+    const token = await login('duplicate-items@test.com');
+    const taxonomy = await seedTaxonomy();
+    const product = await Product.create({
+      _id: 'aggregate-stock',
+      name: 'Aggregate Stock Phone',
+      ...taxonomy,
+      price: 1000000,
+      stock: 1,
+      status: 'active',
+    });
+
+    const response = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send(orderPayload(product.id, {
+        items: [
+          { productId: product.id, quantity: 1 },
+          { productId: product.id, quantity: 1 },
+        ],
+      }));
+
+    expect(response.status).toBe(400);
+    expect((await Product.findById(product.id)).stock).toBe(1);
+  });
+
   it('creates an order and allows lookup by order number and phone', async () => {
     await createUser({ email: 'customer@test.com', phone: '0911111111' });
     const token = await login('customer@test.com');
@@ -55,6 +150,8 @@ describe('Orders and dashboard APIs', () => {
           email: 'customer@test.com',
           phone: '0911111111',
           address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
         },
         subtotal: product.price,
         shippingFee: 0,
@@ -101,6 +198,8 @@ describe('Orders and dashboard APIs', () => {
           email: 'stock@test.com',
           phone: '0922222222',
           address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
         },
       });
 
@@ -127,6 +226,8 @@ describe('Orders and dashboard APIs', () => {
         email: 'idempotent@test.com',
         phone: '0944444444',
         address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
       },
       subtotal: 1,
       shippingFee: 0,
@@ -149,7 +250,7 @@ describe('Orders and dashboard APIs', () => {
     expect(second.status).toBe(201);
     expect(second.body.data.id).toBe(first.body.data.id);
     expect(first.body.data.subtotal).toBe(product.price);
-    expect(first.body.data.total).toBe(product.price + 40000);
+    expect(first.body.data.total).toBe(product.price + 20000);
     const productAfter = await Product.findById(product.id);
     expect(productAfter.stock).toBe(2);
   });
@@ -173,6 +274,8 @@ describe('Orders and dashboard APIs', () => {
         email: 'race@test.com',
         phone: '0955555555',
         address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
       },
     };
     const post = () => request(app)
@@ -221,6 +324,8 @@ describe('Orders and dashboard APIs', () => {
         email: 'durable@test.com',
         phone: '0901010101',
         address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
       },
     };
     const secondaryWrite = jest
@@ -266,7 +371,9 @@ describe('Orders and dashboard APIs', () => {
     });
     const payloadFor = (email, phone) => ({
       items: [{ productId: product.id, quantity: 1 }],
-      customer: { fullName: 'Customer', email, phone, address: 'Test address' },
+      customer: {
+        fullName: 'Customer', email, phone, address: 'Test address', province: 'Ho Chi Minh', ward: 'Ben Nghe',
+      },
     });
 
     const first = await request(app)
@@ -286,7 +393,9 @@ describe('Orders and dashboard APIs', () => {
     expect(second.body.data.userId).not.toBe(first.body.data.userId);
   });
 
-  it('scopes guest keys by email and phone and ignores payload userId', async () => {
+  it('ignores a payload userId and assigns the authenticated customer as owner', async () => {
+    const user = await createUser({ email: 'owned-order@test.com', phone: '0988888888' });
+    const token = jwt.sign({ sub: user.id, role: user.role }, env.jwtAccessSecret);
     const taxonomy = await seedTaxonomy();
     const product = await Product.create({
       _id: 'guest-scoped-phone',
@@ -296,29 +405,28 @@ describe('Orders and dashboard APIs', () => {
       stock: 4,
       status: 'active',
     });
-    const payloadFor = (email, phone, userId) => ({
-      userId,
+    const payload = {
+      userId: 'victim-user',
       items: [{ productId: product.id, quantity: 1 }],
-      customer: { fullName: 'Guest', email, phone, address: 'Test address' },
-    });
-    const post = (payload) => request(app)
+      customer: {
+        fullName: 'Customer',
+        email: 'owned-order@test.com',
+        phone: '0988888888',
+        address: 'Test address',
+        province: 'Ho Chi Minh',
+        ward: 'Ben Nghe',
+      },
+    };
+    const created = await request(app)
       .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
       .set('Idempotency-Key', 'guest-shared-key')
       .send(payload);
 
-    const first = await post(payloadFor('guest-one@test.com', '0988888888', 'victim-user'));
-    const repeated = await post(payloadFor('guest-one@test.com', '0988888888', 'another-user'));
-    const otherGuest = await post(payloadFor('guest-two@test.com', '0999999999', 'victim-user'));
-
-    expect(first.status).toBe(201);
-    expect(repeated.status).toBe(201);
-    expect(otherGuest.status).toBe(201);
-    expect(repeated.body.data.id).toBe(first.body.data.id);
-    expect(otherGuest.body.data.id).not.toBe(first.body.data.id);
-    expect(first.body.data.userId).toBeNull();
-    expect(otherGuest.body.data.userId).toBeNull();
+    expect(created.status).toBe(201);
+    expect(created.body.data.userId).toBe(user.id);
     const productAfter = await Product.findById(product.id);
-    expect(productAfter.stock).toBe(2);
+    expect(productAfter.stock).toBe(3);
   });
 
   it('rejects an expired bearer token before refresh and owns the retried order', async () => {
@@ -348,6 +456,8 @@ describe('Orders and dashboard APIs', () => {
         email: 'refresh-order@test.com',
         phone: '0902020202',
         address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
       },
     };
 
@@ -376,6 +486,8 @@ describe('Orders and dashboard APIs', () => {
   });
 
   it('exhausts a limited voucher sequentially from authoritative usage', async () => {
+    const user = await createUser({ email: 'voucher-one@test.com', phone: '0903030303' });
+    const token = jwt.sign({ sub: user.id, role: user.role }, env.jwtAccessSecret);
     const taxonomy = await seedTaxonomy();
     const product = await Product.create({
       _id: 'sequential-voucher-phone',
@@ -388,17 +500,21 @@ describe('Orders and dashboard APIs', () => {
     await seedVoucher({ code: 'SEQUENTIAL', quantity: 1 });
     const payloadFor = (email, phone) => ({
       items: [{ productId: product.id, quantity: 1 }],
-      customer: { fullName: 'Voucher Guest', email, phone, address: 'Test address' },
+      customer: {
+        fullName: 'Voucher Customer', email, phone, address: 'Test address', province: 'Ho Chi Minh', ward: 'Ben Nghe',
+      },
       voucherCode: 'SEQUENTIAL',
     });
 
     await request(app)
       .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
       .set('Idempotency-Key', 'voucher-sequential-1')
       .send(payloadFor('voucher-one@test.com', '0903030303'))
       .expect(201);
     await request(app)
       .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
       .set('Idempotency-Key', 'voucher-sequential-2')
       .send(payloadFor('voucher-two@test.com', '0904040404'))
       .expect(400);
@@ -408,6 +524,10 @@ describe('Orders and dashboard APIs', () => {
   });
 
   it('allows only one concurrent last-voucher redemption', async () => {
+    const firstUser = await createUser({ email: 'concurrent-one@test.com', phone: '0905050505' });
+    const secondUser = await createUser({ email: 'concurrent-two@test.com', phone: '0906060606' });
+    const firstToken = jwt.sign({ sub: firstUser.id, role: firstUser.role }, env.jwtAccessSecret);
+    const secondToken = jwt.sign({ sub: secondUser.id, role: secondUser.role }, env.jwtAccessSecret);
     const taxonomy = await seedTaxonomy();
     const product = await Product.create({
       _id: 'concurrent-voucher-phone',
@@ -418,18 +538,21 @@ describe('Orders and dashboard APIs', () => {
       status: 'active',
     });
     await seedVoucher({ code: 'CONCURRENT', quantity: 1 });
-    const post = (email, phone, key) => request(app)
+    const post = (email, phone, key, token) => request(app)
       .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
       .set('Idempotency-Key', key)
       .send({
         items: [{ productId: product.id, quantity: 1 }],
-        customer: { fullName: 'Voucher Guest', email, phone, address: 'Test address' },
+        customer: {
+          fullName: 'Voucher Customer', email, phone, address: 'Test address', province: 'Ho Chi Minh', ward: 'Ben Nghe',
+        },
         voucherCode: 'CONCURRENT',
       });
 
     const responses = await Promise.all([
-      post('concurrent-one@test.com', '0905050505', 'voucher-concurrent-1'),
-      post('concurrent-two@test.com', '0906060606', 'voucher-concurrent-2'),
+      post('concurrent-one@test.com', '0905050505', 'voucher-concurrent-1', firstToken),
+      post('concurrent-two@test.com', '0906060606', 'voucher-concurrent-2', secondToken),
     ]);
 
     expect(responses.map((response) => response.status).sort()).toEqual([201, 400]);
@@ -439,6 +562,8 @@ describe('Orders and dashboard APIs', () => {
   });
 
   it('converges same-key concurrent requests that consume the final voucher redemption', async () => {
+    const user = await createUser({ email: 'same-voucher@test.com', phone: '0906161616' });
+    const token = jwt.sign({ sub: user.id, role: user.role }, env.jwtAccessSecret);
     const taxonomy = await seedTaxonomy();
     const product = await Product.create({
       _id: 'same-key-final-voucher-phone',
@@ -456,11 +581,14 @@ describe('Orders and dashboard APIs', () => {
         email: 'same-voucher@test.com',
         phone: '0906161616',
         address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
       },
       voucherCode: 'SAMEKEYLAST',
     };
     const post = () => request(app)
       .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
       .set('Idempotency-Key', 'same-key-final-voucher')
       .send(payload);
 
@@ -494,6 +622,8 @@ describe('Orders and dashboard APIs', () => {
         email: 'voucher-cancel@test.com',
         phone: '0907070707',
         address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
       },
       voucherCode: 'CANCELONCE',
     };
@@ -545,6 +675,8 @@ describe('Orders and dashboard APIs', () => {
           email: 'restore-retry@test.com',
           phone: '0907171717',
           address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
         },
       })
       .expect(201);
@@ -603,6 +735,8 @@ describe('Orders and dashboard APIs', () => {
           email: 'voucher-retry@test.com',
           phone: '0907272727',
           address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
         },
         voucherCode: 'RELEASEFAIL',
       })
@@ -696,6 +830,8 @@ describe('Orders and dashboard APIs', () => {
             email: 'mixed@test.com',
             phone: '0904141414',
             address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
           },
         });
     } finally {
@@ -744,8 +880,8 @@ describe('Orders and dashboard APIs', () => {
   });
 
   it('rejects generic admin state mutations while allowing safe shipping edits', async () => {
-    await createUser({ email: 'safe-admin@test.com', phone: '0904242424', role: 'admin' });
-    const adminToken = await login('safe-admin@test.com');
+    const admin = await createUser({ email: 'safe-admin@test.com', phone: '0904242424', role: 'admin' });
+    const adminToken = jwt.sign({ sub: admin.id, role: admin.role }, env.jwtAccessSecret);
     const order = await Order.create({
       orderNumber: 'TP260729SAFE',
       userId: 'customer-id',
@@ -761,6 +897,8 @@ describe('Orders and dashboard APIs', () => {
         email: 'safe-update@test.com',
         phone: '0904343434',
         address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
       },
     });
 
@@ -789,6 +927,8 @@ describe('Orders and dashboard APIs', () => {
   });
 
   it('allocates unique order numbers for concurrent different checkout keys', async () => {
+    const user = await createUser({ email: 'sequence@test.com', phone: '0904444444' });
+    const token = jwt.sign({ sub: user.id, role: user.role }, env.jwtAccessSecret);
     const taxonomy = await seedTaxonomy();
     const product = await Product.create({
       _id: 'sequence-phone',
@@ -805,10 +945,13 @@ describe('Orders and dashboard APIs', () => {
         email: 'sequence@test.com',
         phone: '0904444444',
         address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
       },
     };
     const post = (key) => request(app)
       .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
       .set('Idempotency-Key', key)
       .send(payload);
 
@@ -824,8 +967,8 @@ describe('Orders and dashboard APIs', () => {
   });
 
   it('enforces valid admin order status transitions', async () => {
-    await createUser({ email: 'admin@test.com', phone: '0900000000', role: 'admin' });
-    const adminToken = await login('admin@test.com');
+    const admin = await createUser({ email: 'admin@test.com', phone: '0900000000', role: 'admin' });
+    const adminToken = jwt.sign({ sub: admin.id, role: admin.role }, env.jwtAccessSecret);
     const order = await Order.create({
       orderNumber: 'TP26061799',
       userId: 'customer-id',
@@ -840,6 +983,8 @@ describe('Orders and dashboard APIs', () => {
         email: 'transition@test.com',
         phone: '0933333333',
         address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
       },
     });
 
@@ -860,8 +1005,8 @@ describe('Orders and dashboard APIs', () => {
   });
 
   it('restores inventory and voucher usage before an admin archives an active order', async () => {
-    await createUser({ email: 'archive-admin@test.com', phone: '0904545454', role: 'admin' });
-    const adminToken = await login('archive-admin@test.com');
+    const admin = await createUser({ email: 'archive-admin@test.com', phone: '0904545454', role: 'admin' });
+    const adminToken = jwt.sign({ sub: admin.id, role: admin.role }, env.jwtAccessSecret);
     const taxonomy = await seedTaxonomy();
     const product = await Product.create({
       _id: 'archive-phone',
@@ -875,6 +1020,7 @@ describe('Orders and dashboard APIs', () => {
 
     const created = await request(app)
       .post('/api/orders')
+      .set('Authorization', `Bearer ${adminToken}`)
       .send({
         items: [{ productId: product.id, quantity: 1 }],
         customer: {
@@ -882,6 +1028,8 @@ describe('Orders and dashboard APIs', () => {
           email: 'archive-customer@test.com',
           phone: '0904646464',
           address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
         },
         voucherCode: voucher.code,
       })
@@ -921,6 +1069,8 @@ describe('Orders and dashboard APIs', () => {
         email: 'paid-archive@test.com',
         phone: '0904747474',
         address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
       },
     });
 

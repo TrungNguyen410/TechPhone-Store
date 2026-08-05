@@ -3,11 +3,11 @@ const orderController = require('../controllers/orderController');
 const validators = require('../validators/orderValidators');
 const { idParam } = require('../validators/commonValidators');
 const validate = require('../middlewares/validate');
-const { authorize, optionalProtect, protect } = require('../middlewares/authMiddleware');
+const { authorize, protect } = require('../middlewares/authMiddleware');
 
 const router = express.Router();
 
-router.post('/', optionalProtect, validators.create, validate, orderController.create);
+router.post('/', protect, validators.createDirect, validate, orderController.create);
 router.get('/', protect, orderController.list);
 router.get('/my-orders', protect, orderController.myOrders);
 router.get('/lookup', validators.lookup, validate, orderController.lookup);
