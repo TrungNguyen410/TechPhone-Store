@@ -91,7 +91,46 @@ describe('OrderManagement payment method', () => {
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
       expect.stringMatching(/đã cập nhật.*không thể tải lại/i),
     ));
+    const updatedSelect = screen.getByRole('combobox', { name: /TP260601/ });
+    expect(updatedSelect).toHaveValue('confirmed');
+    expect(toast.success).not.toHaveBeenCalled();
     expect(toast.error).not.toHaveBeenCalledWith('refresh unavailable');
+
+    fireEvent.change(updatedSelect, { target: { value: 'confirmed' } });
+    expect(orderApi.updateStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('removes a transitioned order from the active status filter when refresh fails', async () => {
+    orderApi.updateStatus.mockResolvedValue({ ...pendingOrder, status: 'confirmed' });
+    adminApi.getOrders
+      .mockResolvedValueOnce({
+        items: [pendingOrder],
+        pagination: { page: 1, limit: 20, total: 1, totalPages: 1 },
+      })
+      .mockResolvedValueOnce({
+        items: [pendingOrder],
+        pagination: { page: 1, limit: 20, total: 1, totalPages: 1 },
+      })
+      .mockRejectedValueOnce(new Error('refresh unavailable'));
+    const { container } = render(<OrderManagement />);
+    await screen.findByText(pendingOrder.orderNumber);
+
+    fireEvent.change(container.querySelector('.admin-page-toolbar > select'), {
+      target: { value: 'pending' },
+    });
+    await waitFor(() => expect(adminApi.getOrders).toHaveBeenLastCalledWith({
+      page: 1, limit: 20, search: '', status: 'pending',
+    }));
+    fireEvent.change(screen.getByRole('combobox', { name: /TP260601/ }), {
+      target: { value: 'confirmed' },
+    });
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+      expect.stringMatching(/đã cập nhật.*không thể tải lại/i),
+    ));
+    expect(screen.queryByText(pendingOrder.orderNumber)).not.toBeInTheDocument();
+    expect(container.querySelector('.admin-table-title span')).toHaveTextContent(/^0\s/);
+    expect(screen.queryByRole('button', { name: 'Trang 0' })).not.toBeInTheDocument();
   });
 
   it('renders reconciliation actions only for eligible bank and MoMo payments', async () => {

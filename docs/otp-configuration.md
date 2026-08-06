@@ -39,7 +39,16 @@ Nếu báo cáo không có số sai hoặc trùng sau chuẩn hóa, mới chạy
 npm run migrate:phone-auth -- --write
 ```
 
-Migration giữ nguyên email cũ, chuẩn hóa số điện thoại, đánh dấu tài khoản hiện tại đã xác minh số và thay index email bằng index unique có điều kiện.
+Migration này chỉ giữ nguyên email cũ, chuẩn hóa số điện thoại và đánh dấu tài khoản hiện tại đã xác minh số. Nó không tạo, xóa hoặc sửa index email/phone.
+
+Sau khi ghi dữ liệu phone thành công, kiểm tra rồi chạy migration index dành cho soft delete:
+
+```powershell
+npm run migrate:soft-delete-indexes
+npm run migrate:soft-delete-indexes -- --write
+```
+
+`migrate:soft-delete-indexes` là owner duy nhất của các unique index trên User, bao gồm `user_phone_active_unique` và `user_email_active_unique`. Nếu migration index đã chạy trước đó, có thể chạy migration phone sau mà không làm đổi index; chạy lại migration index sau cùng vẫn an toàn và idempotent.
 
 ## Kiểm tra luồng phát triển
 

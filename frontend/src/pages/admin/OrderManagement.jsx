@@ -34,6 +34,12 @@ export default function OrderManagement() {
   const [reconcilingPayment, setReconcilingPayment] = useState(false);
   const requestId = useRef(0);
   const latestLoad = useRef(null);
+  const ordersRef = useRef(orders);
+  const paginationRef = useRef(pagination);
+  const statusFilterRef = useRef(statusFilter);
+  useEffect(() => { ordersRef.current = orders; }, [orders]);
+  useEffect(() => { paginationRef.current = pagination; }, [pagination]);
+  useEffect(() => { statusFilterRef.current = statusFilter; }, [statusFilter]);
   const load = useCallback(() => {
     const currentRequest = ++requestId.current;
     return adminApi.getOrders({ page, limit: 20, search: debouncedSearch, status: statusFilter })
@@ -64,12 +70,36 @@ export default function OrderManagement() {
     }, 300);
     return () => clearTimeout(timeout);
   }, [debouncedSearch, search]);
+  const applyUpdatedOrder = (updated) => {
+    const currentOrders = ordersRef.current;
+    const orderIsVisible = currentOrders.some((order) => order.id === updated.id);
+    if (!orderIsVisible) return;
+
+    if (statusFilterRef.current && updated.status !== statusFilterRef.current) {
+      const nextOrders = currentOrders.filter((order) => order.id !== updated.id);
+      const currentPagination = paginationRef.current;
+      const total = Math.max(0, currentPagination.total - 1);
+      const totalPages = total === 0 ? 0 : Math.ceil(total / currentPagination.limit);
+      const nextPagination = { ...currentPagination, total, totalPages };
+      ordersRef.current = nextOrders;
+      paginationRef.current = nextPagination;
+      setOrders(nextOrders);
+      setPagination(nextPagination);
+      setPage((currentPage) => Math.min(currentPage, Math.max(totalPages, 1)));
+      return;
+    }
+
+    const nextOrders = currentOrders.map((order) => (order.id === updated.id ? updated : order));
+    ordersRef.current = nextOrders;
+    setOrders(nextOrders);
+  };
   const updateStatus = async (order, status) => {
     if (mutatingOrderId || status === order.status) return;
     setMutatingOrderId(order.id);
     try {
       const updated = await orderApi.updateStatus(order.id, status);
-      if (selectedOrder?.id === order.id) setSelectedOrder(updated);
+      applyUpdatedOrder(updated);
+      setSelectedOrder((current) => (current?.id === order.id ? updated : current));
       try {
         await latestLoad.current();
         toast.success(`Đã cập nhật đơn ${order.orderNumber}`);
@@ -164,7 +194,7 @@ export default function OrderManagement() {
   if (loading) return <Loading />;
   return (
     <>
-      <div className="admin-page-toolbar"><div className="admin-search"><FiSearch /><input maxLength={100} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm mã đơn, khách hàng, số điện thoại..." /></div><select aria-label="Lọc trạng thái đơn hàng" value={statusFilter} onChange={(event) => { setPage(1); setStatusFilter(event.target.value); }}><option value="">Tất cả trạng thái</option>{ORDER_STATUSES.map((status) => <option value={status} key={status}>{getOrderStatus(status).label}</option>)}</select></div>
+      <div className="admin-page-toolbar"><div className="admin-search"><FiSearch /><input maxLength={100} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm mã đơn, khách hàng, số điện thoại..." /></div><select aria-label="Lọc trạng thái đơn hàng" value={statusFilter} onChange={(event) => { statusFilterRef.current = event.target.value; setPage(1); setStatusFilter(event.target.value); }}><option value="">Tất cả trạng thái</option>{ORDER_STATUSES.map((status) => <option value={status} key={status}>{getOrderStatus(status).label}</option>)}</select></div>
       <div className="admin-table-card"><div className="admin-table-title"><div><h2>Danh sách đơn hàng</h2><span>{pagination.total} đơn hàng</span></div></div><DataTable columns={columns} rows={orders} /><Pagination currentPage={page} totalPages={pagination.totalPages} onPageChange={setPage} /></div>
       {selectedOrder && (
         <AccessibleDialog
