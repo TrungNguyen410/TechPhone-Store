@@ -3,23 +3,42 @@ import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import process from 'node:process';
+import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { generateSiteMetadata, staticRoutes } from './generate-site-metadata.mjs';
 
 const execFileAsync = promisify(execFile);
 const frontendDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const viteBin = resolve(frontendDir, 'node_modules/vite/bin/vite.js');
 const viteConfig = resolve(frontendDir, 'vite.config.js');
+const transientCleanupErrors = new Set(['EBUSY', 'EPERM']);
+
+const removeFixture = async (path, {
+  remove = rm,
+  wait = delay,
+  maxRetries = 5,
+  retryDelay = 100,
+} = {}) => {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await remove(path, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      if (!transientCleanupErrors.has(error.code) || attempt >= maxRetries) throw error;
+      await wait(retryDelay);
+    }
+  }
+};
 
 describe('generateSiteMetadata', () => {
   let outputDir;
   let projectDir;
 
   afterEach(async () => {
-    if (outputDir) await rm(outputDir, { recursive: true, force: true });
-    if (projectDir) await rm(projectDir, { recursive: true, force: true });
+    if (outputDir) await removeFixture(outputDir);
+    if (projectDir) await removeFixture(projectDir);
     outputDir = undefined;
     projectDir = undefined;
   });
@@ -169,6 +188,38 @@ describe('generateSiteMetadata', () => {
 
     expect(sitePort).toBeDefined();
     expect(previewPort).toBe(sitePort);
+  });
+});
+
+describe('fixture cleanup', () => {
+  it('retries transient Windows locks up to the configured bound', async () => {
+    const remove = vi.fn()
+      .mockRejectedValueOnce(Object.assign(new Error('busy'), { code: 'EBUSY' }))
+      .mockRejectedValueOnce(Object.assign(new Error('denied'), { code: 'EPERM' }))
+      .mockResolvedValueOnce(undefined);
+    const wait = vi.fn().mockResolvedValue(undefined);
+
+    await removeFixture('fixture-path', {
+      remove,
+      wait,
+      maxRetries: 2,
+      retryDelay: 25,
+    });
+
+    expect(remove).toHaveBeenCalledTimes(3);
+    expect(wait.mock.calls).toEqual([[25], [25]]);
+  });
+
+  it('does not retry non-transient cleanup failures', async () => {
+    const error = Object.assign(new Error('invalid path'), { code: 'EINVAL' });
+    const remove = vi.fn().mockRejectedValue(error);
+    const wait = vi.fn();
+
+    await expect(removeFixture('fixture-path', { remove, wait, maxRetries: 3 }))
+      .rejects.toBe(error);
+
+    expect(remove).toHaveBeenCalledTimes(1);
+    expect(wait).not.toHaveBeenCalled();
   });
 });
 
