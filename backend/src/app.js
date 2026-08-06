@@ -17,7 +17,7 @@ app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({ origin: env.frontendUrl === '*' ? true : env.frontendUrl, credentials: true }));
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
-app.use(morgan(env.nodeEnv === 'test' ? 'tiny' : 'dev'));
+if (env.nodeEnv !== 'test') app.use(morgan('dev'));
 app.use('/uploads', express.static(path.resolve(process.cwd(), env.uploadDir)));
 
 app.get('/api/health', (_req, res) => {

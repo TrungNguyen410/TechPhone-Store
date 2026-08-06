@@ -1,8 +1,21 @@
 const swaggerDocument = require('../src/config/swagger');
+const request = require('supertest');
+const app = require('../src/app');
 
 const httpMethods = new Set(['get', 'post', 'put', 'patch', 'delete', 'head', 'options']);
 
 describe('Swagger OpenAPI document', () => {
+  it('does not emit HTTP access logs during tests', async () => {
+    const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    try {
+      await request(app).get('/api/health').expect(200);
+      expect(writeSpy.mock.calls.flat().join('')).not.toMatch(/GET \/api\/health/);
+    } finally {
+      writeSpy.mockRestore();
+    }
+  });
+
   it('documents a response for every operation', () => {
     for (const pathItem of Object.values(swaggerDocument.paths)) {
       for (const [method, operation] of Object.entries(pathItem)) {

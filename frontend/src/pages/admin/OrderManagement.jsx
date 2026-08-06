@@ -70,8 +70,12 @@ export default function OrderManagement() {
     try {
       const updated = await orderApi.updateStatus(order.id, status);
       if (selectedOrder?.id === order.id) setSelectedOrder(updated);
-      await latestLoad.current();
-      toast.success(`Đã cập nhật đơn ${order.orderNumber}`);
+      try {
+        await latestLoad.current();
+        toast.success(`Đã cập nhật đơn ${order.orderNumber}`);
+      } catch {
+        toast.error(`Đã cập nhật đơn ${order.orderNumber}, nhưng không thể tải lại danh sách. Vui lòng làm mới trang.`);
+      }
     } catch (error) {
       toast.error(error.friendlyMessage || error.message);
     } finally {

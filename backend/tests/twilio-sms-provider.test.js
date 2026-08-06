@@ -42,4 +42,23 @@ describe('TwilioProvider', () => {
     await expect(provider.send({ to: '0912345678', body: 'secret body' }))
       .rejects.toMatchObject({ statusCode: 503 });
   });
+
+  it('maps a non-2xx Twilio response to a safe 503 without exposing its body', async () => {
+    const provider = new TwilioProvider({
+      accountSid: 'AC123',
+      authToken: 'secret',
+      from: '+15005550006',
+      fetchImpl: jest.fn().mockResolvedValue({
+        ok: false,
+        status: 429,
+        text: async () => 'private Twilio quota details',
+      }),
+    });
+
+    await expect(provider.send({ to: '0912345678', body: 'secret OTP body' }))
+      .rejects.toMatchObject({
+        statusCode: 503,
+        message: expect.not.stringMatching(/Twilio|quota|OTP|429/i),
+      });
+  });
 });

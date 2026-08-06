@@ -226,6 +226,24 @@ describe('public catalog visibility', () => {
     expect((await request(app).get(`/api/accessories/${hidden.id}`)).status).toBe(404);
   });
 
+  it('returns 404 for soft-deleted product and accessory public details', async () => {
+    const { apple, phones } = await seedTaxonomy();
+    const product = await Product.create({ name: 'Archived Phone', brandId: apple.id, categoryId: phones.id, price: 1000000, status: 'active' });
+    const accessory = await Accessory.create({ name: 'Archived Charger', brandId: apple.id, categoryId: phones.id, price: 500000, status: 'active' });
+    await Promise.all([
+      Product.updateOne({ _id: product.id }, { isDeleted: true, deletedAt: new Date() }),
+      Accessory.updateOne({ _id: accessory.id }, { isDeleted: true, deletedAt: new Date() }),
+    ]);
+
+    const [productResponse, accessoryResponse] = await Promise.all([
+      request(app).get(`/api/products/${product.id}`),
+      request(app).get(`/api/accessories/${accessory.id}`),
+    ]);
+
+    expect(productResponse.status).toBe(404);
+    expect(accessoryResponse.status).toBe(404);
+  });
+
   it('retains inactive catalog records in admin lists', async () => {
     const { apple, phones } = await seedTaxonomy();
     const hiddenProduct = await Product.create({ name: 'Hidden Phone', brandId: apple.id, categoryId: phones.id, price: 1000000, status: 'inactive' });

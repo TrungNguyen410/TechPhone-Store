@@ -422,7 +422,7 @@ export const mockDb = {
 
   async reconcileManualPayment(id, payload) {
     const actor = currentMockUser();
-    if (!actor || actor.role !== 'admin') {
+    if (!actor || actor.role !== 'admin' || actor.status !== 'active') {
       fail('Bạn không có đủ quyền để thực hiện thao tác này', 403);
     }
     const allowedFields = ['status', 'reference', 'note'];

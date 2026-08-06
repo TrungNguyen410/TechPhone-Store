@@ -4,6 +4,7 @@ import { adminApi } from '../../api/adminApi';
 import { orderApi } from '../../api/orderApi';
 import { paymentApi } from '../../api/paymentApi';
 import OrderManagement from './OrderManagement';
+import { toast } from 'react-toastify';
 
 vi.mock('../../api/adminApi', () => ({ adminApi: { getOrders: vi.fn() } }));
 vi.mock('../../api/orderApi', () => ({ orderApi: { updateStatus: vi.fn() } }));
@@ -70,6 +71,27 @@ describe('OrderManagement payment method', () => {
     expect(select).toBeDisabled();
     await waitFor(() => expect(select).not.toBeDisabled());
     expect(select).toHaveValue('pending');
+  });
+
+  it('reports that the mutation succeeded when only the list refresh fails', async () => {
+    orderApi.updateStatus.mockResolvedValue({ ...pendingOrder, status: 'confirmed' });
+    adminApi.getOrders
+      .mockResolvedValueOnce({
+        items: [pendingOrder],
+        pagination: { page: 1, limit: 20, total: 1, totalPages: 1 },
+      })
+      .mockRejectedValueOnce(new Error('refresh unavailable'));
+    render(<OrderManagement />);
+
+    fireEvent.change(await screen.findByRole('combobox', { name: /TP260601/ }), {
+      target: { value: 'confirmed' },
+    });
+
+    await waitFor(() => expect(orderApi.updateStatus).toHaveBeenCalledWith('order-1', 'confirmed'));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+      expect.stringMatching(/đã cập nhật.*không thể tải lại/i),
+    ));
+    expect(toast.error).not.toHaveBeenCalledWith('refresh unavailable');
   });
 
   it('renders reconciliation actions only for eligible bank and MoMo payments', async () => {

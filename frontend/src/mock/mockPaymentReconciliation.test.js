@@ -42,6 +42,18 @@ describe('mock manual payment reconciliation contract', () => {
     expect(storage.get(STORAGE_KEYS.mockOrders)[0]).toEqual(manualOrder);
   });
 
+  it('rejects reconciliation by an inactive admin without mutating the order', async () => {
+    setSession({ id: 'user-admin', role: 'admin', status: 'inactive' });
+
+    await expect(mockDb.reconcileManualPayment('manual-order', {
+      status: 'paid',
+      reference: 'BANK-01',
+      note: '',
+    })).rejects.toMatchObject({ response: { status: 403 } });
+
+    expect(storage.get(STORAGE_KEYS.mockOrders)[0]).toEqual(manualOrder);
+  });
+
   it.each([
     ['an invalid status', { status: 'refunded', reference: 'BANK-01', note: '' }],
     ['confirmedBy', { status: 'paid', reference: 'BANK-01', note: '', confirmedBy: 'attacker' }],
