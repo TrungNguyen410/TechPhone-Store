@@ -19,7 +19,7 @@ export default function CatalogManagement({ api, kind = 'product' }) {
   const [mutationKey, setMutationKey] = useState('');
 
   const load = useCallback(
-    () => api.getAll().then(setItems).finally(() => setLoading(false)),
+    () => api.getAllAdmin().then(setItems).finally(() => setLoading(false)),
     [api],
   );
   useEffect(() => { load(); }, [load]);
