@@ -10,8 +10,8 @@ const router = express.Router();
 const controller = createCrudController(accessoryService, 'Accessory');
 const adminOnly = [protect, authorize('admin')];
 
-router.get('/', validators.list, validate, controller.list);
-router.get('/:id', idParam, validate, controller.getById);
+router.get('/', validators.list, validate, controller.listPublic);
+router.get('/:id', idParam, validate, controller.getPublicById);
 router.post('/', adminOnly, validators.create, validate, controller.create);
 router.put('/:id', adminOnly, idParam, validators.update, validate, controller.update);
 router.delete('/:id', adminOnly, idParam, validate, controller.remove);

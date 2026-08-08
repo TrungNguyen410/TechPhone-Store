@@ -1,28 +1,21 @@
-const buckets = new Map();
+const { consumeRateLimit } = require('../repositories/rateLimitRepository');
 
-const rateLimit = ({ windowMs = 15 * 60 * 1000, max = 5, namespace = 'ip', keyGenerator } = {}) => (req, res, next) => {
+const rateLimit = ({ windowMs = 15 * 60 * 1000, max = 5, namespace = 'ip', keyGenerator } = {}) => async (req, res, next) => {
   const identity = keyGenerator ? keyGenerator(req) : req.ip;
   const key = `${namespace}:${identity}:${req.baseUrl}${req.path}`;
-  const now = Date.now();
-  const bucket = buckets.get(key);
-  if (!bucket || bucket.resetAt <= now) {
-    const resetAt = now + windowMs;
-    buckets.set(key, { count: 1, resetAt });
-    const cleanup = setTimeout(() => {
-      if (buckets.get(key)?.resetAt === resetAt) buckets.delete(key);
-    }, windowMs);
-    cleanup.unref?.();
-    return next();
-  }
-  if (bucket.count >= max) {
-    res.set('Retry-After', String(Math.ceil((bucket.resetAt - now) / 1000)));
+
+  try {
+    const bucket = await consumeRateLimit({ key, windowMs, max });
+    if (bucket.allowed) return next();
+
+    res.set('Retry-After', String(Math.max(1, Math.ceil((bucket.resetAt.getTime() - Date.now()) / 1000))));
     return res.status(429).json({
       success: false,
       message: 'Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau.',
     });
+  } catch (error) {
+    return next(error);
   }
-  bucket.count += 1;
-  return next();
 };
 
 module.exports = rateLimit;

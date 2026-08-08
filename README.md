@@ -16,7 +16,7 @@ Frontend React cho website bán điện thoại và phụ kiện TechPhone. Dự
 
 ## Cài đặt và chạy
 
-Yêu cầu Node.js 20.19+ hoặc Node.js 22.12+.
+Yêu cầu Node.js 22 (`>=22 <23`).
 
 ```bash
 cd frontend
@@ -26,12 +26,18 @@ npm run dev
 
 Ứng dụng mặc định chạy tại `http://localhost:5173`.
 
-## Build production
+## Local preview build
 
 ```bash
 npm run build
 npm run preview
 ```
+
+Copy `.env.example` to `.env` before this local preview workflow. It uses the
+explicit `local-preview` target so localhost URLs are intentional. A Render
+production build must instead use the non-loopback variables documented below.
+
+The local preview is available at `http://localhost:5173`.
 
 Thư mục build được tạo tại `dist/`.
 
@@ -50,6 +56,8 @@ Mở `http://localhost:8080`.
 docker build \
   --build-arg VITE_USE_MOCK=false \
   --build-arg VITE_API_URL=http://localhost:5000/api \
+  --build-arg VITE_SITE_URL=http://localhost:8080 \
+  --build-arg VITE_DEPLOYMENT_TARGET=docker \
   -t duanwebdidong-frontend .
 ```
 
@@ -60,6 +68,8 @@ Tạo file `.env` từ `.env.example`:
 ```env
 VITE_API_URL=http://localhost:5000/api
 VITE_USE_MOCK=true
+VITE_SITE_URL=http://localhost:5173
+VITE_DEPLOYMENT_TARGET=local-preview
 ```
 
 - `VITE_USE_MOCK=true`: dùng dữ liệu mock và lưu tạm thay đổi trong localStorage.
@@ -150,3 +160,42 @@ Mock mode dùng localStorage để mô phỏng thay đổi trong phiên phát tr
 - `mock_products`, `mock_orders`, `mock_reviews` và các collection quản trị khác
 
 Xóa các key `mock_*` trong DevTools để khôi phục dữ liệu mẫu ban đầu.
+
+## Canonical production deployment
+
+Render is the repository's single canonical production target: use a Render
+Static Site for the frontend, a Render Web Service for the backend, and MongoDB
+Atlas. The backend requires a Render persistent disk mounted at `/app/uploads`
+with `UPLOAD_DIR=/app/uploads`; do not deploy the current local-upload routes to
+a serverless filesystem.
+
+Replace these documented domain placeholders with the actual Render domains:
+
+```env
+VITE_SITE_URL=https://shop.techphone.example
+VITE_API_URL=https://api.techphone.example/api
+VITE_DEPLOYMENT_TARGET=render
+FRONTEND_URL=https://shop.techphone.example
+PUBLIC_SITE_URL=https://shop.techphone.example
+API_PUBLIC_URL=https://api.techphone.example
+DEPLOYMENT_TARGET=render
+UPLOAD_DIR=/app/uploads
+```
+
+Production public URLs must be absolute HTTP(S) URLs. Render builds reject
+loopback URLs and do not fall back to localhost; only the explicit `docker` and
+`local-preview` targets permit localhost in a production-mode frontend build. If VNPay is enabled, also set
+`VNPAY_RETURN_URL=https://api.techphone.example/api/payments/vnpay/return`.
+See [deployment.md](deployment.md) for the complete Render checklist.
+
+## Security exception: React Router RSC advisory
+
+- Advisory: [GHSA-qwww-vcr4-c8h2](https://github.com/advisories/GHSA-qwww-vcr4-c8h2)
+- Package: `react-router@7.18.2`, installed through `react-router-dom@7.18.2`.
+- Reason: this is a Vite browser SPA using stable `react-router-dom` routing APIs;
+  it does not import or enable the unstable RSC APIs affected by the advisory.
+- Owner: TechPhone maintainers.
+- Review date: 2026-09-05.
+- Compatibility plan: upgrade `react-router-dom` and `react-router` to 8.3.0 or
+  newer in a separate change, then run the route and full frontend test suites.
+  Do not use `npm audit fix --force` or downgrade the packages.

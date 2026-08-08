@@ -34,4 +34,11 @@ describe('mock OTP authentication', () => {
     expect(updated.fullName).toBe('Updated User');
     expect(updated.phone).toBe('0911111111');
   });
+
+  it('rejects inactive users at login', async () => {
+    const users = await mockDb.list('users');
+    await mockDb.updateUser('user-3', { ...users.find((user) => user.id === 'user-3'), status: 'inactive' });
+
+    await expect(mockDb.login('nam.tran@example.com', '123456')).rejects.toThrow();
+  });
 });

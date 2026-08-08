@@ -1,3 +1,5 @@
+const env = require('./env');
+
 const swaggerDocument = {
   openapi: '3.0.3',
   info: {
@@ -6,8 +8,10 @@ const swaggerDocument = {
     description: 'Production-ready REST API for the TechPhone Store Software Engineering course project.',
   },
   servers: [
-    { url: 'http://localhost:5000/api', description: 'Local development' },
-    { url: 'https://techphone-api.onrender.com/api', description: 'Render production example' },
+    {
+      url: `${env.apiPublicUrl}/api`,
+      description: env.nodeEnv === 'production' ? 'Production' : 'Current environment',
+    },
   ],
   tags: [
     { name: 'Auth' },

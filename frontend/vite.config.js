@@ -1,18 +1,40 @@
 import process from 'node:process';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import { createSiteMetadataAssets } from './scripts/generate-site-metadata.mjs';
+import { normalizeDeploymentTarget, normalizePublicUrl } from './src/utils/deploymentConfig.js';
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ command, mode }) => {
+  const production = command === 'build';
   const env = loadEnv(mode, process.cwd(), 'VITE_');
-  const siteUrl = (env.VITE_SITE_URL || 'http://localhost:5173').replace(/\/+$/, '');
-  process.env.VITE_SITE_URL = siteUrl;
+  const deploymentTarget = normalizeDeploymentTarget(env, production);
+  const options = { production, deploymentTarget };
+  const siteUrl = normalizePublicUrl('VITE_SITE_URL', env.VITE_SITE_URL, {
+    ...options,
+    fallback: production ? '' : 'http://localhost:5173',
+    originOnly: true,
+  });
+  const apiUrl = normalizePublicUrl('VITE_API_URL', env.VITE_API_URL, options);
+  const useMock = env.VITE_USE_MOCK === 'true';
+
+  if (production && !siteUrl) throw new Error('VITE_SITE_URL is required in production');
+  if (production && !useMock && !apiUrl) throw new Error('VITE_API_URL is required in production');
+
+  const metadata = production
+    ? createSiteMetadataAssets({ siteUrl, deploymentTarget })
+    : null;
 
   return {
     plugins: [
       {
-        name: 'techphone-html-site-url',
+        name: 'techphone-site-metadata',
         enforce: 'pre',
         transformIndexHtml: (html) => html.replaceAll('%VITE_SITE_URL%', siteUrl),
+        generateBundle() {
+          if (!metadata) return;
+          this.emitFile({ type: 'asset', fileName: 'robots.txt', source: metadata.robots });
+          this.emitFile({ type: 'asset', fileName: 'sitemap.xml', source: metadata.sitemap });
+        },
       },
       react(),
     ],
@@ -43,6 +65,10 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
+      port: 5173,
+      host: true,
+    },
+    preview: {
       port: 5173,
       host: true,
     },

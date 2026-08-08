@@ -42,9 +42,15 @@ const verifyVnpayResult = asyncHandler(async (req, res) => {
   successResponse(res, result, 'Payment result verified');
 });
 
+const reconcileManualPayment = asyncHandler(async (req, res) => {
+  const order = await paymentService.reconcileManualPayment(req.params.id, req.body, req.user);
+  successResponse(res, order, 'Manual payment reconciled');
+});
+
 module.exports = {
   createVnpayCheckout,
   getConfig,
+  reconcileManualPayment,
   verifyVnpayResult,
   vnpayIpn,
   vnpayReturn,

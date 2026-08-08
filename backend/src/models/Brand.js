@@ -5,8 +5,8 @@ const { baseSchemaOptions, stringId } = require('./baseSchemaOptions');
 const brandSchema = new mongoose.Schema(
   {
     _id: stringId,
-    name: { type: String, required: true, trim: true, unique: true },
-    slug: { type: String, required: true, trim: true, unique: true },
+    name: { type: String, required: true, trim: true },
+    slug: { type: String, required: true, trim: true },
     logo: { type: String, default: '' },
     description: { type: String, default: '' },
     active: { type: Boolean, default: true },
@@ -15,5 +15,13 @@ const brandSchema = new mongoose.Schema(
 );
 
 brandSchema.plugin(softDeletePlugin);
+brandSchema.index(
+  { name: 1 },
+  { name: 'brand_name_active_unique', unique: true, partialFilterExpression: { isDeleted: false } },
+);
+brandSchema.index(
+  { slug: 1 },
+  { name: 'brand_slug_active_unique', unique: true, partialFilterExpression: { isDeleted: false } },
+);
 
 module.exports = mongoose.model('Brand', brandSchema);

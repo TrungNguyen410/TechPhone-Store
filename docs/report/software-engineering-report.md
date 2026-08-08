@@ -70,7 +70,7 @@ The challenge was to convert an existing React + Vite frontend mock application 
 - Mock data layer (switches to real API with VITE_USE_MOCK=false)
 
 **Backend:**
-- Node.js 24 (runtime)
+- Node.js 22 (runtime)
 - Express 5.x (web framework)
 - Mongoose 9.x (ODM)
 - MongoDB (document database)
@@ -603,8 +603,8 @@ uploads/
 ### 6.1 Containerization
 
 **Docker Images:**
-- **Frontend:** Node 24 build stage + Nginx runtime
-- **Backend:** Node 24 alpine with production dependencies
+- **Frontend:** Node 22 build stage + Nginx runtime
+- **Backend:** Node 22 alpine with production dependencies
 - **MongoDB:** Official mongo:7 image
 
 **Docker Compose Stack:**

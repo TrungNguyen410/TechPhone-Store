@@ -99,9 +99,23 @@ describe('Checkout payment confirmations', () => {
     await waitFor(() => expect(orderApi.create).toHaveBeenCalledTimes(1));
     expect(orderApi.create.mock.calls[0][0].paymentMethod).toBe('momo');
     expect(orderApi.create.mock.calls[0][0].note).toMatch(/Ma giao dich MoMo:/);
+    expect(orderApi.create.mock.calls[0][0].items).toEqual([
+      { id: 'phone-1', productId: 'phone-1', type: 'product', quantity: 1 },
+    ]);
   });
 
   it('redirects card payments to VNPay without rendering card inputs', async () => {
+    cart.cartItems = [{
+      id: 'case-1',
+      productId: 'case-1',
+      name: 'Case',
+      image: 'case.png',
+      price: 300000,
+      oldPrice: 350000,
+      stock: 10,
+      type: 'accessory',
+      quantity: 2,
+    }];
     render(<MemoryRouter><Checkout /></MemoryRouter>);
     completeCurrentAddress();
     fireEvent.click(await screen.findByRole('radio', { name: /VNPay/i }));
@@ -110,6 +124,9 @@ describe('Checkout payment confirmations', () => {
 
     await waitFor(() => expect(paymentApi.createVnpayCheckout).toHaveBeenCalledTimes(1));
     expect(paymentApi.createVnpayCheckout.mock.calls[0][0].paymentMethod).toBe('card');
+    expect(paymentApi.createVnpayCheckout.mock.calls[0][0].items).toEqual([
+      { id: 'case-1', accessoryId: 'case-1', type: 'accessory', quantity: 2 },
+    ]);
     expect(paymentApi.createVnpayCheckout.mock.calls[0][1]).toMatch(/^checkout-/);
     expect(cart.clearCart).not.toHaveBeenCalled();
     expect(JSON.parse(sessionStorage.getItem('techphone_pending_payment'))).toEqual(
@@ -147,7 +164,7 @@ describe('Checkout payment confirmations', () => {
       .toBe('checkout-existing-attempt');
   });
 
-  it('recalculates a shipping voucher against the selected province fee', async () => {
+  it('keeps pricing fields out of the checkout request', async () => {
     cart.discount = 30000;
     cart.voucher = { code: 'SHIP', type: 'shipping', value: 30000 };
     render(<MemoryRouter><Checkout /></MemoryRouter>);
@@ -156,9 +173,14 @@ describe('Checkout payment confirmations', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận đặt hàng' }));
 
     await waitFor(() => expect(orderApi.create).toHaveBeenCalledTimes(1));
-    expect(orderApi.create.mock.calls[0][0]).toEqual(
-      expect.objectContaining({ shippingFee: 20000, discount: 20000, total: 1000000 }),
-    );
+    const payload = orderApi.create.mock.calls[0][0];
+    expect(payload.voucherCode).toBe('SHIP');
+    expect(payload).not.toHaveProperty('userId');
+    expect(payload).not.toHaveProperty('paymentReference');
+    expect(payload).not.toHaveProperty('subtotal');
+    expect(payload).not.toHaveProperty('shippingFee');
+    expect(payload).not.toHaveProperty('discount');
+    expect(payload).not.toHaveProperty('total');
   });
 
   it('uses one stable idempotency key and synchronously blocks duplicate submits', async () => {

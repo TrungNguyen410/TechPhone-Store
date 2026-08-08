@@ -297,6 +297,44 @@ class PaymentService {
     );
   }
 
+  async reconcileManualPayment(orderId, payload, actor) {
+    const order = await orderRepository.findById(orderId);
+    if (!order) throw new AppError('Không tìm thấy đơn hàng', 404);
+    if (!['bank', 'momo'].includes(order.paymentMethod)) {
+      throw new AppError('Đơn hàng không dùng thanh toán thủ công', 409);
+    }
+    if (!['pending', 'failed'].includes(order.paymentStatus)) {
+      throw new AppError('Thanh toán đã được đối soát', 409);
+    }
+    if (payload.status === order.paymentStatus) {
+      throw new AppError('Thanh toán đã ở trạng thái này', 409);
+    }
+
+    const shouldConfirmOrder = payload.status === 'paid' && order.status === 'pending';
+    const updatedOrder = await orderRepository.updateState(
+      orderId,
+      {
+        paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus,
+        ...(shouldConfirmOrder ? { status: order.status } : {}),
+      },
+      {
+        paymentStatus: payload.status,
+        paymentReference: payload.reference || '',
+        paymentAudit: {
+          confirmedBy: actor.id,
+          confirmedAt: new Date(),
+          note: payload.note || '',
+        },
+        ...(shouldConfirmOrder ? { status: 'confirmed' } : {}),
+      },
+    );
+    if (!updatedOrder) {
+      throw new AppError('Trạng thái thanh toán vừa thay đổi. Vui lòng thử lại.', 409);
+    }
+    return updatedOrder;
+  }
+
   verifyResultProof(proof) {
     try {
       const payload = jwt.verify(proof, env.jwtAccessSecret, {

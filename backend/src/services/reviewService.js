@@ -1,6 +1,12 @@
 const AppError = require('../utils/AppError');
 const reviewRepository = require('../repositories/reviewRepository');
 const orderRepository = require('../repositories/orderRepository');
+const accessoryRepository = require('../repositories/accessoryRepository');
+const productRepository = require('../repositories/productRepository');
+const pick = require('../utils/pick');
+
+const reviewCreateFields = ['productId', 'accessoryId', 'rating', 'comment', 'images'];
+const reviewUpdateFields = ['rating', 'comment', 'images', 'status'];
 
 class ReviewService {
   async listPublic() {
@@ -20,19 +26,24 @@ class ReviewService {
   }
 
   async create(payload, user) {
-    const userId = user?.id || payload.userId;
-    const productId = payload.productId || 'general';
-    const accessoryId = payload.accessoryId || null;
-    let verifiedPurchase = false;
-    if (accessoryId || productId !== 'general') {
-      const orders = await orderRepository.findAll({ userId }, { sort: { createdAt: -1 } });
-      verifiedPurchase = orders.some((order) =>
-        ['delivered', 'completed'].includes(order.status)
-        && order.items.some((item) =>
-          (accessoryId && item.accessoryId === accessoryId)
-          || (!accessoryId && item.productId === productId)),
-      );
+    const dto = pick(payload, reviewCreateFields);
+    const userId = user?.id;
+    const productId = dto.productId || 'general';
+    const accessoryId = dto.accessoryId || null;
+    const target = accessoryId
+      ? await accessoryRepository.findById(accessoryId)
+      : await productRepository.findById(productId);
+    if (!target || target.isDeleted || target.status !== 'active') {
+      throw new AppError('Sản phẩm đánh giá không tồn tại', 404);
     }
+    let verifiedPurchase = false;
+    const orders = await orderRepository.findAll({ userId }, { sort: { createdAt: -1 } });
+    verifiedPurchase = orders.some((order) =>
+      ['delivered', 'completed'].includes(order.status)
+      && order.items.some((item) =>
+        (accessoryId && item.accessoryId === accessoryId)
+        || (!accessoryId && item.productId === productId)),
+    );
     const existingReview = await reviewRepository.findByUserAndTarget(userId, { productId, accessoryId });
     if (existingReview) {
       throw new AppError('Bạn đã đánh giá mặt hàng này rồi', 409);
@@ -40,12 +51,12 @@ class ReviewService {
 
     try {
       return await reviewRepository.create({
-        ...payload,
+        ...dto,
         userId,
-        userName: user?.fullName || payload.userName,
+        userName: user?.fullName,
         productId,
         accessoryId,
-        images: Array.isArray(payload.images) ? payload.images.slice(0, 5) : [],
+        images: Array.isArray(dto.images) ? dto.images.slice(0, 5) : [],
         verifiedPurchase,
         status: 'pending',
       });
@@ -58,7 +69,9 @@ class ReviewService {
   }
 
   async update(id, payload) {
-    return reviewRepository.update(id, payload);
+    const dto = pick(payload, reviewUpdateFields);
+    if (Object.keys(dto).length === 0) throw new AppError('Dữ liệu cập nhật không hợp lệ', 422);
+    return reviewRepository.update(id, dto);
   }
 
   async approve(id) {

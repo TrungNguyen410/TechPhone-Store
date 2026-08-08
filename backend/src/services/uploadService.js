@@ -21,7 +21,10 @@ class UploadService {
       throw new AppError('Thư mục lưu ảnh không hợp lệ', 422);
     }
 
-    const destination = path.join(process.cwd(), env.uploadDir, file.fieldname);
+    const destination = path.join(
+      path.resolve(process.cwd(), env.uploadDir),
+      file.fieldname,
+    );
     await fs.mkdir(destination, { recursive: true });
     const filename = `${Date.now()}-${crypto.randomUUID()}.${file.detectedType.ext}`;
     await fs.writeFile(path.join(destination, filename), file.buffer, { flag: 'wx' });

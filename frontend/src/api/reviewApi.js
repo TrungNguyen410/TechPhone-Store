@@ -3,7 +3,10 @@ import { mockDb } from '../mock/mockDb';
 import axiosClient from './axiosClient';
 
 export const reviewApi = {
-  getAll: () => (USE_MOCK ? mockDb.list('reviews') : axiosClient.get('/reviews')),
+  getAll: async () => {
+    if (!USE_MOCK) return axiosClient.get('/reviews');
+    return (await mockDb.list('reviews')).filter((review) => review.status === 'approved');
+  },
   getByProduct: async (productId) => {
     if (!USE_MOCK) return axiosClient.get(`/reviews/product/${productId}`);
     const reviews = await mockDb.list('reviews');

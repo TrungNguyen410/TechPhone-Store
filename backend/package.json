@@ -3,12 +3,16 @@
   "version": "1.0.0",
   "description": "Clean Architecture REST API for the TechPhone Store course project.",
   "main": "server.js",
+  "engines": {
+    "node": ">=22 <23"
+  },
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
     "seed": "node src/seed/seed.js",
     "migrate:taxonomy": "node src/scripts/migrateCatalogTaxonomy.js",
     "migrate:phone-auth": "node src/scripts/migratePhoneAuth.js",
+    "migrate:soft-delete-indexes": "node src/scripts/migrateSoftDeleteIndexes.js",
     "test": "jest --runInBand",
     "test:coverage": "jest --coverage --runInBand"
   },

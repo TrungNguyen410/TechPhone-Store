@@ -35,4 +35,8 @@ export const paymentApi = {
     USE_MOCK
       ? Promise.reject(new Error('Mock payment results are verified locally'))
       : axiosClient.post('/payments/vnpay/result', { proof }),
+  reconcileManualPayment: (orderId, payload) =>
+    USE_MOCK
+      ? mockDb.reconcileManualPayment(orderId, payload)
+      : axiosClient.put(`/admin/orders/${orderId}/payment`, payload),
 };

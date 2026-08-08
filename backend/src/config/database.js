@@ -9,9 +9,9 @@ const assertTransactionTopology = (hello) => {
   }
 };
 
-const connectDB = async (uri = env.mongoUri, client = mongoose) => {
+const connectDB = async (uri = env.mongoUri, client = mongoose, options) => {
   client.set('strictQuery', true);
-  await client.connect(uri);
+  await client.connect(uri, options);
   try {
     const hello = await client.connection.db.admin().command({ hello: 1 });
     assertTransactionTopology(hello);

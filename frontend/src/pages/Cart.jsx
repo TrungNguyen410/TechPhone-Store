@@ -16,6 +16,7 @@ export default function Cart() {
   const cart = useCart();
   const [confirmClear, setConfirmClear] = useState(false);
   const [removeId, setRemoveId] = useState(null);
+  const shippingVoucherPending = cart.voucher?.type === 'shipping';
 
   if (cart.cartItems.length === 0) {
     return (
@@ -55,7 +56,12 @@ export default function Cart() {
               />
             ))}
           </section>
-          <CartSummary {...cart} onCheckout={checkout} />
+          <CartSummary
+            subtotal={cart.subtotal}
+            discount={shippingVoucherPending ? 0 : cart.discount}
+            shippingVoucherPending={shippingVoucherPending}
+            onCheckout={checkout}
+          />
         </div>
       </div>
       <ConfirmModal

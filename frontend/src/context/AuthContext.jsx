@@ -26,6 +26,26 @@ export function AuthProvider({ children }) {
     if (refreshToken) void authApi.logout(refreshToken).catch(() => {});
   }, []);
 
+  const mergeLocalWishlist = useCallback(async (session) => {
+    const localItems = storage.get(STORAGE_KEYS.wishlist, []);
+    const remoteItems = session.user.wishlist || [];
+    const mergedItems = mergeWishlists(remoteItems, localItems);
+    try {
+      const wishlist = wishlistEquals(mergedItems, remoteItems)
+        ? remoteItems
+        : await authApi.updateWishlist(session.user.id, mergedItems);
+      const nextSession = { ...session, user: { ...session.user, wishlist } };
+      setUser(nextSession.user);
+      storage.set(STORAGE_KEYS.currentUser, nextSession.user);
+      storage.set(STORAGE_KEYS.wishlist, wishlist);
+      window.dispatchEvent(new CustomEvent('wishlist-updated'));
+      return nextSession;
+    } catch {
+      storage.set(STORAGE_KEYS.wishlist, mergedItems);
+      return session;
+    }
+  }, []);
+
   const loadCurrentUser = useCallback(async () => {
     const persistedUser = storage.get(STORAGE_KEYS.currentUser);
     if (!token || !persistedUser) {
@@ -34,40 +54,17 @@ export function AuthProvider({ children }) {
     }
     try {
       const currentUser = await authApi.me(persistedUser);
-      const localItems = storage.get(STORAGE_KEYS.wishlist, []);
-      const remoteItems = currentUser.wishlist || [];
-      const mergedItems = mergeWishlists(remoteItems, localItems);
-      const wishlist = wishlistEquals(mergedItems, remoteItems)
-        ? remoteItems
-        : await authApi.updateWishlist(currentUser.id, mergedItems);
-      const syncedUser = { ...currentUser, wishlist };
-      setUser(syncedUser);
-      storage.set(STORAGE_KEYS.currentUser, syncedUser);
-      storage.set(STORAGE_KEYS.wishlist, wishlist);
-      window.dispatchEvent(new CustomEvent('wishlist-updated'));
-      return syncedUser;
+      const session = { token, user: currentUser };
+      setUser(currentUser);
+      storage.set(STORAGE_KEYS.currentUser, currentUser);
+      return mergeLocalWishlist(session);
     } catch {
       logout();
       return null;
     } finally {
       setLoading(false);
     }
-  }, [logout, token]);
-
-  const mergeLocalWishlist = useCallback(async (session) => {
-    const localItems = storage.get(STORAGE_KEYS.wishlist, []);
-    const remoteItems = session.user.wishlist || [];
-    const mergedItems = mergeWishlists(remoteItems, localItems);
-    const wishlist = wishlistEquals(mergedItems, remoteItems)
-      ? remoteItems
-      : await authApi.updateWishlist(session.user.id, mergedItems);
-    const nextSession = { ...session, user: { ...session.user, wishlist } };
-    setUser(nextSession.user);
-    storage.set(STORAGE_KEYS.currentUser, nextSession.user);
-    storage.set(STORAGE_KEYS.wishlist, wishlist);
-    window.dispatchEvent(new CustomEvent('wishlist-updated'));
-    return nextSession;
-  }, []);
+  }, [logout, mergeLocalWishlist, token]);
 
   useEffect(() => {
     loadCurrentUser();

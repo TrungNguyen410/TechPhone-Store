@@ -1,6 +1,7 @@
 const BaseRepository = require('./baseRepository');
 const User = require('../models/User');
 const { normalizeVietnamesePhone } = require('../utils/phone');
+const { buildRegex } = require('../utils/query');
 
 class UserRepository extends BaseRepository {
   constructor() {
@@ -36,6 +37,23 @@ class UserRepository extends BaseRepository {
 
   async findByIdWithPassword(id) {
     return User.findOne({ _id: id, isDeleted: false }).select('+password');
+  }
+
+  async findCustomersPage({ page, limit, search = '' }) {
+    const filter = { role: 'customer' };
+    if (search) {
+      const pattern = buildRegex(search);
+      filter.$or = [
+        { fullName: pattern },
+        { email: pattern },
+        { phone: pattern },
+      ];
+    }
+    const [items, total] = await Promise.all([
+      this.findAll(filter, { sort: { createdAt: -1 }, skip: (page - 1) * limit, limit }),
+      this.count(filter),
+    ]);
+    return { items, total };
   }
 }
 

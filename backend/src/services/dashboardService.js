@@ -1,46 +1,47 @@
-const Order = require('../models/Order');
-const Product = require('../models/Product');
-const User = require('../models/User');
+const orderRepository = require('../repositories/orderRepository');
+const productRepository = require('../repositories/productRepository');
+const userRepository = require('../repositories/userRepository');
+
+const MIN_YEAR = 1970;
+const MAX_YEAR = 9999;
+const statusKeys = ['pending', 'confirmed', 'shipping', 'completed', 'cancelled'];
 
 class DashboardService {
-  async statistics() {
-    const [products, orders, customers] = await Promise.all([
-      Product.find({ isDeleted: false }),
-      Order.find({ isDeleted: false }).sort({ createdAt: -1 }),
-      User.find({ isDeleted: false, role: 'customer' }),
+  async statistics({ year = new Date().getUTCFullYear() } = {}) {
+    const selectedYear = Number(year);
+    if (!Number.isInteger(selectedYear) || selectedYear < MIN_YEAR || selectedYear > MAX_YEAR) {
+      throw new TypeError('Dashboard year is outside the supported range');
+    }
+
+    const [products, orders, customers, recentOrders, topProducts, revenueRows, statusRows] = await Promise.all([
+      productRepository.count(),
+      orderRepository.count(),
+      userRepository.count({ role: 'customer' }),
+      orderRepository.findRecent(5),
+      productRepository.findTopSelling(5),
+      orderRepository.revenueByMonth(selectedYear),
+      orderRepository.countByStatus(),
     ]);
 
-    const completedOrders = orders.filter((order) => ['completed', 'delivered'].includes(order.status));
-    const revenue = completedOrders.reduce((sum, order) => sum + order.total, 0);
-    const monthlyRevenue = Array.from({ length: 12 }, (_, monthIndex) => {
-      const total = completedOrders
-        .filter((order) => new Date(order.createdAt).getMonth() === monthIndex)
-        .reduce((sum, order) => sum + order.total, 0);
-      return Number((total / 1000000).toFixed(1));
-    });
-
-    const statusKeys = ['pending', 'confirmed', 'shipping', 'completed', 'cancelled'];
+    const revenueByMonth = new Map(revenueRows.map((row) => [row._id, row.total]));
+    const monthlyRevenue = Array.from({ length: 12 }, (_, index) => (
+      Number(((revenueByMonth.get(index + 1) || 0) / 1000000).toFixed(1))
+    ));
+    const statusCounts = new Map(statusRows.map((row) => [row._id, row.count]));
 
     return {
       stats: {
-        products: products.length,
-        orders: orders.length,
-        customers: customers.length,
-        revenue,
+        products,
+        orders,
+        customers,
+        revenue: revenueRows.reduce((sum, row) => sum + row.total, 0),
       },
-      recentOrders: orders.slice(0, 5).map((order) => order.toJSON()),
-      topProducts: products
-        .sort((a, b) => b.sold - a.sold)
-        .slice(0, 5)
-        .map((product) => product.toJSON()),
+      recentOrders,
+      topProducts,
       monthlyRevenue,
       orderStatus: statusKeys.map((status) => ({
         status,
-        count: orders.filter((order) =>
-          status === 'completed'
-            ? ['completed', 'delivered'].includes(order.status)
-            : order.status === status,
-        ).length,
+        count: statusCounts.get(status) || 0,
       })),
     };
   }

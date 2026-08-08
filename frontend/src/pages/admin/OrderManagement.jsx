@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { FiEye, FiSearch, FiTruck } from 'react-icons/fi';
 import { toast } from 'react-toastify';
+import { adminApi } from '../../api/adminApi';
 import { orderApi } from '../../api/orderApi';
+import { paymentApi } from '../../api/paymentApi';
 import DataTable from '../../components/admin/DataTable';
 import Loading from '../../components/common/Loading';
+import Pagination from '../../components/common/Pagination';
 import AccessibleDialog from '../../components/common/AccessibleDialog';
 import { ORDER_STATUSES, PAYMENT_METHODS } from '../../utils/constants';
 import { formatCurrency, formatDate } from '../../utils/formatCurrency';
@@ -14,7 +17,10 @@ const paymentMethodLabel = (value) => PAYMENT_METHODS.find((method) => method.va
 export default function OrderManagement() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 0 });
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [trackingForm, setTrackingForm] = useState({
@@ -24,23 +30,82 @@ export default function OrderManagement() {
   });
   const [savingTracking, setSavingTracking] = useState(false);
   const [mutatingOrderId, setMutatingOrderId] = useState(null);
-  const load = () => orderApi.getAllAdmin().then(setOrders).finally(() => setLoading(false));
-  useEffect(() => { load(); }, []);
+  const [paymentForm, setPaymentForm] = useState({ reference: '', note: '' });
+  const [reconcilingPayment, setReconcilingPayment] = useState(false);
+  const requestId = useRef(0);
+  const latestLoad = useRef(null);
+  const ordersRef = useRef(orders);
+  const paginationRef = useRef(pagination);
+  const statusFilterRef = useRef(statusFilter);
+  useEffect(() => { ordersRef.current = orders; }, [orders]);
+  useEffect(() => { paginationRef.current = pagination; }, [pagination]);
+  useEffect(() => { statusFilterRef.current = statusFilter; }, [statusFilter]);
+  const load = useCallback(() => {
+    const currentRequest = ++requestId.current;
+    return adminApi.getOrders({ page, limit: 20, search: debouncedSearch, status: statusFilter })
+      .then((response) => {
+        if (currentRequest !== requestId.current) return;
+        const totalPages = Number.isFinite(response.pagination.totalPages)
+          ? Math.max(0, Math.trunc(response.pagination.totalPages))
+          : 0;
+        const lastPage = Math.max(totalPages, 1);
+        if (page > lastPage) {
+          setPage(lastPage);
+          return;
+        }
+        setOrders(response.items);
+        setPagination({ ...response.pagination, totalPages });
+      })
+      .finally(() => {
+        if (currentRequest === requestId.current) setLoading(false);
+      });
+  }, [debouncedSearch, page, statusFilter]);
+  useEffect(() => { latestLoad.current = load; }, [load]);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (search.trim() === debouncedSearch) return undefined;
+    const timeout = setTimeout(() => {
+      setPage(1);
+      setDebouncedSearch(search.trim());
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [debouncedSearch, search]);
+  const applyUpdatedOrder = (updated) => {
+    const currentOrders = ordersRef.current;
+    const orderIsVisible = currentOrders.some((order) => order.id === updated.id);
+    if (!orderIsVisible) return;
 
-  const visible = useMemo(() => orders.filter((order) =>
-    (!search || `${order.orderNumber} ${order.customer.phone} ${order.customer.fullName}`.toLowerCase().includes(search.toLowerCase())) &&
-    (!statusFilter || order.status === statusFilter)
-  ), [orders, search, statusFilter]);
+    if (statusFilterRef.current && updated.status !== statusFilterRef.current) {
+      const nextOrders = currentOrders.filter((order) => order.id !== updated.id);
+      const currentPagination = paginationRef.current;
+      const total = Math.max(0, currentPagination.total - 1);
+      const totalPages = total === 0 ? 0 : Math.ceil(total / currentPagination.limit);
+      const nextPagination = { ...currentPagination, total, totalPages };
+      ordersRef.current = nextOrders;
+      paginationRef.current = nextPagination;
+      setOrders(nextOrders);
+      setPagination(nextPagination);
+      setPage((currentPage) => Math.min(currentPage, Math.max(totalPages, 1)));
+      return;
+    }
+
+    const nextOrders = currentOrders.map((order) => (order.id === updated.id ? updated : order));
+    ordersRef.current = nextOrders;
+    setOrders(nextOrders);
+  };
   const updateStatus = async (order, status) => {
     if (mutatingOrderId || status === order.status) return;
     setMutatingOrderId(order.id);
     try {
       const updated = await orderApi.updateStatus(order.id, status);
-      setOrders((current) => current.map((item) => (
-        item.id === order.id ? updated : item
-      )));
-      if (selectedOrder?.id === order.id) setSelectedOrder(updated);
-      toast.success(`Đã cập nhật đơn ${order.orderNumber}`);
+      applyUpdatedOrder(updated);
+      setSelectedOrder((current) => (current?.id === order.id ? updated : current));
+      try {
+        await latestLoad.current();
+        toast.success(`Đã cập nhật đơn ${order.orderNumber}`);
+      } catch {
+        toast.error(`Đã cập nhật đơn ${order.orderNumber}, nhưng không thể tải lại danh sách. Vui lòng làm mới trang.`);
+      }
     } catch (error) {
       toast.error(error.friendlyMessage || error.message);
     } finally {
@@ -49,11 +114,36 @@ export default function OrderManagement() {
   };
   const openOrder = (order) => {
     setSelectedOrder(order);
+    setPaymentForm({ reference: order.paymentReference || '', note: '' });
     setTrackingForm({
       shippingProvider: order.shippingProvider || 'TechPhone Express',
       trackingNumber: order.trackingNumber || '',
       estimatedDelivery: order.estimatedDelivery?.slice(0, 10) || '',
     });
+  };
+  const reconcilePayment = async (status) => {
+    if (reconcilingPayment) return;
+    const payload = {
+      status,
+      reference: paymentForm.reference.trim(),
+      note: paymentForm.note.trim(),
+    };
+    if (status === 'paid' && !payload.reference) {
+      toast.error('Vui lòng nhập mã tham chiếu thanh toán');
+      return;
+    }
+    setReconcilingPayment(true);
+    try {
+      const updated = await paymentApi.reconcileManualPayment(selectedOrder.id, payload);
+      setSelectedOrder(updated);
+      setOrders((current) => current.map((order) => (order.id === updated.id ? updated : order)));
+      setPaymentForm({ reference: updated.paymentReference || '', note: '' });
+      toast.success(`Đã đối soát thanh toán đơn ${updated.orderNumber}`);
+    } catch (error) {
+      toast.error(error.friendlyMessage || error.message);
+    } finally {
+      setReconcilingPayment(false);
+    }
   };
   const saveTracking = async (event) => {
     event.preventDefault();
@@ -104,8 +194,8 @@ export default function OrderManagement() {
   if (loading) return <Loading />;
   return (
     <>
-      <div className="admin-page-toolbar"><div className="admin-search"><FiSearch /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm mã đơn, khách hàng, số điện thoại..." /></div><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">Tất cả trạng thái</option>{ORDER_STATUSES.map((status) => <option value={status} key={status}>{getOrderStatus(status).label}</option>)}</select></div>
-      <div className="admin-table-card"><div className="admin-table-title"><div><h2>Danh sách đơn hàng</h2><span>{visible.length} đơn hàng</span></div></div><DataTable columns={columns} rows={visible} /></div>
+      <div className="admin-page-toolbar"><div className="admin-search"><FiSearch /><input maxLength={100} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm mã đơn, khách hàng, số điện thoại..." /></div><select aria-label="Lọc trạng thái đơn hàng" value={statusFilter} onChange={(event) => { statusFilterRef.current = event.target.value; setPage(1); setStatusFilter(event.target.value); }}><option value="">Tất cả trạng thái</option>{ORDER_STATUSES.map((status) => <option value={status} key={status}>{getOrderStatus(status).label}</option>)}</select></div>
+      <div className="admin-table-card"><div className="admin-table-title"><div><h2>Danh sách đơn hàng</h2><span>{pagination.total} đơn hàng</span></div></div><DataTable columns={columns} rows={orders} /><Pagination currentPage={page} totalPages={pagination.totalPages} onPageChange={setPage} /></div>
       {selectedOrder && (
         <AccessibleDialog
           open
@@ -130,6 +220,57 @@ export default function OrderManagement() {
               <b>{formatCurrency(item.price * item.quantity)}</b>
             </div>
           ))}
+          {selectedOrder.paymentAudit?.confirmedAt && (
+            <section className="admin-payment-audit" aria-label="Payment reconciliation audit">
+              <h3>Lịch sử đối soát thanh toán</h3>
+              <div><small>Mã tham chiếu</small><strong>{selectedOrder.paymentReference || '—'}</strong></div>
+              <div><small>Người xác nhận</small><strong>{selectedOrder.paymentAudit.confirmedBy || '—'}</strong></div>
+              <div><small>Thời gian</small><strong>{formatDate(selectedOrder.paymentAudit.confirmedAt, true)}</strong></div>
+              <div><small>Ghi chú</small><strong>{selectedOrder.paymentAudit.note || '—'}</strong></div>
+            </section>
+          )}
+          {['bank', 'momo'].includes(selectedOrder.paymentMethod)
+            && ['pending', 'failed'].includes(selectedOrder.paymentStatus) && (
+              <section className="admin-payment-reconciliation" aria-label="Manual payment reconciliation">
+                <h3>Đối soát thanh toán</h3>
+                <div className="form-grid">
+                  <label className="form-field full">
+                    <span>Mã tham chiếu thanh toán</span>
+                    <input
+                      aria-label="Payment reference"
+                      maxLength={150}
+                      value={paymentForm.reference}
+                      onChange={(event) => setPaymentForm((current) => ({ ...current, reference: event.target.value }))}
+                    />
+                  </label>
+                  <label className="form-field full">
+                    <span>Ghi chú đối soát</span>
+                    <textarea
+                      aria-label="Reconciliation note"
+                      maxLength={1000}
+                      value={paymentForm.note}
+                      onChange={(event) => setPaymentForm((current) => ({ ...current, note: event.target.value }))}
+                    />
+                  </label>
+                </div>
+                <div className="admin-payment-actions">
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    aria-label="Confirm paid payment"
+                    disabled={reconcilingPayment}
+                    onClick={() => reconcilePayment('paid')}
+                  >Xác nhận đã thanh toán</button>
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    aria-label="Mark payment failed"
+                    disabled={reconcilingPayment}
+                    onClick={() => reconcilePayment('failed')}
+                  >Đánh dấu thất bại</button>
+                </div>
+              </section>
+            )}
           <form className="admin-tracking-form" onSubmit={saveTracking}>
             <h3><FiTruck /> Thông tin vận chuyển</h3>
             <div className="form-grid">

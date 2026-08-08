@@ -7,6 +7,7 @@ const Accessory = require('../models/Accessory');
 const Product = require('../models/Product');
 const voucherService = require('./voucherService');
 const withTransaction = require('../utils/withTransaction');
+const { normalizeVietnamesePhone } = require('../utils/phone');
 
 const allowedStatuses = ['pending', 'confirmed', 'shipping', 'delivered', 'completed', 'cancelled'];
 const statusTransitions = {
@@ -34,17 +35,24 @@ const safeUpdateFields = [
 ];
 
 class OrderService {
+  canonicalCustomer(customer = {}) {
+    const phone = normalizeVietnamesePhone(customer.phone);
+    if (!phone) throw new AppError('Số điện thoại người nhận không hợp lệ', 422);
+    return { ...customer, phone };
+  }
+
   buildIdempotencyKey(rawKey, user, customer = {}) {
     const key = String(rawKey || '').trim().slice(0, 120);
     if (!key) return '';
+    const canonicalCustomer = this.canonicalCustomer(customer);
     const principal = user?.id
       ? `user:${user.id}`
-      : `guest:${String(customer.email || '').trim().toLowerCase()}:${String(customer.phone || '').trim()}`;
+      : `guest:${String(canonicalCustomer.email || '').trim().toLowerCase()}:${canonicalCustomer.phone}`;
     return crypto.createHash('sha256').update(`${principal}:${key}`).digest('hex');
   }
 
   buildRequestFingerprint(payload = {}) {
-    const customer = payload.customer || {};
+    const customer = this.canonicalCustomer(payload.customer);
     const items = (payload.items || [])
       .map((item) => {
         const type = item.type === 'accessory' || item.accessoryId ? 'accessory' : 'product';
@@ -66,7 +74,7 @@ class OrderService {
       customer: {
         fullName: String(customer.fullName || '').trim(),
         email: String(customer.email || '').trim().toLowerCase(),
-        phone: String(customer.phone || '').trim(),
+        phone: customer.phone,
         address: String(customer.address || '').trim(),
         province: String(customer.province || '').trim(),
         district: String(customer.district || '').trim(),
@@ -108,6 +116,25 @@ class OrderService {
     const datePart = now.toISOString().slice(2, 10).replaceAll('-', '');
     const sequence = await orderRepository.nextSequence(datePart, session);
     return `TP${datePart}${String(sequence).padStart(4, '0')}`;
+  }
+
+  normalizeRequestedItems(items = []) {
+    const grouped = new Map();
+    for (const item of items) {
+      const type = item.type === 'accessory' || item.accessoryId ? 'accessory' : 'product';
+      const id = String(
+        type === 'accessory'
+          ? item.accessoryId || item.productId || item.id
+          : item.productId || item.id,
+      );
+      const key = `${type}:${id}`;
+      grouped.set(key, {
+        type,
+        id,
+        quantity: (grouped.get(key)?.quantity || 0) + Number(item.quantity),
+      });
+    }
+    return [...grouped.values()];
   }
 
   async normalizeItems(items = [], session) {
@@ -198,15 +225,17 @@ class OrderService {
   }
 
   async create(payload, user, metadata = {}) {
+    const customer = this.canonicalCustomer(payload.customer);
     const paymentMethod = payload.paymentMethod || 'cod';
     const requestFingerprint = this.buildRequestFingerprint({
       ...payload,
+      customer,
       paymentMethod,
     });
     const idempotencyKey = this.buildIdempotencyKey(
       metadata.idempotencyKey,
       user,
-      payload.customer,
+      customer,
     );
     await orderRepository.ensureIndexes();
     try {
@@ -222,10 +251,11 @@ class OrderService {
           }
         }
 
-        const items = await this.normalizeItems(payload.items, session);
+        const requestedItems = this.normalizeRequestedItems(payload.items);
+        const items = await this.normalizeItems(requestedItems, session);
         if (!items.length) throw new AppError('Đơn hàng phải có ít nhất một sản phẩm', 422);
         const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-        const shipping = this.shippingQuote(payload.customer, subtotal);
+        const shipping = this.shippingQuote(customer, subtotal);
         const shippingFee = shipping.fee;
         const voucher = payload.voucherCode
           ? await voucherService.reserve(payload.voucherCode, subtotal, session)
@@ -244,7 +274,7 @@ class OrderService {
           shippingFee,
           discount,
           total,
-          customer: payload.customer,
+          customer,
           paymentMethod,
           paymentStatus: 'pending',
           paymentReference: payload.paymentReference || '',
@@ -272,7 +302,28 @@ class OrderService {
     const filter = {};
     if (user.role !== 'admin') filter.userId = user.id;
     if (query.status) filter.status = query.status;
-    return orderRepository.findAll(filter, { sort: { createdAt: -1 } });
+    if (user.role !== 'admin') {
+      return orderRepository.findAll(filter, { sort: { createdAt: -1 } });
+    }
+
+    const page = Math.min(Math.max(Number(query.page) || 1, 1), 1000000);
+    const limit = Math.min(Math.max(Number(query.limit) || 20, 1), 100);
+    const search = String(query.search || '').trim().slice(0, 100);
+    const { items, total } = await orderRepository.findAdminPage({
+      page,
+      limit,
+      search,
+      status: query.status || '',
+    });
+    return {
+      items,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
   async myOrders(userId) {
@@ -287,9 +338,37 @@ class OrderService {
   }
 
   async lookup(orderNumber, phone) {
-    const order = await orderRepository.findByOrderNumberAndPhone(orderNumber, phone);
+    const canonicalPhone = normalizeVietnamesePhone(phone);
+    if (!canonicalPhone) throw new AppError('Số điện thoại người nhận không hợp lệ', 422);
+    const order = await orderRepository.findByOrderNumberAndPhone(orderNumber, canonicalPhone);
     if (!order) throw new AppError('Không tìm thấy đơn hàng phù hợp', 404);
-    return order;
+    return this.publicLookup(order);
+  }
+
+  publicLookup(order) {
+    const phone = order.customer.phone;
+    return {
+      id: order.id,
+      orderNumber: order.orderNumber,
+      createdAt: order.createdAt,
+      status: order.status,
+      items: order.items.map(({ id, name, image, price, quantity, type }) => ({
+        id,
+        name,
+        image,
+        price,
+        quantity,
+        type,
+      })),
+      total: order.total,
+      shippingProvider: order.shippingProvider,
+      trackingNumber: order.trackingNumber,
+      estimatedDelivery: order.estimatedDelivery,
+      customer: {
+        fullName: `${order.customer.fullName.slice(0, 1)}***`,
+        phone: `${phone.slice(0, 3)}****${phone.slice(-3)}`,
+      },
+    };
   }
 
   async update(id, payload) {
@@ -300,6 +379,9 @@ class OrderService {
     const safePayload = Object.fromEntries(
       fields.map((field) => [field, payload[field]]),
     );
+    if (safePayload.customer) {
+      safePayload.customer = this.canonicalCustomer(safePayload.customer);
+    }
     return orderRepository.update(id, safePayload);
   }
 

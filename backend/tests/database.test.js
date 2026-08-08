@@ -31,4 +31,24 @@ describe('database transaction topology', () => {
     );
     expect(client.disconnect).toHaveBeenCalledTimes(1);
   });
+
+  it('passes connection safety options to the MongoDB client', async () => {
+    const client = {
+      set: jest.fn(),
+      connect: jest.fn().mockResolvedValue(),
+      disconnect: jest.fn().mockResolvedValue(),
+      connection: {
+        db: {
+          admin: () => ({
+            command: jest.fn().mockResolvedValue({ setName: 'rs0' }),
+          }),
+        },
+      },
+    };
+    const options = { autoIndex: false, autoCreate: false };
+
+    await connectDB('mongodb://replica.test/store', client, options);
+
+    expect(client.connect).toHaveBeenCalledWith('mongodb://replica.test/store', options);
+  });
 });

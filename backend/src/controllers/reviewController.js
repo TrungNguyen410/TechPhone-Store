@@ -1,6 +1,9 @@
 const reviewService = require('../services/reviewService');
+const { mutationFields } = require('./crudController');
 const asyncHandler = require('../utils/asyncHandler');
 const { successResponse } = require('../utils/apiResponse');
+const AppError = require('../utils/AppError');
+const pick = require('../utils/pick');
 
 const listPublic = asyncHandler(async (_req, res) => {
   const reviews = await reviewService.listPublic();
@@ -23,12 +26,14 @@ const getByAccessory = asyncHandler(async (req, res) => {
 });
 
 const create = asyncHandler(async (req, res) => {
-  const review = await reviewService.create(req.body, req.user);
+  const review = await reviewService.create(pick(req.body, mutationFields.reviewCreate), req.user);
   successResponse(res, review, 'Review submitted', 201);
 });
 
 const update = asyncHandler(async (req, res) => {
-  const review = await reviewService.update(req.params.id, req.body);
+  const dto = pick(req.body, mutationFields.reviewAdminUpdate);
+  if (Object.keys(dto).length === 0) throw new AppError('Dữ liệu cập nhật không hợp lệ', 422);
+  const review = await reviewService.update(req.params.id, dto);
   successResponse(res, review, 'Review updated');
 });
 

@@ -1,6 +1,7 @@
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const Order = require('../src/models/Order');
+const User = require('../src/models/User');
 const OrderItem = require('../src/models/OrderItem');
 const Product = require('../src/models/Product');
 const Accessory = require('../src/models/Accessory');
@@ -16,6 +17,19 @@ const voucherService = require('../src/services/voucherService');
 const { app, createUser, login } = require('./helpers');
 
 describe('Orders and dashboard APIs', () => {
+  const orderPayload = (productId, overrides = {}) => ({
+    items: [{ productId, quantity: 1 }],
+    customer: {
+      fullName: 'Checkout Customer',
+      email: 'checkout@example.com',
+      phone: '0912345678',
+      address: '1 Nguyen Hue',
+      province: 'Ho Chi Minh',
+      district: 'District 1',
+      ward: 'Ben Nghe',
+    },
+    ...overrides,
+  });
   const seedTaxonomy = async () => {
     const brand = await Brand.create({ name: 'Apple', slug: 'apple', active: true });
     const category = await Category.create({ name: 'Dien thoai', slug: 'dien-thoai', active: true });
@@ -32,7 +46,114 @@ describe('Orders and dashboard APIs', () => {
     endDate: new Date(Date.now() + 24 * 60 * 60 * 1000),
     active: true,
   });
-  it('creates an order and allows lookup by order number and phone', async () => {
+  it('rejects unauthenticated order creation without decrementing stock', async () => {
+    const taxonomy = await seedTaxonomy();
+    const product = await Product.create({
+      _id: 'protected-stock',
+      name: 'Protected Stock Phone',
+      ...taxonomy,
+      price: 1000000,
+      stock: 2,
+      status: 'active',
+    });
+
+    const response = await request(app)
+      .post('/api/orders')
+      .send(orderPayload(product.id));
+
+    expect(response.status).toBe(401);
+    expect((await Product.findById(product.id)).stock).toBe(2);
+  });
+
+  it('rejects card orders outside the VNPay checkout endpoint', async () => {
+    await createUser({ email: 'direct-card@test.com', phone: '0912121212' });
+    const token = await login('direct-card@test.com');
+    const taxonomy = await seedTaxonomy();
+    const product = await Product.create({
+      _id: 'direct-card',
+      name: 'Direct Card Phone',
+      ...taxonomy,
+      price: 1000000,
+      stock: 2,
+      status: 'active',
+    });
+
+    const response = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send(orderPayload(product.id, { paymentMethod: 'card' }));
+
+    expect(response.status).toBe(422);
+    expect((await Product.findById(product.id)).stock).toBe(2);
+  });
+
+  it('rejects unknown direct-order fields before inventory changes', async () => {
+    await createUser({ email: 'direct-allowlist@test.com', phone: '0915151515' });
+    const token = await login('direct-allowlist@test.com');
+    const taxonomy = await seedTaxonomy();
+    const product = await Product.create({
+      _id: 'direct-allowlist',
+      name: 'Allowlisted Direct Phone',
+      ...taxonomy,
+      price: 1000000,
+      stock: 2,
+      status: 'active',
+    });
+
+    const response = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send(orderPayload(product.id, {
+        items: [{ productId: product.id, quantity: 1, suppliedPrice: 1 }],
+        internalStatus: 'confirmed',
+      }));
+
+    expect(response.status).toBe(422);
+    expect((await Product.findById(product.id)).stock).toBe(2);
+  });
+
+  it('rejects more than 50 line items', async () => {
+    await createUser({ email: 'line-limit@test.com', phone: '0913131313' });
+    const token = await login('line-limit@test.com');
+
+    const response = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send(orderPayload('product-1', {
+        items: Array.from({ length: 51 }, () => ({ productId: 'product-1', quantity: 1 })),
+      }));
+
+    expect(response.status).toBe(422);
+  });
+
+  it('aggregates duplicate line items before checking inventory', async () => {
+    await createUser({ email: 'duplicate-items@test.com', phone: '0914141414' });
+    const token = await login('duplicate-items@test.com');
+    const taxonomy = await seedTaxonomy();
+    const product = await Product.create({
+      _id: 'aggregate-stock',
+      name: 'Aggregate Stock Phone',
+      ...taxonomy,
+      price: 1000000,
+      stock: 1,
+      status: 'active',
+    });
+
+    const response = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send(orderPayload(product.id, {
+        items: [
+          { productId: product.id, quantity: 1 },
+          { productId: product.id, quantity: 1 },
+        ],
+      }));
+
+    expect(response.status).toBe(400);
+    expect((await Product.findById(product.id)).stock).toBe(1);
+  });
+
+  it('stores a canonical phone and returns a masked minimal public lookup DTO', async () => {
     await createUser({ email: 'customer@test.com', phone: '0911111111' });
     const token = await login('customer@test.com');
     const taxonomy = await seedTaxonomy();
@@ -49,21 +170,20 @@ describe('Orders and dashboard APIs', () => {
       .post('/api/orders')
       .set('Authorization', `Bearer ${token}`)
       .send({
-        items: [{ id: product.id, productId: product.id, name: product.name, price: 1, quantity: 1 }],
+        items: [{ id: product.id, productId: product.id, quantity: 1 }],
         customer: {
           fullName: 'Test Customer',
           email: 'customer@test.com',
-          phone: '0911111111',
+          phone: '0911 111 111',
           address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
         },
-        subtotal: product.price,
-        shippingFee: 0,
-        discount: 0,
-        total: product.price,
       });
 
     expect(created.status).toBe(201);
     expect(created.body.data.orderNumber).toMatch(/^TP/);
+    expect(created.body.data.customer.phone).toBe('0911111111');
     expect(created.body.data.subtotal).toBe(product.price);
     expect(created.body.data.total).toBe(product.price);
     const updatedProduct = await Product.findById(product.id);
@@ -72,10 +192,132 @@ describe('Orders and dashboard APIs', () => {
 
     const lookup = await request(app).get('/api/orders/lookup').query({
       orderNumber: created.body.data.orderNumber,
-      phone: '0911111111',
+      phone: '+84 911 111 111',
     });
     expect(lookup.status).toBe(200);
     expect(lookup.body.data.id).toBe(created.body.data.id);
+    expect(lookup.body.data.customer).toEqual({
+      fullName: 'T***',
+      phone: '091****111',
+    });
+    expect(lookup.body.data.customer.address).toBeUndefined();
+    expect(lookup.body.data.customer.email).toBeUndefined();
+    expect(lookup.body.data.items[0]).toEqual({
+      id: product.id,
+      name: product.name,
+      image: '',
+      price: product.price,
+      quantity: 1,
+      type: 'product',
+    });
+    expect(Object.keys(lookup.body.data).sort()).toEqual([
+      'createdAt',
+      'customer',
+      'estimatedDelivery',
+      'id',
+      'items',
+      'orderNumber',
+      'shippingProvider',
+      'status',
+      'total',
+      'trackingNumber',
+    ]);
+  });
+
+  it('rate limits repeated public lookup failures at the configured boundary', async () => {
+    const lookup = () => request(app).get('/api/orders/lookup').query({
+      orderNumber: 'TP2601019999',
+      phone: '0912345678',
+    });
+
+    for (let index = 0; index < 10; index += 1) {
+      await lookup().expect(404);
+    }
+
+    const blocked = await lookup();
+    expect(blocked.status).toBe(429);
+    expect(Number(blocked.headers['retry-after'])).toBeGreaterThan(0);
+  });
+
+  it('rate limits a lookup IP even when the order number and phone vary', async () => {
+    const orderService = require('../src/services/orderService');
+    const lookupSpy = jest.spyOn(orderService, 'lookup');
+
+    for (let index = 0; index < 10; index += 1) {
+      await request(app).get('/api/orders/lookup').query({
+        orderNumber: `TP260101${String(index).padStart(4, '0')}`,
+        phone: `09123456${String(index).padStart(2, '0')}`,
+      }).expect(404);
+    }
+
+    const blocked = await request(app).get('/api/orders/lookup').query({
+      orderNumber: 'TP2601019999',
+      phone: '0999999999',
+    });
+
+    expect(blocked.status).toBe(429);
+    expect(lookupSpy).toHaveBeenCalledTimes(10);
+  });
+
+  it('ignores spoofed forwarded IP headers for direct requests', async () => {
+    expect(app.get('trust proxy')).toBe(false);
+
+    for (let index = 0; index < 10; index += 1) {
+      await request(app)
+        .get('/api/orders/lookup')
+        .set('X-Forwarded-For', `198.51.100.${index + 1}`)
+        .query({
+          orderNumber: `TP260102${String(index).padStart(4, '0')}`,
+          phone: `09234567${String(index).padStart(2, '0')}`,
+        })
+        .expect(404);
+    }
+
+    await request(app)
+      .get('/api/orders/lookup')
+      .set('X-Forwarded-For', '198.51.100.99')
+      .query({ orderNumber: 'TP2601029999', phone: '0988888888' })
+      .expect(429);
+  });
+
+  it('atomically allows exactly max concurrent bucket consumers', async () => {
+    const { consumeRateLimit } = require('../src/repositories/rateLimitRepository');
+    const attempts = await Promise.all(
+      Array.from({ length: 15 }, () => consumeRateLimit({
+        key: 'order-lookup:203.0.113.8:TP2601019999:0912345678',
+        windowMs: 60000,
+        max: 10,
+      })),
+    );
+
+    expect(attempts.filter(({ allowed }) => allowed)).toHaveLength(10);
+    expect(attempts.filter(({ allowed }) => !allowed)).toHaveLength(5);
+  });
+
+  it('safely rejects an already exhausted persistent bucket', async () => {
+    const { consumeRateLimit } = require('../src/repositories/rateLimitRepository');
+    const options = { key: 'exhausted-bucket', windowMs: 60000, max: 1 };
+
+    await expect(consumeRateLimit(options)).resolves.toMatchObject({ allowed: true });
+    await expect(consumeRateLimit(options)).resolves.toMatchObject({ allowed: false });
+  });
+
+  it('persists only hashed rate-limit identities', async () => {
+    const RateLimitBucket = require('../src/models/RateLimitBucket');
+    const { consumeRateLimit } = require('../src/repositories/rateLimitRepository');
+    const rawIdentity = 'order-lookup:203.0.113.8:TP2601019999:0912345678';
+
+    await consumeRateLimit({ key: rawIdentity, windowMs: 60000, max: 10 });
+
+    const bucket = await RateLimitBucket.findOne().lean();
+    expect(bucket._id).toMatch(/^[a-f0-9]{64}$/);
+    expect(bucket._id).not.toContain('0912345678');
+    expect(bucket._id).not.toContain('TP2601019999');
+    expect(bucket._id).not.toContain('203.0.113.8');
+  });
+
+  it('does not trust a reverse-proxy hop outside the Render deployment', () => {
+    expect(env.trustProxy).toBe(false);
   });
 
   it('rejects orders that exceed product stock', async () => {
@@ -101,6 +343,8 @@ describe('Orders and dashboard APIs', () => {
           email: 'stock@test.com',
           phone: '0922222222',
           address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
         },
       });
 
@@ -121,17 +365,15 @@ describe('Orders and dashboard APIs', () => {
       status: 'active',
     });
     const payload = {
-      items: [{ productId: product.id, price: 1, quantity: 1 }],
+      items: [{ productId: product.id, quantity: 1 }],
       customer: {
         fullName: 'Idempotent Customer',
         email: 'idempotent@test.com',
         phone: '0944444444',
         address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
       },
-      subtotal: 1,
-      shippingFee: 0,
-      discount: 999999,
-      total: 1,
     };
 
     const first = await request(app)
@@ -143,13 +385,16 @@ describe('Orders and dashboard APIs', () => {
       .post('/api/orders')
       .set('Authorization', `Bearer ${token}`)
       .set('Idempotency-Key', 'checkout-attempt-1')
-      .send(payload);
+      .send({
+        ...payload,
+        customer: { ...payload.customer, phone: '+84 944 444 444' },
+      });
 
     expect(first.status).toBe(201);
     expect(second.status).toBe(201);
     expect(second.body.data.id).toBe(first.body.data.id);
     expect(first.body.data.subtotal).toBe(product.price);
-    expect(first.body.data.total).toBe(product.price + 40000);
+    expect(first.body.data.total).toBe(product.price + 20000);
     const productAfter = await Product.findById(product.id);
     expect(productAfter.stock).toBe(2);
   });
@@ -173,6 +418,8 @@ describe('Orders and dashboard APIs', () => {
         email: 'race@test.com',
         phone: '0955555555',
         address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
       },
     };
     const post = () => request(app)
@@ -221,6 +468,8 @@ describe('Orders and dashboard APIs', () => {
         email: 'durable@test.com',
         phone: '0901010101',
         address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
       },
     };
     const secondaryWrite = jest
@@ -266,7 +515,9 @@ describe('Orders and dashboard APIs', () => {
     });
     const payloadFor = (email, phone) => ({
       items: [{ productId: product.id, quantity: 1 }],
-      customer: { fullName: 'Customer', email, phone, address: 'Test address' },
+      customer: {
+        fullName: 'Customer', email, phone, address: 'Test address', province: 'Ho Chi Minh', ward: 'Ben Nghe',
+      },
     });
 
     const first = await request(app)
@@ -286,7 +537,9 @@ describe('Orders and dashboard APIs', () => {
     expect(second.body.data.userId).not.toBe(first.body.data.userId);
   });
 
-  it('scopes guest keys by email and phone and ignores payload userId', async () => {
+  it('assigns the authenticated customer as order owner', async () => {
+    const user = await createUser({ email: 'owned-order@test.com', phone: '0988888888' });
+    const token = jwt.sign({ sub: user.id, role: user.role }, env.jwtAccessSecret);
     const taxonomy = await seedTaxonomy();
     const product = await Product.create({
       _id: 'guest-scoped-phone',
@@ -296,29 +549,27 @@ describe('Orders and dashboard APIs', () => {
       stock: 4,
       status: 'active',
     });
-    const payloadFor = (email, phone, userId) => ({
-      userId,
+    const payload = {
       items: [{ productId: product.id, quantity: 1 }],
-      customer: { fullName: 'Guest', email, phone, address: 'Test address' },
-    });
-    const post = (payload) => request(app)
+      customer: {
+        fullName: 'Customer',
+        email: 'owned-order@test.com',
+        phone: '0988888888',
+        address: 'Test address',
+        province: 'Ho Chi Minh',
+        ward: 'Ben Nghe',
+      },
+    };
+    const created = await request(app)
       .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
       .set('Idempotency-Key', 'guest-shared-key')
       .send(payload);
 
-    const first = await post(payloadFor('guest-one@test.com', '0988888888', 'victim-user'));
-    const repeated = await post(payloadFor('guest-one@test.com', '0988888888', 'another-user'));
-    const otherGuest = await post(payloadFor('guest-two@test.com', '0999999999', 'victim-user'));
-
-    expect(first.status).toBe(201);
-    expect(repeated.status).toBe(201);
-    expect(otherGuest.status).toBe(201);
-    expect(repeated.body.data.id).toBe(first.body.data.id);
-    expect(otherGuest.body.data.id).not.toBe(first.body.data.id);
-    expect(first.body.data.userId).toBeNull();
-    expect(otherGuest.body.data.userId).toBeNull();
+    expect(created.status).toBe(201);
+    expect(created.body.data.userId).toBe(user.id);
     const productAfter = await Product.findById(product.id);
-    expect(productAfter.stock).toBe(2);
+    expect(productAfter.stock).toBe(3);
   });
 
   it('rejects an expired bearer token before refresh and owns the retried order', async () => {
@@ -348,6 +599,8 @@ describe('Orders and dashboard APIs', () => {
         email: 'refresh-order@test.com',
         phone: '0902020202',
         address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
       },
     };
 
@@ -376,6 +629,8 @@ describe('Orders and dashboard APIs', () => {
   });
 
   it('exhausts a limited voucher sequentially from authoritative usage', async () => {
+    const user = await createUser({ email: 'voucher-one@test.com', phone: '0903030303' });
+    const token = jwt.sign({ sub: user.id, role: user.role }, env.jwtAccessSecret);
     const taxonomy = await seedTaxonomy();
     const product = await Product.create({
       _id: 'sequential-voucher-phone',
@@ -388,17 +643,21 @@ describe('Orders and dashboard APIs', () => {
     await seedVoucher({ code: 'SEQUENTIAL', quantity: 1 });
     const payloadFor = (email, phone) => ({
       items: [{ productId: product.id, quantity: 1 }],
-      customer: { fullName: 'Voucher Guest', email, phone, address: 'Test address' },
+      customer: {
+        fullName: 'Voucher Customer', email, phone, address: 'Test address', province: 'Ho Chi Minh', ward: 'Ben Nghe',
+      },
       voucherCode: 'SEQUENTIAL',
     });
 
     await request(app)
       .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
       .set('Idempotency-Key', 'voucher-sequential-1')
       .send(payloadFor('voucher-one@test.com', '0903030303'))
       .expect(201);
     await request(app)
       .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
       .set('Idempotency-Key', 'voucher-sequential-2')
       .send(payloadFor('voucher-two@test.com', '0904040404'))
       .expect(400);
@@ -408,6 +667,10 @@ describe('Orders and dashboard APIs', () => {
   });
 
   it('allows only one concurrent last-voucher redemption', async () => {
+    const firstUser = await createUser({ email: 'concurrent-one@test.com', phone: '0905050505' });
+    const secondUser = await createUser({ email: 'concurrent-two@test.com', phone: '0906060606' });
+    const firstToken = jwt.sign({ sub: firstUser.id, role: firstUser.role }, env.jwtAccessSecret);
+    const secondToken = jwt.sign({ sub: secondUser.id, role: secondUser.role }, env.jwtAccessSecret);
     const taxonomy = await seedTaxonomy();
     const product = await Product.create({
       _id: 'concurrent-voucher-phone',
@@ -418,18 +681,21 @@ describe('Orders and dashboard APIs', () => {
       status: 'active',
     });
     await seedVoucher({ code: 'CONCURRENT', quantity: 1 });
-    const post = (email, phone, key) => request(app)
+    const post = (email, phone, key, token) => request(app)
       .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
       .set('Idempotency-Key', key)
       .send({
         items: [{ productId: product.id, quantity: 1 }],
-        customer: { fullName: 'Voucher Guest', email, phone, address: 'Test address' },
+        customer: {
+          fullName: 'Voucher Customer', email, phone, address: 'Test address', province: 'Ho Chi Minh', ward: 'Ben Nghe',
+        },
         voucherCode: 'CONCURRENT',
       });
 
     const responses = await Promise.all([
-      post('concurrent-one@test.com', '0905050505', 'voucher-concurrent-1'),
-      post('concurrent-two@test.com', '0906060606', 'voucher-concurrent-2'),
+      post('concurrent-one@test.com', '0905050505', 'voucher-concurrent-1', firstToken),
+      post('concurrent-two@test.com', '0906060606', 'voucher-concurrent-2', secondToken),
     ]);
 
     expect(responses.map((response) => response.status).sort()).toEqual([201, 400]);
@@ -439,6 +705,8 @@ describe('Orders and dashboard APIs', () => {
   });
 
   it('converges same-key concurrent requests that consume the final voucher redemption', async () => {
+    const user = await createUser({ email: 'same-voucher@test.com', phone: '0906161616' });
+    const token = jwt.sign({ sub: user.id, role: user.role }, env.jwtAccessSecret);
     const taxonomy = await seedTaxonomy();
     const product = await Product.create({
       _id: 'same-key-final-voucher-phone',
@@ -456,11 +724,14 @@ describe('Orders and dashboard APIs', () => {
         email: 'same-voucher@test.com',
         phone: '0906161616',
         address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
       },
       voucherCode: 'SAMEKEYLAST',
     };
     const post = () => request(app)
       .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
       .set('Idempotency-Key', 'same-key-final-voucher')
       .send(payload);
 
@@ -494,6 +765,8 @@ describe('Orders and dashboard APIs', () => {
         email: 'voucher-cancel@test.com',
         phone: '0907070707',
         address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
       },
       voucherCode: 'CANCELONCE',
     };
@@ -545,6 +818,8 @@ describe('Orders and dashboard APIs', () => {
           email: 'restore-retry@test.com',
           phone: '0907171717',
           address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
         },
       })
       .expect(201);
@@ -603,6 +878,8 @@ describe('Orders and dashboard APIs', () => {
           email: 'voucher-retry@test.com',
           phone: '0907272727',
           address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
         },
         voucherCode: 'RELEASEFAIL',
       })
@@ -640,8 +917,8 @@ describe('Orders and dashboard APIs', () => {
   });
 
   it('processes mixed product and accessory transaction operations sequentially', async () => {
-    await createUser({ email: 'mixed@test.com', phone: '0904141414' });
-    const token = await login('mixed@test.com');
+    const user = await createUser({ email: 'mixed@test.com', phone: '0904141414' });
+    const token = jwt.sign({ sub: user.id, role: user.role }, env.jwtAccessSecret);
     const taxonomy = await seedTaxonomy();
     const product = await Product.create({
       _id: 'mixed-phone',
@@ -696,6 +973,8 @@ describe('Orders and dashboard APIs', () => {
             email: 'mixed@test.com',
             phone: '0904141414',
             address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
           },
         });
     } finally {
@@ -744,8 +1023,8 @@ describe('Orders and dashboard APIs', () => {
   });
 
   it('rejects generic admin state mutations while allowing safe shipping edits', async () => {
-    await createUser({ email: 'safe-admin@test.com', phone: '0904242424', role: 'admin' });
-    const adminToken = await login('safe-admin@test.com');
+    const admin = await createUser({ email: 'safe-admin@test.com', phone: '0904242424', role: 'admin' });
+    const adminToken = jwt.sign({ sub: admin.id, role: admin.role }, env.jwtAccessSecret);
     const order = await Order.create({
       orderNumber: 'TP260729SAFE',
       userId: 'customer-id',
@@ -761,6 +1040,8 @@ describe('Orders and dashboard APIs', () => {
         email: 'safe-update@test.com',
         phone: '0904343434',
         address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
       },
     });
 
@@ -786,9 +1067,28 @@ describe('Orders and dashboard APIs', () => {
       shippingProvider: 'Safe Express',
       trackingNumber: 'SAFE-001',
     }));
+
+    const customerUpdate = await request(app)
+      .put(`/api/admin/orders/${order.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        customer: {
+          fullName: 'Safe Update Customer',
+          email: 'safe-update@test.com',
+          phone: '+84 904 343 434',
+          address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
+        },
+      })
+      .expect(200);
+
+    expect(customerUpdate.body.data.customer.phone).toBe('0904343434');
   });
 
   it('allocates unique order numbers for concurrent different checkout keys', async () => {
+    const user = await createUser({ email: 'sequence@test.com', phone: '0904444444' });
+    const token = jwt.sign({ sub: user.id, role: user.role }, env.jwtAccessSecret);
     const taxonomy = await seedTaxonomy();
     const product = await Product.create({
       _id: 'sequence-phone',
@@ -805,10 +1105,13 @@ describe('Orders and dashboard APIs', () => {
         email: 'sequence@test.com',
         phone: '0904444444',
         address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
       },
     };
     const post = (key) => request(app)
       .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
       .set('Idempotency-Key', key)
       .send(payload);
 
@@ -824,8 +1127,8 @@ describe('Orders and dashboard APIs', () => {
   });
 
   it('enforces valid admin order status transitions', async () => {
-    await createUser({ email: 'admin@test.com', phone: '0900000000', role: 'admin' });
-    const adminToken = await login('admin@test.com');
+    const admin = await createUser({ email: 'admin@test.com', phone: '0900000000', role: 'admin' });
+    const adminToken = jwt.sign({ sub: admin.id, role: admin.role }, env.jwtAccessSecret);
     const order = await Order.create({
       orderNumber: 'TP26061799',
       userId: 'customer-id',
@@ -840,6 +1143,8 @@ describe('Orders and dashboard APIs', () => {
         email: 'transition@test.com',
         phone: '0933333333',
         address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
       },
     });
 
@@ -860,8 +1165,8 @@ describe('Orders and dashboard APIs', () => {
   });
 
   it('restores inventory and voucher usage before an admin archives an active order', async () => {
-    await createUser({ email: 'archive-admin@test.com', phone: '0904545454', role: 'admin' });
-    const adminToken = await login('archive-admin@test.com');
+    const admin = await createUser({ email: 'archive-admin@test.com', phone: '0904545454', role: 'admin' });
+    const adminToken = jwt.sign({ sub: admin.id, role: admin.role }, env.jwtAccessSecret);
     const taxonomy = await seedTaxonomy();
     const product = await Product.create({
       _id: 'archive-phone',
@@ -875,6 +1180,7 @@ describe('Orders and dashboard APIs', () => {
 
     const created = await request(app)
       .post('/api/orders')
+      .set('Authorization', `Bearer ${adminToken}`)
       .send({
         items: [{ productId: product.id, quantity: 1 }],
         customer: {
@@ -882,6 +1188,8 @@ describe('Orders and dashboard APIs', () => {
           email: 'archive-customer@test.com',
           phone: '0904646464',
           address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
         },
         voucherCode: voucher.code,
       })
@@ -921,6 +1229,8 @@ describe('Orders and dashboard APIs', () => {
         email: 'paid-archive@test.com',
         phone: '0904747474',
         address: 'Test address',
+          province: 'Ho Chi Minh',
+          ward: 'Ben Nghe',
       },
     });
 
@@ -955,5 +1265,313 @@ describe('Orders and dashboard APIs', () => {
       }),
     );
     expect(response.body.data.monthlyRevenue).toHaveLength(12);
+  });
+
+  it('does not merge the same month from different years', async () => {
+    const admin = await createUser({
+      email: 'year-admin@test.com',
+      phone: '0900000001',
+      role: 'admin',
+    });
+    const token = jwt.sign({ sub: admin.id, role: 'admin' }, env.jwtAccessSecret, {
+      expiresIn: '15m',
+    });
+    const customer = {
+      fullName: 'Revenue Customer',
+      email: 'revenue@test.com',
+      phone: '0912000000',
+      address: 'Test address',
+    };
+
+    await Order.create([
+      {
+        orderNumber: 'TP25011001',
+        status: 'completed',
+        items: [],
+        subtotal: 1000000,
+        total: 1000000,
+        customer,
+        createdAt: new Date('2025-01-10T00:00:00.000Z'),
+      },
+      {
+        orderNumber: 'TP26011001',
+        status: 'delivered',
+        items: [],
+        subtotal: 2000000,
+        total: 2000000,
+        customer,
+        createdAt: new Date('2026-01-10T00:00:00.000Z'),
+      },
+      {
+        orderNumber: 'TP26011002',
+        status: 'pending',
+        items: [],
+        subtotal: 4000000,
+        total: 4000000,
+        customer,
+        createdAt: new Date('2026-01-11T00:00:00.000Z'),
+      },
+      {
+        orderNumber: 'TP26011003',
+        status: 'completed',
+        items: [],
+        subtotal: 8000000,
+        total: 8000000,
+        customer,
+        isDeleted: true,
+        deletedAt: new Date('2026-01-12T00:00:00.000Z'),
+        createdAt: new Date('2026-01-12T00:00:00.000Z'),
+      },
+    ]);
+
+    const response = await request(app)
+      .get('/api/admin/dashboard?year=2026')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.stats.revenue).toBe(2000000);
+    expect(response.body.data.monthlyRevenue[0]).toBe(2);
+  });
+
+  it('returns zero revenue for an empty year and rejects unsafe years', async () => {
+    const admin = await createUser({
+      email: 'empty-year-admin@test.com',
+      phone: '0900000002',
+      role: 'admin',
+    });
+    const token = jwt.sign({ sub: admin.id, role: 'admin' }, env.jwtAccessSecret, {
+      expiresIn: '15m',
+    });
+
+    const empty = await request(app)
+      .get('/api/admin/dashboard?year=2024')
+      .set('Authorization', `Bearer ${token}`);
+    expect(empty.status).toBe(200);
+    expect(empty.body.data.stats.revenue).toBe(0);
+    expect(empty.body.data.monthlyRevenue).toEqual(Array(12).fill(0));
+
+    await request(app)
+      .get('/api/admin/dashboard?year=1899')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(422);
+    await request(app)
+      .get('/api/admin/dashboard?year=10000')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(422);
+  });
+
+  it('paginates admin customers with aggregate order totals', async () => {
+    const admin = await createUser({
+      email: 'customer-page-admin@test.com',
+      phone: '0900000003',
+      role: 'admin',
+    });
+    const token = jwt.sign({ sub: admin.id, role: 'admin' }, env.jwtAccessSecret, {
+      expiresIn: '15m',
+    });
+    const customers = await Promise.all([
+      createUser({ email: 'page-1@test.com', phone: '0913000001', fullName: 'Page One' }),
+      createUser({ email: 'page-2@test.com', phone: '0913000002', fullName: 'Page Two' }),
+      createUser({ email: 'page-3@test.com', phone: '0913000003', fullName: 'Page Three' }),
+    ]);
+    await Order.create({
+      orderNumber: 'TPCUSTOMER01',
+      userId: customers[0].id,
+      status: 'delivered',
+      items: [],
+      subtotal: 1500000,
+      total: 1500000,
+      customer: {
+        fullName: customers[0].fullName,
+        email: customers[0].email,
+        phone: customers[0].phone,
+        address: 'Test address',
+      },
+    });
+
+    const firstPage = await request(app)
+      .get('/api/admin/customers?page=1&limit=2')
+      .set('Authorization', `Bearer ${token}`);
+    const secondPage = await request(app)
+      .get('/api/admin/customers?page=2&limit=2')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(firstPage.status).toBe(200);
+    expect(firstPage.body.data.items).toHaveLength(2);
+    expect(firstPage.body.data.pagination).toEqual({ page: 1, limit: 2, total: 3, totalPages: 2 });
+    expect(secondPage.body.data.items).toHaveLength(1);
+    expect(secondPage.body.data.pagination).toEqual({ page: 2, limit: 2, total: 3, totalPages: 2 });
+    const enrichedCustomer = [...firstPage.body.data.items, ...secondPage.body.data.items]
+      .find((item) => item.id === customers[0].id);
+    expect(enrichedCustomer).toEqual(expect.objectContaining({ orderCount: 1, totalSpent: 1500000 }));
+  });
+
+  it('paginates admin orders while preserving the response envelope', async () => {
+    const admin = await createUser({
+      email: 'order-page-admin@test.com',
+      phone: '0900000004',
+      role: 'admin',
+    });
+    const token = jwt.sign({ sub: admin.id, role: 'admin' }, env.jwtAccessSecret, {
+      expiresIn: '15m',
+    });
+    const customer = {
+      fullName: 'Paged Order Customer',
+      email: 'paged-order@test.com',
+      phone: '0914000000',
+      address: 'Test address',
+    };
+    await Order.create([1, 2, 3].map((number) => ({
+      orderNumber: `TPPAGE000${number}`,
+      status: 'pending',
+      items: [],
+      subtotal: number,
+      total: number,
+      customer,
+      createdAt: new Date(`2026-01-0${number}T00:00:00.000Z`),
+    })));
+
+    const response = await request(app)
+      .get('/api/admin/orders?page=2&limit=2')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.items).toHaveLength(1);
+    expect(response.body.data.pagination).toEqual({ page: 2, limit: 2, total: 3, totalPages: 2 });
+  });
+
+  it('filters admin customers before pagination and escapes literal search text', async () => {
+    const admin = await createUser({
+      email: 'customer-filter-admin@test.com',
+      phone: '0900000005',
+      role: 'admin',
+    });
+    const token = jwt.sign({ sub: admin.id, role: 'admin' }, env.jwtAccessSecret, {
+      expiresIn: '15m',
+    });
+    const matchingCustomers = await Promise.all([1, 2, 3].map((number) => createUser({
+      email: `literal.${number}@test.com`,
+      phone: `091500000${number}`,
+      fullName: `Literal.Customer ${number}`,
+    })));
+    await createUser({
+      email: 'plain-customer@test.com',
+      phone: '0915000004',
+      fullName: 'Plain Customer',
+    });
+    const deleted = await createUser({
+      email: 'deleted.literal@test.com',
+      phone: '0915000005',
+      fullName: 'Deleted Literal.Customer',
+    });
+    await User.updateOne({ _id: deleted.id }, { isDeleted: true, deletedAt: new Date() });
+
+    const response = await request(app)
+      .get('/api/admin/customers?search=Literal.Customer&page=2&limit=2')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.items).toHaveLength(1);
+    expect(matchingCustomers.map((customer) => customer.id)).toContain(response.body.data.items[0].id);
+    expect(response.body.data.pagination).toEqual({ page: 2, limit: 2, total: 3, totalPages: 2 });
+
+    await request(app)
+      .get(`/api/admin/customers?search=${'x'.repeat(101)}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(422);
+  });
+
+  it('filters admin orders and count with the same escaped search and status', async () => {
+    const admin = await createUser({
+      email: 'order-filter-admin@test.com',
+      phone: '0900000006',
+      role: 'admin',
+    });
+    const token = jwt.sign({ sub: admin.id, role: 'admin' }, env.jwtAccessSecret, {
+      expiresIn: '15m',
+    });
+    const customer = {
+      fullName: 'Order Filter Customer',
+      email: 'order-filter@test.com',
+      phone: '0916000000',
+      address: 'Test address',
+    };
+    const plainCustomer = {
+      fullName: 'Plain Customer',
+      email: 'plain',
+      phone: '0916000001',
+      address: 'Test address',
+    };
+    await Order.create([
+      { orderNumber: 'TP.LITERAL1', status: 'pending', items: [], subtotal: 1, total: 1, customer },
+      { orderNumber: 'TPPLAIN001', status: 'pending', items: [], subtotal: 2, total: 2, customer: plainCustomer },
+      { orderNumber: 'TP.LITERAL2', status: 'completed', items: [], subtotal: 3, total: 3, customer },
+      {
+        orderNumber: 'TP.LITERAL3',
+        status: 'pending',
+        items: [],
+        subtotal: 4,
+        total: 4,
+        customer,
+        isDeleted: true,
+        deletedAt: new Date(),
+      },
+    ]);
+
+    const response = await request(app)
+      .get('/api/admin/orders?search=.&status=pending&page=1&limit=20')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.items.map((order) => order.orderNumber)).toEqual(['TP.LITERAL1']);
+    expect(response.body.data.pagination).toEqual({ page: 1, limit: 20, total: 1, totalPages: 1 });
+
+    await request(app)
+      .get('/api/admin/orders?status=not-a-status')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(422);
+    await request(app)
+      .get(`/api/admin/orders?search=${'x'.repeat(101)}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(422);
+  });
+
+  it('accepts dashboard year 9999 and defaults omitted year to the current UTC year', async () => {
+    const admin = await createUser({
+      email: 'dashboard-boundary-admin@test.com',
+      phone: '0900000007',
+      role: 'admin',
+    });
+    const token = jwt.sign({ sub: admin.id, role: 'admin' }, env.jwtAccessSecret, {
+      expiresIn: '15m',
+    });
+    const currentYear = new Date().getUTCFullYear();
+    await Order.create({
+      orderNumber: 'TPCURRENTYEAR1',
+      status: 'completed',
+      items: [],
+      subtotal: 7000000,
+      total: 7000000,
+      customer: {
+        fullName: 'Current Year Customer',
+        email: 'current-year@test.com',
+        phone: '0917000000',
+        address: 'Test address',
+      },
+      createdAt: new Date(Date.UTC(currentYear, 5, 1)),
+    });
+
+    const boundary = await request(app)
+      .get('/api/admin/dashboard?year=9999')
+      .set('Authorization', `Bearer ${token}`);
+    const omitted = await request(app)
+      .get('/api/admin/dashboard')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(boundary.status).toBe(200);
+    expect(boundary.body.data.stats.revenue).toBe(0);
+    expect(omitted.status).toBe(200);
+    expect(omitted.body.data.stats.revenue).toBe(7000000);
+    expect(omitted.body.data.monthlyRevenue[5]).toBe(7);
   });
 });

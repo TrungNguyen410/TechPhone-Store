@@ -40,7 +40,7 @@ Các checkbox chi tiết bên dưới là baseline lịch sử được viết t
 
 ## 1. Công nghệ (giữ nguyên stack tham chiếu)
 
-**Frontend:** React 19, Vite, React Router DOM, Axios (JWT interceptor), Bootstrap 5, React Icons, Chart.js, React Toastify, Context API. Yêu cầu Node.js 20.19+ / 22.12+.
+**Frontend:** React 19, Vite, React Router DOM, Axios (JWT interceptor), Bootstrap 5, React Icons, Chart.js, React Toastify, Context API. Yêu cầu Node.js 22 (`>=22 <23`).
 
 **Backend:** Node.js + Express 5, MongoDB + Mongoose, JWT (`jsonwebtoken`), `bcrypt`, `express-validator`, `helmet`, `cors`, `morgan`, `multer`, `swagger-ui-express`.
 

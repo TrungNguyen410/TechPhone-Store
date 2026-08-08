@@ -5,7 +5,7 @@ const { baseSchemaOptions, stringId } = require('./baseSchemaOptions');
 const voucherSchema = new mongoose.Schema(
   {
     _id: stringId,
-    code: { type: String, required: true, unique: true, uppercase: true, trim: true },
+    code: { type: String, required: true, uppercase: true, trim: true },
     type: { type: String, enum: ['percent', 'fixed', 'shipping'], required: true },
     value: { type: Number, required: true, min: 0 },
     minOrder: { type: Number, default: 0, min: 0 },
@@ -20,5 +20,9 @@ const voucherSchema = new mongoose.Schema(
 );
 
 voucherSchema.plugin(softDeletePlugin);
+voucherSchema.index(
+  { code: 1 },
+  { name: 'voucher_code_active_unique', unique: true, partialFilterExpression: { isDeleted: false } },
+);
 
 module.exports = mongoose.model('Voucher', voucherSchema);
