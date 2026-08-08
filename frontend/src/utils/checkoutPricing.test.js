@@ -17,6 +17,11 @@ describe('calculateVoucherDiscount', () => {
 });
 
 describe('mock checkout invariants', () => {
+  const setActiveSession = (id = 'user-customer') => {
+    storage.set(STORAGE_KEYS.currentUser, { id });
+    storage.set(STORAGE_KEYS.token, `trusted-token-${id}`);
+  };
+
   beforeEach(() => {
     mockDb.reset();
     storage.remove(STORAGE_KEYS.currentUser);
@@ -45,6 +50,7 @@ describe('mock checkout invariants', () => {
         endDate: '2099-12-31',
       },
     ]);
+    setActiveSession();
   });
 
   it('uses current price and stock and decrements only once for an idempotency key', async () => {
@@ -77,7 +83,7 @@ describe('mock checkout invariants', () => {
     expect(storage.get(STORAGE_KEYS.mockProducts)[0].stock).toBe(1);
   });
 
-  it('scopes the same idempotency key to the mock customer', async () => {
+  it('scopes the same idempotency key to the authenticated mock customer', async () => {
     const payload = {
       items: [{ id: 'current-phone', quantity: 1 }],
       customer: {
@@ -97,7 +103,7 @@ describe('mock checkout invariants', () => {
       'shared-key',
     );
 
-    expect(second.id).not.toBe(first.id);
+    expect(second.id).toBe(first.id);
   });
 
   it('ignores a client-supplied user id when scoping a mock checkout key', async () => {
@@ -133,11 +139,9 @@ describe('mock checkout invariants', () => {
       },
     };
 
-    storage.set(STORAGE_KEYS.currentUser, { id: 'trusted-user-1' });
-    storage.set(STORAGE_KEYS.token, 'trusted-token-1');
+    setActiveSession('user-customer');
     const first = await mockDb.createOrder(payload, 'authenticated-key');
-    storage.set(STORAGE_KEYS.currentUser, { id: 'trusted-user-2' });
-    storage.set(STORAGE_KEYS.token, 'trusted-token-2');
+    setActiveSession('user-3');
     const second = await mockDb.createOrder(payload, 'authenticated-key');
 
     expect(second.id).not.toBe(first.id);
@@ -145,8 +149,7 @@ describe('mock checkout invariants', () => {
   });
 
   it('persists authoritative mock ownership and lists orders for that owner', async () => {
-    storage.set(STORAGE_KEYS.currentUser, { id: 'trusted-owner' });
-    storage.set(STORAGE_KEYS.token, 'trusted-token');
+    setActiveSession();
     const order = await mockDb.createOrder({
       userId: 'attacker-owner',
       items: [{ id: 'current-phone', quantity: 1 }],
@@ -158,15 +161,17 @@ describe('mock checkout invariants', () => {
       },
     }, 'owned-key');
 
-    expect(order.userId).toBe('trusted-owner');
-    expect(await mockDb.ordersForUser('trusted-owner')).toEqual([
-      expect.objectContaining({ id: order.id, userId: 'trusted-owner' }),
-    ]);
+    expect(order.userId).toBe('user-customer');
+    expect(await mockDb.ordersForUser('user-customer')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: order.id, userId: 'user-customer' }),
+    ]));
     expect(await mockDb.ordersForUser('attacker-owner')).toEqual([]);
   });
 
-  it('forces guest mock ownership to null', async () => {
-    const order = await mockDb.createOrder({
+  it('rejects an unauthenticated mock checkout before inventory changes', async () => {
+    storage.remove(STORAGE_KEYS.currentUser);
+    storage.remove(STORAGE_KEYS.token);
+    await expect(mockDb.createOrder({
       userId: 'attacker-owner',
       items: [{ id: 'current-phone', quantity: 1 }],
       customer: {
@@ -175,13 +180,12 @@ describe('mock checkout invariants', () => {
         phone: '0911111111',
         address: 'Test address',
       },
-    }, 'guest-owned-key');
+    }, 'guest-owned-key')).rejects.toThrow();
 
-    expect(order.userId).toBeNull();
-    expect(await mockDb.ordersForUser('attacker-owner')).toEqual([]);
+    expect(storage.get(STORAGE_KEYS.mockProducts)[0].stock).toBe(2);
   });
 
-  it('treats a stale mock user without a token as a guest scope', async () => {
+  it('rejects a stale mock user without a token', async () => {
     const payload = {
       items: [{ id: 'current-phone', quantity: 1 }],
       customer: {
@@ -193,12 +197,28 @@ describe('mock checkout invariants', () => {
     };
 
     storage.set(STORAGE_KEYS.currentUser, { id: 'stale-user-1' });
-    const first = await mockDb.createOrder(payload, 'stale-session-key');
-    storage.set(STORAGE_KEYS.currentUser, { id: 'stale-user-2' });
-    const second = await mockDb.createOrder(payload, 'stale-session-key');
+    await expect(mockDb.createOrder(payload, 'stale-session-key')).rejects.toThrow();
+    expect(storage.get(STORAGE_KEYS.mockProducts)[0].stock).toBe(2);
+  });
 
-    expect(second.id).toBe(first.id);
-    expect(storage.get(STORAGE_KEYS.mockProducts)[0].stock).toBe(1);
+  it('rejects direct card checkout before inventory changes', async () => {
+    await expect(mockDb.createOrder({
+      paymentMethod: 'card',
+      items: [{ id: 'current-phone', quantity: 1 }],
+      customer: { phone: '0911111111' },
+    }, 'direct-card')).rejects.toThrow();
+
+    expect(storage.get(STORAGE_KEYS.mockProducts)[0].stock).toBe(2);
+  });
+
+  it('allows an active session to create a VNPay checkout', async () => {
+    const checkout = await mockDb.createVnpayCheckout({
+      items: [{ id: 'current-phone', quantity: 1 }],
+      customer: { phone: '0911111111' },
+    }, 'vnpay-active');
+
+    expect(checkout.order.userId).toBe('user-customer');
+    expect(checkout.order.paymentMethod).toBe('card');
   });
 
   it('rejects an inactive catalog item without decrementing stock', async () => {

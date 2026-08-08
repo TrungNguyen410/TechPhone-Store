@@ -128,11 +128,13 @@ if (isProduction && deploymentTarget === 'render') {
 }
 
 const rejectRenderLoopback = isProduction && deploymentTarget === 'render';
+const trustProxy = deploymentTarget === 'render' ? 1 : false;
 
 const env = {
   nodeEnv,
   port,
   deploymentTarget,
+  trustProxy,
   mongoUri: process.env.MONGO_URI || 'mongodb://localhost:27017/techphone_store',
   jwtAccessSecret: getJwtSecret('JWT_ACCESS_SECRET', 'dev-access-secret'),
   jwtRefreshSecret: getJwtSecret('JWT_REFRESH_SECRET', 'dev-refresh-secret'),

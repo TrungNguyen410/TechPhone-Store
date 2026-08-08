@@ -2,6 +2,7 @@ const orderRepository = require('../repositories/orderRepository');
 const userRepository = require('../repositories/userRepository');
 const AppError = require('../utils/AppError');
 const pick = require('../utils/pick');
+const { normalizeVietnamesePhone } = require('../utils/phone');
 
 const customerUpdateFields = ['fullName', 'email', 'phone', 'address', 'role', 'status'];
 
@@ -37,6 +38,11 @@ class CustomerService {
   async update(id, payload) {
     const dto = pick(payload, customerUpdateFields);
     if (Object.keys(dto).length === 0) throw new AppError('Dữ liệu cập nhật không hợp lệ', 422);
+    if (Object.hasOwn(dto, 'phone')) {
+      const phone = normalizeVietnamesePhone(dto.phone);
+      if (!phone) throw new AppError('Số điện thoại Việt Nam không hợp lệ', 422);
+      dto.phone = phone;
+    }
     const existing = await userRepository.findById(id);
     if (!existing || existing.role !== 'customer') throw new AppError('Không tìm thấy khách hàng', 404);
     return userRepository.update(id, dto);

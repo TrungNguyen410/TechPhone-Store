@@ -82,6 +82,48 @@ describe('Contact support workflow', () => {
     expect(empty.status).toBe(422);
   });
 
+  test('canonicalizes an admin-updated phone for OTP lookup and login', async () => {
+    const customer = await createUser({ email: 'canonical-customer@test.com', phone: '0922222222' });
+    await createUser({ email: 'canonical-admin@test.com', phone: '0900000004', role: 'admin' });
+    const token = await login('canonical-admin@test.com');
+
+    const updated = await request(app)
+      .put(`/api/admin/customers/${customer.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ phone: '+84 912 345 678' });
+
+    expect(updated.status).toBe(200);
+    expect((await User.findById(customer.id)).phone).toBe('0912345678');
+    expect((await request(app).post('/api/auth/forgot-password/request-otp').send({
+      identifier: '+84 912 345 678',
+    })).status).toBe(200);
+    expect((await request(app).post('/api/auth/login').send({
+      identifier: '0912345678', password: '123456',
+    })).status).toBe(200);
+  });
+
+  test('rejects invalid and canonically colliding admin customer phones', async () => {
+    const first = await createUser({ email: 'phone-first@test.com', phone: '0912345678' });
+    const second = await createUser({ email: 'phone-second@test.com', phone: '0922222222' });
+    await createUser({ email: 'phone-admin@test.com', phone: '0900000005', role: 'admin' });
+    const token = await login('phone-admin@test.com');
+
+    await request(app)
+      .put(`/api/admin/customers/${second.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ phone: '0123456789' })
+      .expect(422);
+
+    await request(app)
+      .put(`/api/admin/customers/${second.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ phone: '+84 912 345 678' })
+      .expect(409);
+
+    expect((await User.findById(first.id)).phone).toBe('0912345678');
+    expect((await User.findById(second.id)).phone).toBe('0922222222');
+  });
+
   test('allows only supported setting update fields', async () => {
     const setting = await Setting.create({ key: 'store_name', value: 'TechPhone', group: 'general', label: 'Store name' });
     await createUser({ email: 'setting-admin@test.com', phone: '0900000003', role: 'admin' });

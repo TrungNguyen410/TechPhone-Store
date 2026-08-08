@@ -55,19 +55,43 @@ const createId = (prefix) => `${prefix}-${Date.now()}-${Math.random().toString(3
 const readOtpRequests = () => storage.get(STORAGE_KEYS.mockOtpRequests, []);
 const writeOtpRequests = (items) => storage.set(STORAGE_KEYS.mockOtpRequests, items);
 const mockOtp = '123456';
+const vnpayCheckoutAuthorization = Symbol('mock-vnpay-checkout');
 const currentMockUser = () => {
   const currentUser = storage.get(STORAGE_KEYS.currentUser);
   return currentUser?.id && storage.get(STORAGE_KEYS.token) ? currentUser : null;
 };
-const currentMockUserId = () => currentMockUser()?.id || null;
-const scopedCheckoutKey = (payload, idempotencyKey) => {
+const requireActiveCheckoutUser = () => {
+  const session = currentMockUser();
+  if (!session) fail('Vui lòng đăng nhập để đặt hàng', 401);
+  const user = read('users').find((item) => item.id === session.id);
+  if (!user || user.status !== 'active') fail('Tài khoản không thể đặt hàng', 403);
+  return user;
+};
+const scopedCheckoutKey = (userId, idempotencyKey) => {
   const key = String(idempotencyKey || '').trim().slice(0, 120);
   if (!key) return '';
-  const userId = currentMockUserId();
-  const customerScope = userId
-    ? `user:${userId}`
-    : `guest:${String(payload.customer?.email || '').trim().toLowerCase()}:${String(payload.customer?.phone || '').trim()}`;
-  return `${customerScope}:${key}`;
+  return `user:${userId}:${key}`;
+};
+
+const publicLookupOrder = (order) => {
+  const phone = String(order.customer?.phone || '');
+  return {
+    id: order.id,
+    orderNumber: order.orderNumber,
+    createdAt: order.createdAt,
+    status: order.status,
+    items: (order.items || []).map(({ id, name, image, price, quantity, type }) => ({
+      id, name, image, price, quantity, type,
+    })),
+    total: order.total,
+    shippingProvider: order.shippingProvider,
+    trackingNumber: order.trackingNumber,
+    estimatedDelivery: order.estimatedDelivery,
+    customer: {
+      fullName: `${String(order.customer?.fullName || '').slice(0, 1)}***`,
+      phone: `${phone.slice(0, 3)}****${phone.slice(-3)}`,
+    },
+  };
 };
 
 export const mockDb = {
@@ -78,7 +102,7 @@ export const mockDb = {
         || item.phone === normalizedPhone,
     );
     if (!user || user.password !== password) fail('Số điện thoại hoặc mật khẩu không đúng', 401);
-    if (user.status === 'locked') fail('Tài khoản đã bị khóa', 403);
+    if (user.status !== 'active') fail('Tài khoản không thể đăng nhập', 403);
     return wait({ token: tokenFor(user), user: publicUser(user) });
   },
 
@@ -223,6 +247,18 @@ export const mockDb = {
     return wait(clone(item));
   },
 
+  async listPublicCatalog(name) {
+    if (!['products', 'accessories'].includes(name)) fail('Danh mục công khai không hợp lệ', 404);
+    return wait(clone(read(name).filter((item) => item.status === 'active')));
+  },
+
+  async getPublicCatalogItem(name, id) {
+    if (!['products', 'accessories'].includes(name)) fail('Danh mục công khai không hợp lệ', 404);
+    const item = read(name).find((entry) => entry.id === id && entry.status === 'active');
+    if (!item) fail('Không tìm thấy dữ liệu', 404);
+    return wait(clone(item));
+  },
+
   async save(name, payload) {
     if ((name === 'categories' || name === 'brands') && payload.name && !payload.slug) payload = { ...payload, slug: slugify(payload.name) };
     const items = read(name);
@@ -245,9 +281,13 @@ export const mockDb = {
     return wait({ success: true });
   },
 
-  async createOrder(payload, idempotencyKey) {
+  async createOrder(payload, idempotencyKey, authorization) {
+    const user = requireActiveCheckoutUser();
+    if (payload.paymentMethod === 'card' && authorization !== vnpayCheckoutAuthorization) {
+      fail('Thanh toán thẻ chỉ khả dụng qua VNPay', 422);
+    }
     const orders = read('orders');
-    const scopedKey = scopedCheckoutKey(payload, idempotencyKey);
+    const scopedKey = scopedCheckoutKey(user.id, idempotencyKey);
     const existing = scopedKey
       ? orders.find((order) => order.idempotencyKey === scopedKey)
       : null;
@@ -306,7 +346,7 @@ export const mockDb = {
     const now = new Date();
     const order = {
       ...payload,
-      userId: currentMockUserId(),
+      userId: user.id,
       items,
       subtotal,
       shippingFee: shipping.fee,
@@ -340,7 +380,7 @@ export const mockDb = {
       paymentMethod: 'card',
       paymentStatus: 'pending',
       paymentReference,
-    }, idempotencyKey);
+    }, idempotencyKey, vnpayCheckoutAuthorization);
     return wait({
       order,
       transaction: {
@@ -358,12 +398,14 @@ export const mockDb = {
   },
 
   async findOrder(orderNumber, phone) {
+    const canonicalPhone = normalizeVietnamesePhone(phone);
     const order = read('orders').find(
       (item) =>
-        item.orderNumber.toLowerCase() === orderNumber.toLowerCase() && item.customer.phone === phone,
+        item.orderNumber.toLowerCase() === String(orderNumber || '').toLowerCase()
+          && item.customer.phone === canonicalPhone,
     );
     if (!order) fail('Không tìm thấy đơn hàng phù hợp', 404);
-    return wait(clone(order));
+    return wait(publicLookupOrder(order));
   },
 
   async updateOrderStatus(id, status) {

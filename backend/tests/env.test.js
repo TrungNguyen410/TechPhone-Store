@@ -97,6 +97,11 @@ describe('production environment configuration', () => {
       .toBe('render');
   });
 
+  it('uses a trusted proxy only for the documented Render deployment', () => {
+    expect(loadEnv(productionEnv({ DEPLOYMENT_TARGET: 'render' })).trustProxy).toBe(1);
+    expect(loadEnv(productionEnv({ DEPLOYMENT_TARGET: 'docker' })).trustProxy).toBe(false);
+  });
+
   it('rejects an unknown production deployment target', () => {
     expect(() => loadEnv(productionEnv({ DEPLOYMENT_TARGET: 'rendr' })))
       .toThrow(/DEPLOYMENT_TARGET.*rendr.*not supported/i);

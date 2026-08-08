@@ -239,6 +239,47 @@ describe('Orders and dashboard APIs', () => {
     expect(Number(blocked.headers['retry-after'])).toBeGreaterThan(0);
   });
 
+  it('rate limits a lookup IP even when the order number and phone vary', async () => {
+    const orderService = require('../src/services/orderService');
+    const lookupSpy = jest.spyOn(orderService, 'lookup');
+
+    for (let index = 0; index < 10; index += 1) {
+      await request(app).get('/api/orders/lookup').query({
+        orderNumber: `TP260101${String(index).padStart(4, '0')}`,
+        phone: `09123456${String(index).padStart(2, '0')}`,
+      }).expect(404);
+    }
+
+    const blocked = await request(app).get('/api/orders/lookup').query({
+      orderNumber: 'TP2601019999',
+      phone: '0999999999',
+    });
+
+    expect(blocked.status).toBe(429);
+    expect(lookupSpy).toHaveBeenCalledTimes(10);
+  });
+
+  it('ignores spoofed forwarded IP headers for direct requests', async () => {
+    expect(app.get('trust proxy')).toBe(false);
+
+    for (let index = 0; index < 10; index += 1) {
+      await request(app)
+        .get('/api/orders/lookup')
+        .set('X-Forwarded-For', `198.51.100.${index + 1}`)
+        .query({
+          orderNumber: `TP260102${String(index).padStart(4, '0')}`,
+          phone: `09234567${String(index).padStart(2, '0')}`,
+        })
+        .expect(404);
+    }
+
+    await request(app)
+      .get('/api/orders/lookup')
+      .set('X-Forwarded-For', '198.51.100.99')
+      .query({ orderNumber: 'TP2601029999', phone: '0988888888' })
+      .expect(429);
+  });
+
   it('atomically allows exactly max concurrent bucket consumers', async () => {
     const { consumeRateLimit } = require('../src/repositories/rateLimitRepository');
     const attempts = await Promise.all(
@@ -275,8 +316,8 @@ describe('Orders and dashboard APIs', () => {
     expect(bucket._id).not.toContain('203.0.113.8');
   });
 
-  it('trusts exactly one reverse-proxy hop', () => {
-    expect(app.get('trust proxy')).toBe(1);
+  it('does not trust a reverse-proxy hop outside the Render deployment', () => {
+    expect(env.trustProxy).toBe(false);
   });
 
   it('rejects orders that exceed product stock', async () => {
