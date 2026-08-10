@@ -1,3 +1,7 @@
+const env = require('./env');
+
+const productionApiUrl = `${env.apiPublicUrl.replace(/\/+$/, '')}/api`;
+
 const swaggerDocument = {
   openapi: '3.0.3',
   info: {
@@ -7,7 +11,7 @@ const swaggerDocument = {
   },
   servers: [
     { url: 'http://localhost:5000/api', description: 'Local development' },
-    { url: 'https://techphone-api.onrender.com/api', description: 'Render production example' },
+    { url: productionApiUrl, description: 'Configured deployment' },
   ],
   tags: [
     { name: 'Auth' },

@@ -12,6 +12,9 @@
     "test": "jest --runInBand",
     "test:coverage": "jest --coverage --runInBand"
   },
+  "engines": {
+    "node": ">=22.12 <23"
+  },
   "keywords": [
     "express",
     "mongodb",
