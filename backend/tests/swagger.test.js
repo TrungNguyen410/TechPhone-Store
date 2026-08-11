@@ -1,12 +1,13 @@
 const swaggerDocument = require('../src/config/swagger');
 const app = require('../src/app');
+const env = require('../src/config/env');
 
 const httpMethods = new Set(['get', 'post', 'put', 'patch', 'delete', 'head', 'options']);
 
 describe('Swagger OpenAPI document', () => {
-  it('trusts exactly one proxy hop for proxy-hosted requests', () => {
-    expect(app.get('trust proxy')).toBe(1);
-  });
+  it('uses the configured trust proxy setting', () => {
+  expect(app.get('trust proxy')).toBe(env.trustProxy);
+});
 
   it('uses API_PUBLIC_URL for the configured deployment server', () => {
     const previousApiPublicUrl = process.env.API_PUBLIC_URL;
