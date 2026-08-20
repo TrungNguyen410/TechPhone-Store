@@ -3681,3 +3681,15 @@ dialog.accessible-dialog.mobile-drawer[open] {
     text-align: left;
   }
 }
+
+.infinite-scroll-sentinel {
+  height: 20px;
+  margin-top: 2rem;
+}
+
+.infinite-scroll-end {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}

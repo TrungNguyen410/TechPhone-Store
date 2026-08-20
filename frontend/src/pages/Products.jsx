@@ -4,16 +4,16 @@ import { useSearchParams } from 'react-router-dom';
 import { productApi } from '../api/productApi';
 import Loading from '../components/common/Loading';
 import LoadError from '../components/common/LoadError';
-import Pagination from '../components/common/Pagination';
 import SearchBox from '../components/common/SearchBox';
 import ProductFilter from '../components/product/ProductFilter';
 import ProductGrid from '../components/product/ProductGrid';
 import ProductSort from '../components/product/ProductSort';
 import { useDebounce } from '../hooks/useDebounce';
+import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { trackEvent } from '../utils/analytics';
 
 const initialFilters = { brand: '', price: '', ram: '', storage: '', battery: '' };
-const PAGE_SIZE = 9;
+const PAGE_SIZE = 12;
 
 export default function Products() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -23,7 +23,6 @@ export default function Products() {
   const [search, setSearch] = useState(searchParams.get('q') || '');
   const [filters, setFilters] = useState({ ...initialFilters, brand: searchParams.get('brand') || '' });
   const [sort, setSort] = useState('newest');
-  const [page, setPage] = useState(1);
   const [mobileFilter, setMobileFilter] = useState(false);
   const debouncedSearch = useDebounce(search);
 
@@ -44,7 +43,6 @@ export default function Products() {
       else next.delete('q');
       return next;
     }, { replace: true });
-    setPage(1);
   }, [debouncedSearch, setSearchParams]);
 
   const urlSearch = searchParams.get('q') || '';
@@ -54,7 +52,6 @@ export default function Products() {
     setFilters((current) => (
       current.brand === urlBrand ? current : { ...current, brand: urlBrand }
     ));
-    setPage(1);
   }, [urlBrand, urlSearch]);
 
   const updateFilters = (next) => {
@@ -67,7 +64,6 @@ export default function Products() {
         return params;
       }, { replace: true });
     }
-    setPage(1);
   };
 
   const resetFilters = () => updateFilters(initialFilters);
@@ -109,8 +105,7 @@ export default function Products() {
     });
   }, [debouncedSearch, filters, products, sort]);
 
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const visibleProducts = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const { visibleItems, hasMore, observerRef } = useInfiniteScroll(filtered, PAGE_SIZE);
 
   if (loading) return <Loading />;
   if (error) {
@@ -127,7 +122,7 @@ export default function Products() {
         <div className="catalog-toolbar">
           <SearchBox value={search} onChange={setSearch} placeholder="Tìm theo tên hoặc thương hiệu..." />
           <button className="mobile-filter-button" onClick={() => setMobileFilter(true)}><FiFilter /> Bộ lọc</button>
-          <ProductSort value={sort} onChange={(value) => { setSort(value); setPage(1); }} />
+          <ProductSort value={sort} onChange={setSort} />
         </div>
         <div className="catalog-layout">
           <div className={`filter-mobile-wrap ${mobileFilter ? 'open' : ''}`}>
@@ -142,8 +137,11 @@ export default function Products() {
           {mobileFilter && <div className="drawer-overlay" onClick={() => setMobileFilter(false)} />}
           <div className="catalog-results">
             <div className="result-count"><FiSearch /> Tìm thấy <strong>{filtered.length}</strong> sản phẩm</div>
-            <ProductGrid products={visibleProducts} />
-            <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+            <ProductGrid products={visibleItems} />
+            <div className="infinite-scroll-sentinel" ref={observerRef} />
+            {!hasMore && filtered.length > 0 && (
+              <div className="infinite-scroll-end">Đã hiển thị hết các sản phẩm</div>
+            )}
           </div>
         </div>
       </div>
