@@ -66,7 +66,7 @@ export default function OrderLookup() {
               <div><h3>Sản phẩm</h3>{order.items.map((item) => <div className="lookup-item" key={item.id}><img src={item.image} alt="" /><span>{item.name} × {item.quantity}</span><strong>{formatCurrency(item.price * item.quantity)}</strong></div>)}</div>
             </div>
             <div className="success-total"><span>Tổng thanh toán</span><strong>{formatCurrency(order.total)}</strong></div>
-            {order.trackingNumber && <div className="order-shipping-note"><strong>{order.shippingProvider || 'Đơn vị giao hàng'}</strong><span>Mã vận đơn: <b>{order.trackingNumber}</b></span>{order.estimatedDelivery && <span>Dự kiến giao: {formatDate(order.estimatedDelivery, true)}</span>}</div>}
+            {order.trackingNumber && <div className="order-shipping-note"><strong>{order.shippingProvider || 'Đơn vị giao hàng'}</strong><span>Mã vận đơn: <b>{order.trackingNumber}</b></span>{order.estimatedDelivery && <span>Dự kiến giao: {formatDate(order.estimatedDelivery)}</span>}</div>}
           </section>
         )}
       </div>
