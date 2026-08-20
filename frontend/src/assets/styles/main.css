@@ -755,8 +755,7 @@ p {
   background: var(--color-static-white);
 }
 
-.slider-pause-button,
-.carousel-pause-button {
+.slider-pause-button {
   display: inline-grid;
   width: 36px;
   height: 36px;
@@ -772,10 +771,6 @@ p {
   z-index: var(--z-local-control);
   right: 18px;
   bottom: 18px;
-}
-
-.carousel-pause-button {
-  margin: 12px auto 0;
 }
 
 .category-section,

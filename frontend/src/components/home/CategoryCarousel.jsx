@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { FiArrowRight, FiPause, FiPlay } from 'react-icons/fi';
+import { FiArrowRight } from 'react-icons/fi';
 import { Link } from 'react-router-dom';
 
 const RESUME_DELAY = 3000;
@@ -23,10 +23,9 @@ function useReducedMotion() {
 export default function CategoryCarousel({ categories }) {
   const resumeRef = useRef(null);
   const [paused, setPaused] = useState(false);
-  const [manualPaused, setManualPaused] = useState(false);
   const reducedMotion = useReducedMotion();
   const looping = !reducedMotion && categories.length > 1;
-  const isPaused = paused || manualPaused;
+  const isPaused = paused || reducedMotion;
 
   const pause = () => {
     clearTimeout(resumeRef.current);
@@ -80,16 +79,6 @@ export default function CategoryCarousel({ categories }) {
           </div>
         )}
       </div>
-      {looping && (
-        <button
-          type="button"
-          className="carousel-pause-button"
-          aria-label={manualPaused ? 'Tiếp tục danh mục' : 'Tạm dừng danh mục'}
-          onClick={() => setManualPaused((current) => !current)}
-        >
-          {manualPaused ? <FiPlay /> : <FiPause />}
-        </button>
-      )}
     </div>
   );
 }
