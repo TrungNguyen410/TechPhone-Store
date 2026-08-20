@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export const useInfiniteScroll = (items, pageSize = 12) => {
   const [visibleCount, setVisibleCount] = useState(pageSize);
@@ -26,7 +26,7 @@ export const useInfiniteScroll = (items, pageSize = 12) => {
 
     if (observerRef.current) observer.observe(observerRef.current);
     return () => observer.disconnect();
-  }, [hasMore, items.length, pageSize]);
+  }, [items.length, pageSize]);
 
   return {
     visibleItems: items.slice(0, visibleCount),
