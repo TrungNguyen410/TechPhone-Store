@@ -34,8 +34,24 @@ export default function OrderLookup() {
       <div className="container">
         <div className="page-hero centered"><FiPackage /><span>Tra cứu nhanh chóng</span><h1>Đơn hàng của bạn đang ở đâu?</h1><p>Nhập mã đơn hàng và số điện thoại đã dùng khi đặt hàng.</p></div>
         <form className="lookup-form panel" onSubmit={submit}>
-          <label><span>Mã đơn hàng</span><input value={form.orderNumber} onChange={(event) => setForm({ ...form, orderNumber: event.target.value.toUpperCase() })} placeholder="Ví dụ: TP260601" /></label>
-          <label><span>Số điện thoại</span><input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} placeholder="0911111111" /></label>
+          <div className="lookup-form-group">
+            <label htmlFor="orderNumber"><span>Mã đơn hàng</span></label>
+            <input
+              id="orderNumber"
+              value={form.orderNumber}
+              onChange={(event) => setForm({ ...form, orderNumber: event.target.value.toUpperCase() })}
+              placeholder="Ví dụ: TP260601"
+            />
+          </div>
+          <div className="lookup-form-group">
+            <label htmlFor="phone"><span>Số điện thoại</span></label>
+            <input
+              id="phone"
+              value={form.phone}
+              onChange={(event) => setForm({ ...form, phone: event.target.value })}
+              placeholder="0911111111"
+            />
+          </div>
           <button className="btn btn-primary" disabled={loading}><FiSearch /> {loading ? 'Đang tìm...' : 'Tra cứu đơn hàng'}</button>
           <small>Dùng thử: TP260601 · 0911111111</small>
         </form>

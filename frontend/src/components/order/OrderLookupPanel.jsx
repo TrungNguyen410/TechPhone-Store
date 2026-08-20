@@ -36,22 +36,24 @@ export default function OrderLookupPanel({ initialPhone = '' }) {
         <p>Nhập mã đơn và số điện thoại dùng khi đặt hàng.</p>
       </div>
       <form className="lookup-form panel" onSubmit={submit}>
-        <label>
-          <span>Mã đơn hàng</span>
+        <div className="lookup-form-group">
+          <label htmlFor="orderNumber"><span>Mã đơn hàng</span></label>
           <input
+            id="orderNumber"
             value={form.orderNumber}
             onChange={(event) => setForm({ ...form, orderNumber: event.target.value.toUpperCase() })}
             placeholder="Ví dụ: TP260601"
           />
-        </label>
-        <label>
-          <span>Số điện thoại</span>
+        </div>
+        <div className="lookup-form-group">
+          <label htmlFor="phone"><span>Số điện thoại</span></label>
           <input
+            id="phone"
             value={form.phone}
             onChange={(event) => setForm({ ...form, phone: event.target.value })}
             placeholder="0911111111"
           />
-        </label>
+        </div>
         <button className="btn btn-primary" disabled={loading}>
           <FiSearch /> {loading ? 'Đang tìm...' : 'Tra cứu'}
         </button>

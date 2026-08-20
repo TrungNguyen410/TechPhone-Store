@@ -3297,40 +3297,39 @@ p {
   display: block;
 }
 
+.lookup-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.lookup-form-group label {
+  display: block;
+  font-weight: 500;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+.lookup-form-group input {
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  font-size: 1rem;
+}
+
 .lookup-form {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
   max-width: 900px;
   margin: -70px auto 35px;
   padding: 24px;
 }
 
-.lookup-form label {
-  display: flex;
-  flex-direction: column;
-}
-
-.lookup-form label span {
-  margin-bottom: 6px;
-  color: var(--color-ink-muted);
-  font-size: 11px;
-  font-weight: 750;
-}
-
-.lookup-form input {
-  height: 46px;
-  padding: 0 12px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  outline: none;
-}
-
-.lookup-form > small {
-  grid-column: 1 / -1;
-  color: var(--color-ink-subtle);
-  font-size: 9px;
+.lookup-form small {
+  align-self: center;
+  color: var(--muted);
+  font-size: 0.85rem;
 }
 
 .lookup-result {
