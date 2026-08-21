@@ -11,7 +11,7 @@ import { useDebounce } from '../hooks/useDebounce';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 
 const initialFilters = { brand: '', category: '', price: '' };
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 9;
 
 export default function Accessories() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -161,9 +161,11 @@ export default function Accessories() {
           <div className="catalog-results">
             <div className="result-count"><FiSearch /> Tìm thấy <strong>{filtered.length}</strong> phụ kiện</div>
             <ProductGrid products={visibleItems} type="accessory" />
-            <div className="infinite-scroll-sentinel" ref={observerRef} />
+            <div className="infinite-scroll-sentinel" ref={observerRef}>
+              {hasMore && <span className="infinite-scroll-loading">Đang tải thêm sản phẩm…</span>}
+            </div>
             {!hasMore && filtered.length > 0 && (
-              <div className="infinite-scroll-end">Đã hiển thị hết các sản phẩm</div>
+              <div className="infinite-scroll-end">Đã hiển thị hết {filtered.length} sản phẩm</div>
             )}
           </div>
         </div>

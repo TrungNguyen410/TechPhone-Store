@@ -54,6 +54,8 @@ services:
       args:
         VITE_API_URL: http://localhost:5000/api
         VITE_USE_MOCK: "false"
+        VITE_SITE_URL: http://localhost:3000
+        VITE_ALLOW_LOOPBACK: "true"
     container_name: techphone-frontend
     restart: unless-stopped
     ports:

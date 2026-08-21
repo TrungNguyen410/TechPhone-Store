@@ -4,6 +4,8 @@ import { FiSmartphone } from 'react-icons/fi';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import CategoryCarousel from './CategoryCarousel';
 
+const RESUME_DELAY = 3000;
+
 const categories = [
   { name: 'iPhone', icon: FiSmartphone, query: 'Apple', color: 'blue' },
   { name: 'Samsung', icon: FiSmartphone, query: 'Samsung', color: 'violet' },
@@ -78,5 +80,44 @@ describe('CategoryCarousel', () => {
     fireEvent.click(pauseButton);
     expect(container.querySelector('.category-marquee-track')).toHaveClass('is-paused');
     expect(screen.getByRole('button', { name: /tiếp tục danh mục/i })).toBeInTheDocument();
+  });
+
+  it('keeps a button pause in place even after the hover resume delay elapses', () => {
+    setMotion(false);
+    const { container } = render(
+      <MemoryRouter><CategoryCarousel categories={categories} /></MemoryRouter>,
+    );
+    const region = screen.getByRole('region');
+    const track = container.querySelector('.category-marquee-track');
+
+    fireEvent.click(screen.getByRole('button', { name: /tạm dừng danh mục/i }));
+    fireEvent.mouseLeave(region);
+    act(() => vi.advanceTimersByTime(RESUME_DELAY * 2));
+
+    expect(track).toHaveClass('is-paused');
+  });
+
+  it('restarts the animation when the control is pressed again while still focused', () => {
+    setMotion(false);
+    const { container } = render(
+      <MemoryRouter><CategoryCarousel categories={categories} /></MemoryRouter>,
+    );
+    const track = container.querySelector('.category-marquee-track');
+
+    fireEvent.click(screen.getByRole('button', { name: /tạm dừng danh mục/i }));
+    expect(track).toHaveClass('is-paused');
+
+    const resumeButton = screen.getByRole('button', { name: /tiếp tục danh mục/i });
+    fireEvent.focus(resumeButton);
+    fireEvent.click(resumeButton);
+
+    expect(track).not.toHaveClass('is-paused');
+    expect(resumeButton).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('omits the control when there is nothing animating', () => {
+    setMotion(true);
+    render(<MemoryRouter><CategoryCarousel categories={categories} /></MemoryRouter>);
+    expect(screen.queryByRole('button', { name: /danh mục tự trượt/i })).not.toBeInTheDocument();
   });
 });

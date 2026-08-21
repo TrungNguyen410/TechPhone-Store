@@ -24,6 +24,7 @@ const isLoopbackUrl = (value) => {
 
 export const createRuntimeConfig = (env = {}) => {
   const useMock = env.VITE_USE_MOCK === 'true';
+  const allowLoopback = env.VITE_ALLOW_LOOPBACK === 'true';
   const apiUrl = env.VITE_API_URL || '';
   const siteUrl = env.VITE_SITE_URL || 'http://localhost:5173';
 
@@ -33,13 +34,13 @@ export const createRuntimeConfig = (env = {}) => {
     );
   }
 
-  if (env.PROD && !useMock && isLoopbackUrl(apiUrl)) {
+  if (env.PROD && !useMock && !allowLoopback && isLoopbackUrl(apiUrl)) {
     throw new Error(
       'VITE_API_URL không được trỏ tới localhost trong môi trường production',
     );
   }
 
-  if (env.PROD && isLoopbackUrl(siteUrl)) {
+  if (env.PROD && !allowLoopback && isLoopbackUrl(siteUrl)) {
     throw new Error(
       'VITE_SITE_URL phải là URL public trong môi trường production',
     );

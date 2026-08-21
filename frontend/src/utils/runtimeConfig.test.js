@@ -45,6 +45,20 @@ describe('createRuntimeConfig', () => {
   });
 
 
+  it('accepts loopback URLs for an explicitly local production container', () => {
+    const config = createRuntimeConfig({
+      PROD: true,
+      VITE_USE_MOCK: 'false',
+      VITE_API_URL: 'http://localhost:5000/api',
+      VITE_SITE_URL: 'http://localhost:3000',
+      VITE_ALLOW_LOOPBACK: 'true',
+    });
+
+    expect(config.apiUrl).toBe('http://localhost:5000/api');
+    expect(config.siteUrl).toBe('http://localhost:3000');
+  });
+
+
   it('accepts Netlify frontend and Vercel backend URLs in production', () => {
     const config = createRuntimeConfig({
       PROD: true,

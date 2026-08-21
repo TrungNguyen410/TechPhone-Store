@@ -77,6 +77,13 @@ export function AuthProvider({ children }) {
     const session = persistSession(await authApi.login(credentials));
     return mergeLocalWishlist(session);
   }, [mergeLocalWishlist, persistSession]);
+  const register = useCallback(
+    async (payload) => {
+      const session = persistSession(await authApi.register(payload));
+      return mergeLocalWishlist(session);
+    },
+    [mergeLocalWishlist, persistSession],
+  );
   const requestRegistrationOtp = useCallback((payload) => authApi.requestRegistrationOtp(payload), []);
   const verifyRegistrationOtp = useCallback(
     async (payload) => {
@@ -130,6 +137,7 @@ export function AuthProvider({ children }) {
       isAuthenticated: Boolean(user && token),
       isAdmin: user?.role === 'admin',
       login,
+      register,
       requestRegistrationOtp,
       verifyRegistrationOtp,
       logout,
@@ -139,7 +147,7 @@ export function AuthProvider({ children }) {
       setWishlist,
       loadCurrentUser,
     }),
-    [changePassword, loadCurrentUser, loading, login, logout, requestRegistrationOtp, setWishlist, token, toggleWishlist, updateProfile, user, verifyRegistrationOtp],
+    [changePassword, loadCurrentUser, loading, login, logout, register, requestRegistrationOtp, setWishlist, token, toggleWishlist, updateProfile, user, verifyRegistrationOtp],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

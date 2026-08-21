@@ -103,8 +103,24 @@ class AuthService {
     });
   }
 
+  /**
+   * Đăng ký trực tiếp: không dùng OTP, chỉ ràng buộc đầu số nhà mạng Việt Nam.
+   * Luồng OTP (requestRegistrationOtp/verifyRegistrationOtp) vẫn được giữ lại.
+   */
   async register(payload) {
-    return this.requestRegistrationOtp(payload);
+    const phone = normalizeVietnamesePhone(payload.phone);
+    if (!phone) throw new AppError('Số điện thoại không thuộc nhà mạng Việt Nam đang hoạt động', 422);
+    const existingPhone = await userRepository.findByPhone(phone);
+    if (existingPhone) throw new AppError('Số điện thoại này đã được đăng ký', 409);
+
+    const user = await userRepository.create({
+      fullName: payload.fullName,
+      phone,
+      password: await bcrypt.hash(payload.password, 12),
+      role: 'customer',
+      status: 'active',
+    });
+    return this.issueSession(user);
   }
 
   async verifyRegistrationOtp({ phone, otp }) {

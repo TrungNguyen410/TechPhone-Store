@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { FiHeart } from 'react-icons/fi';
 import { accessoryApi } from '../api/accessoryApi';
 import { productApi } from '../api/productApi';
@@ -11,7 +11,9 @@ import { storage } from '../utils/storage';
 import { AuthContext } from '../context/AuthContext';
 
 export default function Favorites() {
-  const user = useContext(AuthContext)?.user;
+  const auth = useContext(AuthContext);
+  const user = auth?.user;
+  const persistWishlist = auth?.setWishlist;
   const [catalog, setCatalog] = useState({ products: [], accessories: [] });
   const [wishlist, setWishlist] = useState(() => user?.wishlist || storage.get(STORAGE_KEYS.wishlist, []));
   const [loading, setLoading] = useState(true);
@@ -35,6 +37,22 @@ export default function Favorites() {
     window.addEventListener('wishlist-updated', syncWishlist);
     return () => window.removeEventListener('wishlist-updated', syncWishlist);
   }, [syncWishlist]);
+
+  // Chi giu lai id con ton tai trong catalog, roi ghi nguoc lai de badge o header
+  // khong dem nhung san pham da bi xoa/an (nguyen nhan "chon 1 nhung hien 2").
+  const liveIds = useMemo(
+    () => new Set([...catalog.products, ...catalog.accessories].map((item) => item.id)),
+    [catalog],
+  );
+  const prunedRef = useRef(false);
+
+  useEffect(() => {
+    if (loading || error || prunedRef.current || !persistWishlist) return;
+    const kept = wishlist.filter((id) => liveIds.has(id));
+    if (kept.length === wishlist.length) return;
+    prunedRef.current = true;
+    Promise.resolve(persistWishlist(kept)).catch(() => { prunedRef.current = false; });
+  }, [error, liveIds, loading, persistWishlist, wishlist]);
 
   if (loading) return <Loading />;
   if (error) {

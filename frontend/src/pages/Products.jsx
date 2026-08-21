@@ -13,7 +13,7 @@ import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { trackEvent } from '../utils/analytics';
 
 const initialFilters = { brand: '', price: '', ram: '', storage: '', battery: '' };
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 9;
 
 export default function Products() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -138,9 +138,11 @@ export default function Products() {
           <div className="catalog-results">
             <div className="result-count"><FiSearch /> Tìm thấy <strong>{filtered.length}</strong> sản phẩm</div>
             <ProductGrid products={visibleItems} />
-            <div className="infinite-scroll-sentinel" ref={observerRef} />
+            <div className="infinite-scroll-sentinel" ref={observerRef}>
+              {hasMore && <span className="infinite-scroll-loading">Đang tải thêm sản phẩm…</span>}
+            </div>
             {!hasMore && filtered.length > 0 && (
-              <div className="infinite-scroll-end">Đã hiển thị hết các sản phẩm</div>
+              <div className="infinite-scroll-end">Đã hiển thị hết {filtered.length} sản phẩm</div>
             )}
           </div>
         </div>
