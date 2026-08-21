@@ -6,8 +6,12 @@ const nodeEnv = process.env.NODE_ENV || 'development';
 const isProduction = nodeEnv === 'production';
 const port = Number(process.env.PORT || 5000);
 
-const parseHttpUrl = (name, developmentFallback = '') => {
-  const value = String(process.env[name] || (isProduction ? '' : developmentFallback)).trim();
+// `developmentFallback` bi bo qua o production de bat cau hinh thieu that som.
+// Ngoai le duy nhat: `allowFallbackInProduction` cho PUBLIC_SITE_URL lay lai
+// FRONTEND_URL — gia tri do da duoc validate rieng nen khong noi long guard.
+const parseHttpUrl = (name, developmentFallback = '', { allowFallbackInProduction = false } = {}) => {
+  const useFallback = !isProduction || allowFallbackInProduction;
+  const value = String(process.env[name] || (useFallback ? developmentFallback : '')).trim();
   let parsed;
 
   try {
@@ -35,8 +39,12 @@ const isLoopbackHostname = (hostname) => {
     || /^127\./.test(normalized);
 };
 
-const requiredOrigin = (name, developmentFallback = '', { rejectLoopback = false } = {}) => {
-  const parsed = parseHttpUrl(name, developmentFallback);
+const requiredOrigin = (
+  name,
+  developmentFallback = '',
+  { rejectLoopback = false, allowFallbackInProduction = false } = {},
+) => {
+  const parsed = parseHttpUrl(name, developmentFallback, { allowFallbackInProduction });
   if (
     parsed.username
     || parsed.password
@@ -151,7 +159,7 @@ const env = {
   publicSiteUrl: requiredOrigin(
     'PUBLIC_SITE_URL',
     process.env.FRONTEND_URL || 'http://localhost:5173',
-    { rejectLoopback: rejectRenderLoopback },
+    { rejectLoopback: rejectRenderLoopback, allowFallbackInProduction: true },
   ),
   apiPublicUrl: requiredOrigin(
     'API_PUBLIC_URL',
