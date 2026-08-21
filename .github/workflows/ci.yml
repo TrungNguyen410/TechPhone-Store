@@ -88,3 +88,37 @@ jobs:
 
       - name: Build application images
         run: docker compose build
+
+  # Push len devnguyen ma ba job tren xanh het thi day thang len nhanh
+  # deploy-netlify-vercel de Netlify/Vercel tu build lai.
+  promote:
+    name: Promote to deploy branch
+    needs: [backend, frontend, docker]
+    if: github.ref == 'refs/heads/devnguyen'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: promote-deploy
+      cancel-in-progress: false
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Chi fast-forward. Neu nhanh deploy co commit rieng chua co tren
+      # devnguyen thi buoc nay fail — co y, de khong am tham ghi de.
+      - name: Fast-forward deploy-netlify-vercel
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin devnguyen deploy-netlify-vercel
+          if git merge-base --is-ancestor origin/deploy-netlify-vercel origin/devnguyen; then
+            git push origin "${{ github.sha }}:refs/heads/deploy-netlify-vercel"
+            echo "Da fast-forward deploy-netlify-vercel len ${{ github.sha }}"
+          else
+            echo "::error::deploy-netlify-vercel co commit chua co tren devnguyen."
+            echo "::error::Merge deploy-netlify-vercel vao devnguyen truoc roi chay lai."
+            git --no-pager log --oneline origin/devnguyen..origin/deploy-netlify-vercel
+            exit 1
+          fi
