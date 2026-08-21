@@ -8,7 +8,7 @@ export const DEFAULT_STORE_SETTINGS = {
   address: '123 Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh',
   logo: '',
   facebook: 'https://facebook.com/techphone',
-  instagram: 'https://instagram.com/techphone',
+  tiktok: 'https://tiktok.com/@techphone',
   youtube: 'https://youtube.com/@techphone',
   zaloUrl: '',
 };

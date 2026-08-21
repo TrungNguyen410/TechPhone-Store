@@ -14,11 +14,13 @@
     "test": "vitest",
     "test:run": "vitest run"
   },
+  "engines": {
+    "node": ">=22.12 <23"
+  },
   "dependencies": {
     "@fontsource/ibm-plex-sans": "^5.2.8",
     "@fontsource/jetbrains-mono": "^5.2.8",
     "@fontsource/space-grotesk": "^5.2.10",
-    "@vitejs/plugin-react": "^5.1.1",
     "axios": "^1.17.0",
     "bootstrap": "^5.3.8",
     "chart.js": "^4.5.1",
@@ -27,19 +29,20 @@
     "react-dom": "^19.2.7",
     "react-icons": "^5.5.0",
     "react-router-dom": "7.18.2",
-    "react-toastify": "^11.0.5",
-    "vite": "^8.0.16"
+    "react-toastify": "^11.0.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
+    "@vitejs/plugin-react": "^5.1.1",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
     "jsdom": "^29.1.1",
+    "vite": "^8.0.16",
     "vitest": "^4.1.10"
   }
 }

@@ -400,7 +400,7 @@ describe('Orders and dashboard APIs', () => {
   });
 
   it('handles concurrent requests with one idempotency key without double-decrementing stock', async () => {
-    await createUser({ email: 'race@test.com', phone: '0955555555' });
+    await createUser({ email: 'race@test.com', phone: '0965555555' });
     const token = await login('race@test.com');
     const taxonomy = await seedTaxonomy();
     const product = await Product.create({
@@ -416,7 +416,7 @@ describe('Orders and dashboard APIs', () => {
       customer: {
         fullName: 'Race Customer',
         email: 'race@test.com',
-        phone: '0955555555',
+        phone: '0965555555',
         address: 'Test address',
           province: 'Ho Chi Minh',
           ward: 'Ben Nghe',

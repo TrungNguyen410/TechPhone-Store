@@ -836,6 +836,17 @@ h4,
   color: var(--color-ink-muted);
 }
 
+.order-shipping-note strong {
+  white-space: nowrap;
+}
+
+/* Trong the don hang, note nam sat mep card -> keo vao dung le noi dung. */
+.account-orders > article .order-shipping-note {
+  align-items: baseline;
+  margin: 0 18px 16px;
+  line-height: 1.5;
+}
+
 .verified-review {
   margin-left: var(--space-xs);
   color: var(--color-success);

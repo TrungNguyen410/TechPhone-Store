@@ -71,7 +71,7 @@ export default function SettingManagement() {
         <div className="settings-heading"><FiGlobe /><div><h2>Mạng xã hội</h2><p>Các kênh chính thức của TechPhone.</p></div></div>
         <div className="form-grid">
           <label className="form-field full"><span>Facebook</span><input value={form.facebook} onChange={(event) => update('facebook', event.target.value)} /></label>
-          <label className="form-field full"><span>Instagram</span><input value={form.instagram} onChange={(event) => update('instagram', event.target.value)} /></label>
+          <label className="form-field full"><span>TikTok</span><input value={form.tiktok} onChange={(event) => update('tiktok', event.target.value)} /></label>
           <label className="form-field full"><span>YouTube</span><input value={form.youtube} onChange={(event) => update('youtube', event.target.value)} /></label>
           <label className="form-field full"><span>Zalo URL (tùy chọn)</span><input value={form.zaloUrl || ''} onChange={(event) => update('zaloUrl', event.target.value)} placeholder="https://zalo.me/..." /></label>
         </div>

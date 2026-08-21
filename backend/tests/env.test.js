@@ -97,8 +97,9 @@ describe('production environment configuration', () => {
       .toBe('render');
   });
 
-  it('uses a trusted proxy only for the documented Render deployment', () => {
+  it('uses a trusted proxy for hosted deployments but not for docker', () => {
     expect(loadEnv(productionEnv({ DEPLOYMENT_TARGET: 'render' })).trustProxy).toBe(1);
+    expect(loadEnv(productionEnv({ DEPLOYMENT_TARGET: 'vercel' })).trustProxy).toBe(1);
     expect(loadEnv(productionEnv({ DEPLOYMENT_TARGET: 'docker' })).trustProxy).toBe(false);
   });
 
@@ -108,14 +109,19 @@ describe('production environment configuration', () => {
   });
 
   it.each(['vercel', 'netlify', 'serverless', 'aws-lambda'])(
-    'recognizes but rejects the %s serverless production target',
+    'accepts the %s serverless production target with local uploads disabled',
     (deploymentTarget) => {
-      expect(() => loadEnv(productionEnv({
-        DEPLOYMENT_TARGET: deploymentTarget,
-        UPLOAD_DIR: '/tmp/uploads',
-      }))).toThrow(/serverless.*local uploads/i);
+      const loaded = loadEnv(productionEnv({ DEPLOYMENT_TARGET: deploymentTarget }));
+      expect(loaded.deploymentTarget).toBe(deploymentTarget);
+      expect(loaded.localUploadsEnabled).toBe(false);
     },
   );
+
+  it.each(['render', 'docker'])('keeps local uploads enabled on the %s target', (deploymentTarget) => {
+    const overrides = deploymentTarget === 'render' ? { UPLOAD_DIR: '/app/uploads' } : {};
+    expect(loadEnv(productionEnv({ DEPLOYMENT_TARGET: deploymentTarget, ...overrides })).localUploadsEnabled)
+      .toBe(true);
+  });
 
   it.each([
     ['VERCEL', 'render', 'vercel'],
@@ -127,10 +133,12 @@ describe('production environment configuration', () => {
   ])(
     'does not let the %s marker be hidden by DEPLOYMENT_TARGET=%s',
     (marker, explicitTarget, platformTarget) => {
-      expect(() => loadEnv(productionEnv({
+      const loaded = loadEnv(productionEnv({
         [marker]: 'active-platform-marker',
         DEPLOYMENT_TARGET: explicitTarget,
-      }))).toThrow(new RegExp(`serverless.*${platformTarget}|${platformTarget}.*local uploads`, 'i'));
+      }));
+      expect(loaded.deploymentTarget).toBe(platformTarget);
+      expect(loaded.localUploadsEnabled).toBe(false);
     },
   );
 

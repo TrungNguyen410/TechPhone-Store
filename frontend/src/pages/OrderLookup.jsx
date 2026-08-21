@@ -34,8 +34,24 @@ export default function OrderLookup() {
       <div className="container">
         <div className="page-hero centered"><FiPackage /><span>Tra cứu nhanh chóng</span><h1>Đơn hàng của bạn đang ở đâu?</h1><p>Nhập mã đơn hàng và số điện thoại đã dùng khi đặt hàng.</p></div>
         <form className="lookup-form panel" onSubmit={submit}>
-          <label><span>Mã đơn hàng</span><input value={form.orderNumber} onChange={(event) => setForm({ ...form, orderNumber: event.target.value.toUpperCase() })} placeholder="Ví dụ: TP260601" /></label>
-          <label><span>Số điện thoại</span><input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} placeholder="0911111111" /></label>
+          <div className="lookup-form-group">
+            <label htmlFor="orderNumber"><span>Mã đơn hàng</span></label>
+            <input
+              id="orderNumber"
+              value={form.orderNumber}
+              onChange={(event) => setForm({ ...form, orderNumber: event.target.value.toUpperCase() })}
+              placeholder="Ví dụ: TP260601"
+            />
+          </div>
+          <div className="lookup-form-group">
+            <label htmlFor="phone"><span>Số điện thoại</span></label>
+            <input
+              id="phone"
+              value={form.phone}
+              onChange={(event) => setForm({ ...form, phone: event.target.value })}
+              placeholder="0911111111"
+            />
+          </div>
           <button className="btn btn-primary" disabled={loading}><FiSearch /> {loading ? 'Đang tìm...' : 'Tra cứu đơn hàng'}</button>
           <small>Dùng thử: TP260601 · 0911111111</small>
         </form>
@@ -50,7 +66,7 @@ export default function OrderLookup() {
               <div><h3>Sản phẩm</h3>{order.items.map((item) => <div className="lookup-item" key={item.id}><img src={item.image} alt="" /><span>{item.name} × {item.quantity}</span><strong>{formatCurrency(item.price * item.quantity)}</strong></div>)}</div>
             </div>
             <div className="success-total"><span>Tổng thanh toán</span><strong>{formatCurrency(order.total)}</strong></div>
-            {order.trackingNumber && <div className="order-shipping-note"><strong>{order.shippingProvider || 'Đơn vị giao hàng'}</strong><span>Mã vận đơn: <b>{order.trackingNumber}</b></span>{order.estimatedDelivery && <span>Dự kiến giao: {formatDate(order.estimatedDelivery, true)}</span>}</div>}
+            {order.trackingNumber && <div className="order-shipping-note"><strong>{order.shippingProvider || 'Đơn vị giao hàng'}</strong><span>Mã vận đơn: <b>{order.trackingNumber}</b></span>{order.estimatedDelivery && <span>Dự kiến giao: {formatDate(order.estimatedDelivery)}</span>}</div>}
           </section>
         )}
       </div>

@@ -13,6 +13,10 @@ export const authApi = {
     axiosClient.post('/auth/refresh', { refreshToken }, skipAuthRefresh),
   logout: (refreshToken) =>
     USE_MOCK ? Promise.resolve() : axiosClient.post('/auth/logout', { refreshToken }, skipAuthRefresh),
+  register: (payload) =>
+    USE_MOCK
+      ? mockDb.register(payload)
+      : axiosClient.post('/auth/register', payload, skipAuthRefresh),
   requestRegistrationOtp: (payload) =>
     USE_MOCK
       ? mockDb.requestRegistrationOtp(payload)

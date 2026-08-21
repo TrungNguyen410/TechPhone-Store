@@ -47,6 +47,43 @@ describe('Auth API', () => {
     expect(loggedIn.status).toBe(200);
   });
 
+  it('registers directly without an OTP step', async () => {
+    const response = await request(app).post('/api/auth/register').send({
+      fullName: 'Tran Thi Bich',
+      phone: '+84 912 345 670',
+      password: '123456',
+    });
+
+    expect(response.status).toBe(201);
+    expect(response.body.data.token).toBeTruthy();
+    expect(response.body.data.user.phone).toBe('0912345670');
+    expect(response.body.data.user.role).toBe('customer');
+    expect(response.body.data.user.password).toBeUndefined();
+    expect(await User.findOne({ phone: '0912345670' })).not.toBeNull();
+  });
+
+  it('rejects a registration phone whose prefix no carrier operates', async () => {
+    const response = await request(app).post('/api/auth/register').send({
+      fullName: 'Wrong Prefix',
+      phone: '0123456789',
+      password: '123456',
+    });
+
+    expect(response.status).toBe(422);
+    expect(await User.findOne({ phone: '0123456789' })).toBeNull();
+  });
+
+  it('rejects a duplicate phone on direct registration', async () => {
+    await createUser({ email: 'dup-direct@test.com', phone: '0912345671' });
+    const response = await request(app).post('/api/auth/register').send({
+      fullName: 'Duplicate Direct',
+      phone: '0912345671',
+      password: '123456',
+    });
+
+    expect(response.status).toBe(409);
+  });
+
   it('does not allow public registration to set admin role', async () => {
     const response = await request(app).post('/api/auth/register').send({
       fullName: 'Privilege Attempt',

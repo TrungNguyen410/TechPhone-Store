@@ -4,11 +4,11 @@ import { useSearchParams } from 'react-router-dom';
 import { accessoryApi } from '../api/accessoryApi';
 import Loading from '../components/common/Loading';
 import LoadError from '../components/common/LoadError';
-import Pagination from '../components/common/Pagination';
 import SearchBox from '../components/common/SearchBox';
 import ProductGrid from '../components/product/ProductGrid';
 import ProductSort from '../components/product/ProductSort';
 import { useDebounce } from '../hooks/useDebounce';
+import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 
 const initialFilters = { brand: '', category: '', price: '' };
 const PAGE_SIZE = 9;
@@ -25,7 +25,6 @@ export default function Accessories() {
     category: searchParams.get('category') || '',
   });
   const [sort, setSort] = useState('newest');
-  const [page, setPage] = useState(1);
   const [mobileFilter, setMobileFilter] = useState(false);
   const debouncedSearch = useDebounce(search);
 
@@ -46,7 +45,6 @@ export default function Accessories() {
       else next.delete('q');
       return next;
     }, { replace: true });
-    setPage(1);
   }, [debouncedSearch, setSearchParams]);
 
   const urlSearch = searchParams.get('q') || '';
@@ -59,7 +57,6 @@ export default function Accessories() {
         ? current
         : { ...current, brand: urlBrand, category: urlCategory }
     ));
-    setPage(1);
   }, [urlBrand, urlCategory, urlSearch]);
 
   const updateFilters = (updates) => {
@@ -73,7 +70,6 @@ export default function Accessories() {
       }
       return params;
     }, { replace: true });
-    setPage(1);
   };
 
   const options = useMemo(
@@ -106,8 +102,7 @@ export default function Accessories() {
     });
   }, [accessories, debouncedSearch, filters, sort]);
 
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const visibleAccessories = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const { visibleItems, hasMore, observerRef } = useInfiniteScroll(filtered, PAGE_SIZE);
 
   if (loading) return <Loading />;
   if (error) {
@@ -125,7 +120,7 @@ export default function Accessories() {
         <div className="catalog-toolbar">
           <SearchBox value={search} onChange={setSearch} placeholder="Tìm phụ kiện theo tên, hãng hoặc loại..." />
           <button className="mobile-filter-button" onClick={() => setMobileFilter(true)}><FiFilter /> Bộ lọc</button>
-          <ProductSort value={sort} onChange={(value) => { setSort(value); setPage(1); }} />
+          <ProductSort value={sort} onChange={setSort} />
         </div>
 
         <div className="catalog-layout">
@@ -165,8 +160,13 @@ export default function Accessories() {
           {mobileFilter && <div className="drawer-overlay" onClick={() => setMobileFilter(false)} />}
           <div className="catalog-results">
             <div className="result-count"><FiSearch /> Tìm thấy <strong>{filtered.length}</strong> phụ kiện</div>
-            <ProductGrid products={visibleAccessories} type="accessory" />
-            <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+            <ProductGrid products={visibleItems} type="accessory" />
+            <div className="infinite-scroll-sentinel" ref={observerRef}>
+              {hasMore && <span className="infinite-scroll-loading">Đang tải thêm sản phẩm…</span>}
+            </div>
+            {!hasMore && filtered.length > 0 && (
+              <div className="infinite-scroll-end">Đã hiển thị hết {filtered.length} sản phẩm</div>
+            )}
           </div>
         </div>
 

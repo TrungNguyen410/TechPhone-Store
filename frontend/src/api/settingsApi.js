@@ -13,7 +13,7 @@ const settingMetadata = {
   address: { group: 'general', label: 'Store address' },
   logo: { group: 'general', label: 'Store logo' },
   facebook: { group: 'social', label: 'Facebook URL' },
-  instagram: { group: 'social', label: 'Instagram URL' },
+  tiktok: { group: 'social', label: 'TikTok URL' },
   youtube: { group: 'social', label: 'YouTube URL' },
   zaloUrl: { group: 'social', label: 'Zalo URL' },
 };

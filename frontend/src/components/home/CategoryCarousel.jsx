@@ -22,20 +22,30 @@ function useReducedMotion() {
 
 export default function CategoryCarousel({ categories }) {
   const resumeRef = useRef(null);
-  const [paused, setPaused] = useState(false);
-  const [manualPaused, setManualPaused] = useState(false);
+  // Tạm dừng tạm thời khi hover/focus, tự chạy lại sau RESUME_DELAY.
+  const [hoverPaused, setHoverPaused] = useState(false);
+  // Tạm dừng có chủ đích qua nút bấm: giữ nguyên cho đến khi người dùng bấm lại.
+  const [manuallyPaused, setManuallyPaused] = useState(false);
   const reducedMotion = useReducedMotion();
   const looping = !reducedMotion && categories.length > 1;
-  const isPaused = paused || manualPaused;
+  const isPaused = hoverPaused || manuallyPaused || reducedMotion;
 
   const pause = () => {
     clearTimeout(resumeRef.current);
-    setPaused(true);
+    setHoverPaused(true);
   };
 
   const resume = () => {
     clearTimeout(resumeRef.current);
-    resumeRef.current = setTimeout(() => setPaused(false), RESUME_DELAY);
+    resumeRef.current = setTimeout(() => setHoverPaused(false), RESUME_DELAY);
+  };
+
+  const toggle = () => {
+    clearTimeout(resumeRef.current);
+    const nextPaused = !manuallyPaused;
+    setManuallyPaused(nextPaused);
+    // Bam tiếp tục phải gỡ luôn hover-pause, vì chính nút này đang giữ focus.
+    if (!nextPaused) setHoverPaused(false);
   };
 
   useEffect(() => () => clearTimeout(resumeRef.current), []);
@@ -83,11 +93,13 @@ export default function CategoryCarousel({ categories }) {
       {looping && (
         <button
           type="button"
-          className="carousel-pause-button"
-          aria-label={manualPaused ? 'Tiếp tục danh mục' : 'Tạm dừng danh mục'}
-          onClick={() => setManualPaused((current) => !current)}
+          className="category-marquee-toggle"
+          aria-pressed={manuallyPaused}
+          aria-label={manuallyPaused ? 'Tiếp tục danh mục tự trượt' : 'Tạm dừng danh mục tự trượt'}
+          onClick={toggle}
         >
-          {manualPaused ? <FiPlay /> : <FiPause />}
+          {manuallyPaused ? <FiPlay /> : <FiPause />}
+          <span>{manuallyPaused ? 'Tiếp tục' : 'Tạm dừng'}</span>
         </button>
       )}
     </div>

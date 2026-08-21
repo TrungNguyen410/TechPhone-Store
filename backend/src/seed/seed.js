@@ -1,4 +1,6 @@
 const bcrypt = require('bcrypt');
+const fs = require('fs');
+const path = require('path');
 const { connectDB, disconnectDB } = require('../config/database');
 const Accessory = require('../models/Accessory');
 const Banner = require('../models/Banner');
@@ -16,11 +18,12 @@ const User = require('../models/User');
 const Voucher = require('../models/Voucher');
 const VerificationCode = require('../models/VerificationCode');
 const { resolveSeedPassword } = require('../utils/seedCredentials');
+const { phones: catalogPhones, accessories: catalogAccessories } = require('./catalogData');
 
 const imageFor = (label, color = '2563eb') =>
   `https://placehold.co/800x800/${color}/ffffff?text=${encodeURIComponent(label)}`;
 
-const brandNames = ['Apple', 'Samsung', 'Xiaomi', 'OPPO', 'Vivo', 'Honor', 'Realme', 'Google', 'Anker', 'Baseus', 'TechPhone'];
+const brandNames = ['Apple', 'Samsung', 'Xiaomi', 'OPPO', 'Vivo', 'Honor', 'Realme', 'Google', 'Anker', 'Baseus', 'UAG', 'TechPhone'];
 const brandIdByName = Object.fromEntries(brandNames.map((name, index) => [name, `brand-${index + 1}`]));
 const categoryIdByName = {
   'Dien thoai': 'category-1',
@@ -31,70 +34,99 @@ const categoryIdByName = {
   'Pin du phong': 'category-6',
 };
 
-const products = [
-  ['phone-1', 'iPhone 16 Pro Max', 'Apple', 33990000, 36990000, '8GB', '256GB', '2563eb'],
-  ['phone-2', 'Galaxy S25 Ultra', 'Samsung', 30990000, 33990000, '12GB', '256GB', '1d4ed8'],
-  ['phone-3', 'Xiaomi 15 Ultra', 'Xiaomi', 29990000, 32990000, '16GB', '512GB', '111827'],
-  ['phone-4', 'OPPO Find X8 Pro', 'OPPO', 27990000, 30990000, '16GB', '512GB', '0f766e'],
-  ['phone-5', 'vivo X200 Pro', 'Vivo', 25990000, 29990000, '16GB', '512GB', '2563eb'],
-  ['phone-6', 'HONOR Magic7 Pro', 'Honor', 24990000, 27990000, '12GB', '512GB', '1e40af'],
-  ['phone-7', 'realme GT 7 Pro', 'Realme', 18990000, 21990000, '16GB', '512GB', 'f59e0b'],
-  ['phone-8', 'Google Pixel 9 Pro', 'Google', 23990000, 26990000, '16GB', '256GB', '3b82f6'],
-].map(([id, name, brand, price, oldPrice, ram, storage, color], index) => {
-  const image = imageFor(name, color);
+const catalogDir = path.join(process.cwd(), process.env.UPLOAD_DIR || 'uploads', 'catalog');
+const publicBase = (process.env.API_PUBLIC_URL || `http://localhost:${Number(process.env.PORT || 5000)}`).replace(/[/]+$/, '');
+
+// Anh da day len Cloudinary. Bat buoc phai co khi deploy serverless (Vercel/Netlify)
+// vi `app.js` khong phuc vu `/uploads` o cac target do — xem env.localUploadsEnabled.
+let imageManifest = {};
+try {
+  imageManifest = require('./catalogImageManifest.json');
+} catch {
+  imageManifest = {};
+}
+
+/**
+ * Doc anh that da tai ve cho mot san pham. Chi nhan file dung dang
+ * `<slug>-<so>.<ext>` de slug ngan khong "nuot" anh cua slug dai hon
+ * (vi du phone-galaxy-s25 khong duoc lay anh cua phone-galaxy-s25-plus).
+ * Uu tien URL Cloudinary trong manifest, khong co thi tro ve `/uploads` cuc bo.
+ */
+const catalogImages = (slug) => {
+  if (!slug) return [];
+  let files = [];
+  try {
+    files = fs.readdirSync(catalogDir);
+  } catch {
+    return [];
+  }
+  const pattern = new RegExp('^' + slug + '-([0-9]+)[.](jpg|jpeg|png|webp)$', 'i');
+  return files
+    .map((file) => ({ file, match: pattern.exec(file) }))
+    .filter((entry) => entry.match)
+    .sort((a, b) => Number(a.match[1]) - Number(b.match[1]))
+    .map((entry) => imageManifest[entry.file] || `${publicBase}/uploads/catalog/${entry.file}`);
+};
+
+const discountOf = (price, oldPrice) =>
+  (oldPrice > price ? Math.round(((oldPrice - price) / oldPrice) * 100) : 0);
+
+const products = catalogPhones.map((phone, index) => {
+  const gallery = catalogImages(phone.imageSlug);
+  const images = gallery.length ? gallery : [imageFor(phone.name)];
   return {
-    _id: id,
-    name,
-    brandId: brandIdByName[brand],
+    _id: phone.id,
+    name: phone.name,
+    brandId: brandIdByName[phone.brand],
     categoryId: categoryIdByName['Dien thoai'],
-    price,
-    oldPrice,
-    discountPercent: Math.round(((oldPrice - price) / oldPrice) * 100),
-    image,
-    images: [image, imageFor(`${brand} back`, '0f172a')],
-    ram,
-    storage,
-    screen: `${(6.3 + index * 0.1).toFixed(1)} inch OLED, 120Hz`,
-    battery: `${4500 + index * 120} mAh`,
-    camera: `${48 + index * 4}MP camera system`,
-    chip: 'Flagship 8-core chipset',
-    description: `${name} is a premium smartphone with strong performance, bright display, and official TechPhone warranty.`,
+    price: phone.price,
+    oldPrice: phone.oldPrice,
+    discountPercent: discountOf(phone.price, phone.oldPrice),
+    image: images[0],
+    images,
+    ram: phone.ram,
+    storage: phone.storage,
+    screen: phone.screen,
+    battery: phone.battery,
+    camera: phone.camera,
+    chip: phone.chip,
+    description: `${phone.name} chinh hang, bao hanh 12 thang tai TechPhone Store.`,
     specifications: {
-      Display: `${(6.3 + index * 0.1).toFixed(1)} inch OLED`,
-      RAM: ram,
-      Storage: storage,
-      Battery: `${4500 + index * 120} mAh`,
-      Connectivity: '5G, Wi-Fi 6, Bluetooth 5.3',
+      'Man hinh': phone.screen,
+      'Chip xu ly': phone.chip,
+      RAM: phone.ram,
+      'Bo nho trong': phone.storage,
+      'Camera sau': phone.camera,
+      'Camera truoc': phone.frontCamera,
+      Pin: phone.battery,
+      'Thiet ke': phone.material,
+      'He dieu hanh': phone.os,
     },
-    stock: 10 + index * 4,
-    sold: 70 + index * 33,
-    rating: Number((4.4 + (index % 4) / 10).toFixed(1)),
+    stock: phone.stock,
+    sold: 40 + ((index * 17) % 260),
+    rating: Number((4.3 + ((index * 3) % 7) / 10).toFixed(1)),
     status: 'active',
   };
 });
 
-const accessories = [
-  ['accessory-1', 'AirPods Pro 2 USB-C', 'Apple', 'Tai nghe', 5290000, 5990000, '2563eb'],
-  ['accessory-2', 'Galaxy Buds3 Pro', 'Samsung', 'Tai nghe', 3990000, 4690000, '7c3aed'],
-  ['accessory-3', 'Anker GaN Charger 65W', 'Anker', 'Sac', 1090000, 1390000, '0f766e'],
-  ['accessory-4', 'Baseus Power Bank 20000mAh', 'Baseus', 'Pin du phong', 890000, 1190000, 'f97316'],
-].map(([id, name, brand, category, price, oldPrice, color], index) => {
-  const image = imageFor(name, color);
+const accessories = catalogAccessories.map((accessory, index) => {
+  const gallery = catalogImages(accessory.imageSlug);
+  const images = gallery.length ? gallery : [imageFor(accessory.name)];
   return {
-    _id: id,
-    name,
-    brandId: brandIdByName[brand],
-    categoryId: categoryIdByName[category],
-    price,
-    oldPrice,
-    discountPercent: Math.round(((oldPrice - price) / oldPrice) * 100),
-    image,
-    images: [image],
-    description: `${name} is an official accessory with TechPhone warranty.`,
-    specifications: { Brand: brand, Type: category, Warranty: '12 months' },
-    stock: 20 + index * 8,
-    sold: 50 + index * 20,
-    rating: 4.6,
+    _id: accessory.id,
+    name: accessory.name,
+    brandId: brandIdByName[accessory.brand],
+    categoryId: categoryIdByName[accessory.category],
+    price: accessory.price,
+    oldPrice: accessory.oldPrice,
+    discountPercent: discountOf(accessory.price, accessory.oldPrice),
+    image: images[0],
+    images,
+    description: `${accessory.name} chinh hang, bao hanh 12 thang tai TechPhone Store.`,
+    specifications: accessory.specifications,
+    stock: accessory.stock,
+    sold: 25 + ((index * 13) % 120),
+    rating: Number((4.4 + ((index * 2) % 6) / 10).toFixed(1)),
     status: 'active',
   };
 });
@@ -209,7 +241,7 @@ const run = async () => {
   await Product.insertMany([
     ...products,
     {
-      _id: 'phone-9',
+      _id: 'phone-lowstock',
       name: 'iPhone 15',
       brandId: brandIdByName.Apple,
       categoryId: categoryIdByName['Dien thoai'],
@@ -252,23 +284,6 @@ const run = async () => {
   ]);
   await Accessory.insertMany([
     ...accessories,
-    {
-      _id: 'accessory-5',
-      name: 'Apple Watch Series 10',
-      brandId: brandIdByName.Apple,
-      categoryId: categoryIdByName['Dong ho'],
-      price: 10990000,
-      oldPrice: 12990000,
-      discountPercent: 15,
-      image: imageFor('Apple Watch Series 10', 'db2777'),
-      images: [imageFor('Apple Watch Series 10', 'db2777')],
-      description: 'Smartwatch accessory for category and cart testing.',
-      specifications: { Brand: 'Apple', Type: 'Dong ho', Warranty: '12 months' },
-      stock: 12,
-      sold: 44,
-      rating: 4.7,
-      status: 'active',
-    },
     {
       _id: 'accessory-inactive',
       name: 'Demo Hidden Accessory',

@@ -155,7 +155,7 @@ export default function Account() {
                 <div className="content-heading"><h2>Thông tin cá nhân</h2><p>Cập nhật thông tin dùng cho đơn hàng và liên hệ.</p></div>
                 <div className="form-grid">
                   <label className="form-field"><span>Họ và tên *</span><input aria-invalid={Boolean(profileErrors.fullName)} aria-describedby={profileErrors.fullName ? 'profile-fullName-error' : undefined} value={profile.fullName} onChange={(event) => updateProfileField('fullName', event.target.value)} />{profileErrors.fullName && <small id="profile-fullName-error">{profileErrors.fullName}</small>}</label>
-                  <label className="form-field"><span>Số điện thoại đăng nhập</span><input value={profile.phone} readOnly /><small>Đã xác minh qua SMS</small></label>
+                  <label className="form-field"><span>Số điện thoại đăng nhập</span><input value={profile.phone} readOnly /><small className="field-hint">Số điện thoại đăng nhập không thể thay đổi.</small></label>
                   <label className="form-field full"><span>Địa chỉ</span><textarea rows="3" value={profile.address} onChange={(event) => updateProfileField('address', event.target.value)} /></label>
                 </div>
                 <button className="btn btn-primary">Lưu thay đổi</button>

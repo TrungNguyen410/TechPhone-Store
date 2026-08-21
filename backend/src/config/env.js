@@ -104,11 +104,6 @@ if (isProduction) {
       `DEPLOYMENT_TARGET "${deploymentTarget}" is not supported; use render or docker`,
     );
   }
-  if (serverlessTargets.has(deploymentTarget)) {
-    throw new Error(
-      `Serverless production target "${deploymentTarget}" cannot use the local uploads routes; deploy on Render with a persistent disk`,
-    );
-  }
   if (deploymentTarget === 'local') {
     throw new Error('DEPLOYMENT_TARGET "local" is not supported in production; use docker for local containers');
   }
@@ -127,14 +122,22 @@ if (isProduction && deploymentTarget === 'render') {
   }
 }
 
+// Serverless (Vercel/Netlify) khong co disk ben vung: `app.js` bo qua route
+// tinh `/uploads`, va anh catalog phai nam tren Cloudinary — xem
+// `src/seed/catalogImageManifest.json`.
+const localUploadsEnabled = !serverlessTargets.has(deploymentTarget);
+
+const hostedTargets = new Set(['render', ...serverlessTargets]);
+
 const rejectRenderLoopback = isProduction && deploymentTarget === 'render';
-const trustProxy = deploymentTarget === 'render' ? 1 : false;
+const trustProxy = hostedTargets.has(deploymentTarget) ? 1 : false;
 
 const env = {
   nodeEnv,
   port,
   deploymentTarget,
   trustProxy,
+  localUploadsEnabled,
   mongoUri: process.env.MONGO_URI || 'mongodb://localhost:27017/techphone_store',
   jwtAccessSecret: getJwtSecret('JWT_ACCESS_SECRET', 'dev-access-secret'),
   jwtRefreshSecret: getJwtSecret('JWT_REFRESH_SECRET', 'dev-refresh-secret'),

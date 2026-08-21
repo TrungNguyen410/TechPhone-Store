@@ -4,10 +4,13 @@ const env = require('./src/config/env');
 
 const startServer = async () => {
   await connectDB();
+
   app.listen(env.port, () => {
     console.log(`TechPhone API running on port ${env.port}`);
   });
 };
+
+module.exports = app;
 
 startServer().catch((error) => {
   console.error('Failed to start TechPhone API:', error);
