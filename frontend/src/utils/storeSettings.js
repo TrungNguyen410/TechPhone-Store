@@ -3,9 +3,9 @@ import { storage } from './storage';
 
 export const DEFAULT_STORE_SETTINGS = {
   storeName: 'TechPhone',
-  hotline: '1900 6868',
-  email: 'support@techphone.vn',
-  address: '123 Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh',
+  hotline: '0918550811',
+  email: 'trungnguyen550811@gmail.com',
+  address: 'Đường Trần Văn Giàu, Hòa Thuận, Vĩnh Long',
   logo: '/brand/techphone-mark.svg',
   facebook: 'https://www.facebook.com/trung.nguyen.592626',
   tiktok: 'https://www.tiktok.com/@guppy.farm.tr.vin',

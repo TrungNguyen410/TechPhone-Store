@@ -23,15 +23,15 @@ const { phones: catalogPhones, accessories: catalogAccessories } = require('./ca
 const imageFor = (label, color = '2563eb') =>
   `https://placehold.co/800x800/${color}/ffffff?text=${encodeURIComponent(label)}`;
 
-const brandNames = ['Apple', 'Samsung', 'Xiaomi', 'OPPO', 'Vivo', 'Honor', 'Realme', 'Google', 'Anker', 'Baseus', 'UAG', 'TechPhone'];
+const brandNames = ['Apple', 'Samsung', 'Xiaomi', 'OPPO', 'vivo', 'Honor', 'realme', 'Google', 'Anker', 'Baseus', 'UAG', 'TechPhone'];
 const brandIdByName = Object.fromEntries(brandNames.map((name, index) => [name, `brand-${index + 1}`]));
 const categoryIdByName = {
-  'Dien thoai': 'category-1',
+  'Điện thoại': 'category-1',
   'Tai nghe': 'category-2',
-  Sac: 'category-3',
-  'Dong ho': 'category-4',
-  'Phu kien': 'category-5',
-  'Pin du phong': 'category-6',
+  'Sạc': 'category-3',
+  'Đồng hồ': 'category-4',
+  'Phụ kiện': 'category-5',
+  'Pin dự phòng': 'category-6',
 };
 
 // path.resolve chu khong phai path.join: tren Docker/Render UPLOAD_DIR la duong
@@ -80,7 +80,7 @@ const products = catalogPhones.map((phone, index) => {
     _id: phone.id,
     name: phone.name,
     brandId: brandIdByName[phone.brand],
-    categoryId: categoryIdByName['Dien thoai'],
+    categoryId: categoryIdByName['Điện thoại'],
     price: phone.price,
     oldPrice: phone.oldPrice,
     discountPercent: discountOf(phone.price, phone.oldPrice),
@@ -92,17 +92,17 @@ const products = catalogPhones.map((phone, index) => {
     battery: phone.battery,
     camera: phone.camera,
     chip: phone.chip,
-    description: `${phone.name} chinh hang, bao hanh 12 thang tai TechPhone Store.`,
+    description: `${phone.name} chính hãng, bảo hành 12 tháng tại TechPhone Store.`,
     specifications: {
-      'Man hinh': phone.screen,
-      'Chip xu ly': phone.chip,
+      'Màn hình': phone.screen,
+      'Chip xử lý': phone.chip,
       RAM: phone.ram,
-      'Bo nho trong': phone.storage,
+      'Bộ nhớ trong': phone.storage,
       'Camera sau': phone.camera,
-      'Camera truoc': phone.frontCamera,
+      'Camera trước': phone.frontCamera,
       Pin: phone.battery,
-      'Thiet ke': phone.material,
-      'He dieu hanh': phone.os,
+      'Thiết kế': phone.material,
+      'Hệ điều hành': phone.os,
     },
     stock: phone.stock,
     sold: 40 + ((index * 17) % 260),
@@ -124,7 +124,7 @@ const accessories = catalogAccessories.map((accessory, index) => {
     discountPercent: discountOf(accessory.price, accessory.oldPrice),
     image: images[0],
     images,
-    description: `${accessory.name} chinh hang, bao hanh 12 thang tai TechPhone Store.`,
+    description: `${accessory.name} chính hãng, bảo hành 12 tháng tại TechPhone Store.`,
     specifications: accessory.specifications,
     stock: accessory.stock,
     sold: 25 + ((index * 13) % 120),
@@ -225,19 +225,19 @@ const run = async () => {
   ]);
 
   await Category.insertMany([
-    { _id: 'category-1', name: 'Dien thoai', slug: 'dien-thoai', description: 'Smartphones and flagship devices', active: true },
-    { _id: 'category-2', name: 'Tai nghe', slug: 'tai-nghe', description: 'Wireless earbuds and audio gear', active: true },
-    { _id: 'category-3', name: 'Sac', slug: 'sac', description: 'Chargers and cables', active: true },
-    { _id: 'category-4', name: 'Dong ho', slug: 'dong-ho', description: 'Smart watches and wearables', active: true },
-    { _id: 'category-5', name: 'Phu kien', slug: 'phu-kien', description: 'General accessories', active: false },
-    { _id: 'category-6', name: 'Pin du phong', slug: 'pin-du-phong', description: 'Portable power banks', active: true },
+    { _id: 'category-1', name: 'Điện thoại', slug: 'dien-thoai', description: 'Điện thoại thông minh và máy flagship', active: true },
+    { _id: 'category-2', name: 'Tai nghe', slug: 'tai-nghe', description: 'Tai nghe không dây và thiết bị âm thanh', active: true },
+    { _id: 'category-3', name: 'Sạc', slug: 'sac', description: 'Củ sạc, cáp sạc và bộ sạc nhanh', active: true },
+    { _id: 'category-4', name: 'Đồng hồ', slug: 'dong-ho', description: 'Đồng hồ thông minh và thiết bị đeo', active: true },
+    { _id: 'category-5', name: 'Phụ kiện', slug: 'phu-kien', description: 'Ốp lưng, dán màn hình và phụ kiện khác', active: true },
+    { _id: 'category-6', name: 'Pin dự phòng', slug: 'pin-du-phong', description: 'Pin dự phòng di động', active: true },
   ]);
   await Brand.insertMany(brandNames.map((name, index) => ({
     _id: `brand-${index + 1}`,
     name,
     slug: name.toLowerCase(),
     logo: imageFor(name, index % 2 ? '2563eb' : '0f766e'),
-    description: `${name} products available at TechPhone.`,
+    description: `Sản phẩm ${name} chính hãng, phân phối tại TechPhone.`,
     active: name !== 'TechPhone',
   })));
 
@@ -247,7 +247,7 @@ const run = async () => {
       _id: 'phone-lowstock',
       name: 'iPhone 15',
       brandId: brandIdByName.Apple,
-      categoryId: categoryIdByName['Dien thoai'],
+      categoryId: categoryIdByName['Điện thoại'],
       price: 16990000,
       oldPrice: 19990000,
       discountPercent: 15,
@@ -259,8 +259,17 @@ const run = async () => {
       battery: '3349 mAh',
       camera: '48MP dual camera',
       chip: 'A16 Bionic',
-      description: 'A compact iPhone option for catalog filtering and low-stock checks.',
-      specifications: { Display: '6.1 inch OLED', RAM: '6GB', Storage: '128GB', Warranty: '12 months' },
+      description: 'iPhone 15 chính hãng, bảo hành 12 tháng tại TechPhone Store.',
+      specifications: {
+        'Màn hình': '6.1 inch OLED',
+        'Chip xử lý': 'Apple A16 Bionic',
+        RAM: '6GB',
+        'Bộ nhớ trong': '128GB',
+        'Camera sau': 'Chính 48MP, Siêu rộng 12MP',
+        Pin: '3349 mAh',
+        'Hệ điều hành': 'iOS 18',
+        'Bảo hành': '12 tháng',
+      },
       stock: 2,
       sold: 210,
       rating: 4.5,
@@ -270,7 +279,7 @@ const run = async () => {
       _id: 'phone-inactive',
       name: 'Demo Hidden Phone',
       brandId: brandIdByName.TechPhone,
-      categoryId: categoryIdByName['Dien thoai'],
+      categoryId: categoryIdByName['Điện thoại'],
       price: 9990000,
       oldPrice: 0,
       discountPercent: 0,
@@ -291,7 +300,7 @@ const run = async () => {
       _id: 'accessory-inactive',
       name: 'Demo Hidden Accessory',
       brandId: brandIdByName.TechPhone,
-      categoryId: categoryIdByName['Phu kien'],
+      categoryId: categoryIdByName['Phụ kiện'],
       price: 199000,
       oldPrice: 0,
       discountPercent: 0,
@@ -453,11 +462,16 @@ const run = async () => {
   ));
 
   await Review.insertMany([
-    { _id: 'review-1', userId: 'user-customer', userName: 'Nguyen Minh Anh', productId: 'phone-1', rating: 5, comment: 'Great product quality and fast delivery.', status: 'approved' },
-    { _id: 'review-2', userId: 'user-customer', userName: 'Nguyen Minh Anh', productId: 'general', rating: 5, comment: 'Helpful staff and transparent warranty policy.', status: 'approved' },
-    { _id: 'review-3', userId: 'user-customer-2', userName: 'Tran Hoang Nam', productId: 'phone-3', rating: 4, comment: 'Good camera, waiting for admin approval.', status: 'pending' },
-    { _id: 'review-4', userId: 'user-customer-2', userName: 'Tran Hoang Nam', productId: 'phone-5', rating: 2, comment: 'Rejected review sample for moderation tests.', status: 'rejected' },
-    { _id: 'review-5', userId: 'user-customer', userName: 'Nguyen Minh Anh', productId: 'general', accessoryId: 'accessory-1', rating: 5, comment: 'Noise cancellation works very well.', status: 'approved' },
+    { _id: 'review-1', userId: 'user-customer', userName: 'Nguyễn Minh Anh', productId: 'phone-1', rating: 5, comment: 'Máy đẹp, pin trâu, giao hàng nhanh hơn dự kiến hai ngày.', status: 'approved' },
+    { _id: 'review-2', userId: 'user-customer', userName: 'Nguyễn Minh Anh', productId: 'general', rating: 5, comment: 'Nhân viên tư vấn nhiệt tình, chính sách bảo hành rõ ràng.', status: 'approved' },
+    { _id: 'review-3', userId: 'user-customer-2', userName: 'Trần Hoàng Nam', productId: 'phone-3', rating: 4, comment: 'Camera chụp đêm khá tốt, chỉ hơi nóng khi chơi game nặng.', status: 'pending' },
+    { _id: 'review-4', userId: 'user-customer-2', userName: 'Trần Hoàng Nam', productId: 'phone-5', rating: 2, comment: 'Đánh giá mẫu dùng để kiểm thử luồng từ chối kiểm duyệt.', status: 'rejected' },
+    { _id: 'review-5', userId: 'user-customer', userName: 'Nguyễn Minh Anh', productId: 'general', accessoryId: 'accessory-1', rating: 5, comment: 'Chống ồn rất ăn tiền, đeo cả ngày không đau tai.', status: 'approved' },
+    { _id: 'review-6', userId: 'user-customer-2', userName: 'Trần Hoàng Nam', productId: 'phone-2', rating: 5, comment: 'Màn hình sáng, dùng ngoài nắng vẫn nhìn rõ. Sạc nhanh thật sự.', status: 'approved' },
+    { _id: 'review-7', userId: 'user-customer', userName: 'Nguyễn Minh Anh', productId: 'phone-4', rating: 4, comment: 'Hiệu năng mượt, chỉ tiếc là không tặng kèm củ sạc.', status: 'approved' },
+    { _id: 'review-8', userId: 'user-customer-2', userName: 'Trần Hoàng Nam', productId: 'phone-6', rating: 5, comment: 'Giá tốt hơn nơi khác, máy nguyên seal, kích hoạt bảo hành ngay tại cửa hàng.', status: 'approved' },
+    { _id: 'review-9', userId: 'user-customer', userName: 'Nguyễn Minh Anh', productId: 'general', accessoryId: 'accessory-5', rating: 5, comment: 'Củ sạc nhỏ gọn, sạc đầy nhanh, giá hợp lý.', status: 'approved' },
+    { _id: 'review-10', userId: 'user-customer-2', userName: 'Trần Hoàng Nam', productId: 'general', accessoryId: 'accessory-2', rating: 4, comment: 'Âm thanh hay, kết nối nhanh. Hộp sạc hơi trơn nên dễ tuột tay.', status: 'approved' },
   ]);
   await Contact.insertMany([
     { _id: 'contact-1', fullName: 'Nguyen Minh Anh', email: 'user@gmail.com', phone: '0911111111', subject: 'Bao hanh san pham', message: 'Toi muon hoi ve chinh sach bao hanh iPhone.', status: 'new' },
@@ -466,9 +480,9 @@ const run = async () => {
   ]);
   await Setting.insertMany([
     { _id: 'setting-1', key: 'storeName', value: 'TechPhone', group: 'general', label: 'Store name' },
-    { _id: 'setting-2', key: 'hotline', value: '1900 6868', group: 'general', label: 'Hotline' },
-    { _id: 'setting-3', key: 'email', value: 'support@techphone.vn', group: 'general', label: 'Support email' },
-    { _id: 'setting-4', key: 'address', value: '123 Nguyen Hue, District 1, Ho Chi Minh City', group: 'general', label: 'Store address' },
+    { _id: 'setting-2', key: 'hotline', value: '0918550811', group: 'general', label: 'Hotline' },
+    { _id: 'setting-3', key: 'email', value: 'trungnguyen550811@gmail.com', group: 'general', label: 'Support email' },
+    { _id: 'setting-4', key: 'address', value: 'Đường Trần Văn Giàu, Hòa Thuận, Vĩnh Long', group: 'general', label: 'Store address' },
     { _id: 'setting-5', key: 'freeShippingThreshold', value: 10000000, group: 'checkout', label: 'Free shipping threshold' },
     { _id: 'setting-6', key: 'maintenanceMode', value: false, group: 'system', label: 'Maintenance mode' },
     { _id: 'setting-7', key: 'logo', value: '/brand/techphone-mark.svg', group: 'general', label: 'Store logo' },
