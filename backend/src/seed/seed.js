@@ -34,7 +34,9 @@ const categoryIdByName = {
   'Pin du phong': 'category-6',
 };
 
-const catalogDir = path.join(process.cwd(), process.env.UPLOAD_DIR || 'uploads', 'catalog');
+// path.resolve chu khong phai path.join: tren Docker/Render UPLOAD_DIR la duong
+// dan tuyet doi (/app/uploads), path.join se bien no thanh /app/app/uploads.
+const catalogDir = path.resolve(process.cwd(), process.env.UPLOAD_DIR || 'uploads', 'catalog');
 const publicBase = (process.env.API_PUBLIC_URL || `http://localhost:${Number(process.env.PORT || 5000)}`).replace(/[/]+$/, '');
 
 // Anh da day len Cloudinary. Bat buoc phai co khi deploy serverless (Vercel/Netlify)
