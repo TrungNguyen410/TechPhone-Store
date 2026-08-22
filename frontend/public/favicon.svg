@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="TechPhone">
+  <defs>
+    <linearGradient id="tpMark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2563eb"/>
+      <stop offset="0.55" stop-color="#4f46e5"/>
+      <stop offset="1" stop-color="#7c3aed"/>
+    </linearGradient>
+    <linearGradient id="tpBolt" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#7c3aed"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#tpMark)"/>
+  <!-- Song tin hieu: goi y ket noi, dat lech phai de khong doi xung cung nhac -->
+  <path d="M46.5 17.5a11 11 0 0 1 0 15.6" fill="none" stroke="#ffffff" stroke-opacity="0.55" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M51.6 12.4a18.2 18.2 0 0 1 0 25.8" fill="none" stroke="#ffffff" stroke-opacity="0.3" stroke-width="2.6" stroke-linecap="round"/>
+  <!-- Than may -->
+  <rect x="15" y="10" width="24" height="44" rx="6" fill="#ffffff"/>
+  <rect x="23" y="14.4" width="8" height="1.9" rx="0.95" fill="#cbd5f5"/>
+  <!-- Tia dien: chu "tech" trong TechPhone -->
+  <path d="M29.6 21.5 20.8 37.8h5.9L24.4 48l9.2-16.9h-6.1z" fill="url(#tpBolt)"/>
+</svg>

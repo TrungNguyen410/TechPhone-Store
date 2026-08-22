@@ -17,7 +17,7 @@ const Setting = require('../models/Setting');
 const User = require('../models/User');
 const Voucher = require('../models/Voucher');
 const VerificationCode = require('../models/VerificationCode');
-const { resolveSeedPassword } = require('../utils/seedCredentials');
+const { resolveAdminPassword, resolveSeedPassword } = require('../utils/seedCredentials');
 const { phones: catalogPhones, accessories: catalogAccessories } = require('./catalogData');
 
 const imageFor = (label, color = '2563eb') =>
@@ -135,6 +135,7 @@ const accessories = catalogAccessories.map((accessory, index) => {
 
 const run = async () => {
   const password = await bcrypt.hash(resolveSeedPassword(), 12);
+  const adminPassword = await bcrypt.hash(resolveAdminPassword(), 12);
   await connectDB();
 
   await Promise.all([
@@ -160,8 +161,8 @@ const run = async () => {
       _id: 'user-admin',
       fullName: 'Quan tri TechPhone',
       email: 'admin@gmail.com',
-      phone: '0900000000',
-      password,
+      phone: '0918550811',
+      password: adminPassword,
       role: 'admin',
       status: 'active',
       phoneVerified: true,
@@ -311,10 +312,13 @@ const run = async () => {
     { _id: 'voucher-5', code: 'USEDUP', type: 'fixed', value: 500000, minOrder: 5000000, maxDiscount: 500000, quantity: 10, used: 10, startDate: '2026-01-01', endDate: '2026-12-31', active: true },
     { _id: 'voucher-6', code: 'OFFLINE', type: 'percent', value: 5, minOrder: 1000000, maxDiscount: 200000, quantity: 50, used: 0, startDate: '2026-01-01', endDate: '2026-12-31', active: false },
   ]);
+  // Anh banner nam trong `frontend/public/banners` nen duong dan la tuong doi:
+  // trinh duyet tu ghep vao origin cua frontend, khong phu thuoc backend co
+  // phuc vu `/uploads` hay khong (serverless thi khong) — xem env.localUploadsEnabled.
   await Banner.insertMany([
-    { _id: 'banner-1', title: 'Flagship upgrade', description: 'Trade in and save up to 4 million VND', image: imageFor('Flagship upgrade', '1d4ed8'), link: '/products', position: 1, active: true },
-    { _id: 'banner-2', title: 'Mid-year sale', description: 'Save up to 30% on phones and accessories', image: imageFor('Mid-year sale', '7c3aed'), link: '/products', position: 2, active: true },
-    { _id: 'banner-3', title: 'Accessory bundle', description: 'Bundle earbuds and charger for extra savings', image: imageFor('Accessory bundle', '0f766e'), link: '/accessories', position: 3, active: true },
+    { _id: 'banner-1', title: 'Thu cu doi moi - tro gia den 4.000.000d', description: 'Dinh gia may cu tai cho, tru thang vao gia may moi', image: '/banners/thu-cu-doi-moi.svg', link: '/products', position: 1, active: true },
+    { _id: 'banner-2', title: 'Sale giua nam - giam den 30%', description: 'Uu dai cho dien thoai va phu kien chinh hang', image: '/banners/sale-giua-nam.svg', link: '/products', position: 2, active: true },
+    { _id: 'banner-3', title: 'Combo phu kien - tiet kiem them 15%', description: 'Mua tai nghe kem sac nhanh de nhan uu dai combo', image: '/banners/combo-phu-kien.svg', link: '/accessories', position: 3, active: true },
     { _id: 'banner-hidden', title: 'Hidden campaign', description: 'Inactive banner for admin tests', image: imageFor('Hidden campaign', '475569'), link: '/', position: 99, active: false },
   ]);
 
@@ -467,6 +471,10 @@ const run = async () => {
     { _id: 'setting-4', key: 'address', value: '123 Nguyen Hue, District 1, Ho Chi Minh City', group: 'general', label: 'Store address' },
     { _id: 'setting-5', key: 'freeShippingThreshold', value: 10000000, group: 'checkout', label: 'Free shipping threshold' },
     { _id: 'setting-6', key: 'maintenanceMode', value: false, group: 'system', label: 'Maintenance mode' },
+    { _id: 'setting-7', key: 'logo', value: '/brand/techphone-mark.svg', group: 'general', label: 'Store logo' },
+    { _id: 'setting-8', key: 'facebook', value: 'https://www.facebook.com/trung.nguyen.592626', group: 'social', label: 'Facebook' },
+    { _id: 'setting-9', key: 'tiktok', value: 'https://www.tiktok.com/@guppy.farm.tr.vin', group: 'social', label: 'TikTok' },
+    { _id: 'setting-10', key: 'youtube', value: 'https://www.youtube.com/@nguyentrung8133', group: 'social', label: 'YouTube' },
   ]);
 
   console.log('TechPhone seed data inserted successfully.');

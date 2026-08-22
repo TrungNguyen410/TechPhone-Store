@@ -51,7 +51,7 @@ export default function CategoryCarousel({ categories }) {
   useEffect(() => () => clearTimeout(resumeRef.current), []);
 
   const renderCards = (clone = false) => categories.map((category) => {
-    const { name, icon: Icon, query, path, color } = category;
+    const { name, icon: Icon, image, query, path, color } = category;
     return (
       <Link
         key={name}
@@ -60,7 +60,10 @@ export default function CategoryCarousel({ categories }) {
         aria-hidden={clone || undefined}
         tabIndex={clone ? -1 : undefined}
       >
-        <div className={`category-icon ${color}`}><Icon /></div>
+        {/* Anh that cua san pham dai dien; Icon chi con la duong lui khi thieu anh. */}
+        <div className={`category-icon ${color}${image ? ' has-photo' : ''}`}>
+          {image ? <img src={image} alt="" loading="lazy" decoding="async" /> : <Icon />}
+        </div>
         <strong>{name}</strong>
         <span>Khám phá <FiArrowRight /></span>
       </Link>

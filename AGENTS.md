@@ -98,8 +98,12 @@ Defaults are already coded in `src/config/env.js`, so the backend runs without a
 
 | Role | Phone | Password |
 |---|---|---|
-| Admin | 0900000000 | 123456 |
+| Admin | 0918550811 | TechPhone2026 |
 | Customer | 0911111111 | 123456 |
+
+Seed thật (`npm run seed`) dùng cùng số admin. Mật khẩu admin lấy từ
+`SEED_ADMIN_PASSWORD` (mặc định `TechPhone2026`), tách khỏi `SEED_DEMO_PASSWORD`
+của các tài khoản khách.
 
 Sample order for lookup: `TP260601` with phone `0911111111`.
 

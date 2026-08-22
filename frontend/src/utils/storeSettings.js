@@ -6,10 +6,10 @@ export const DEFAULT_STORE_SETTINGS = {
   hotline: '1900 6868',
   email: 'support@techphone.vn',
   address: '123 Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh',
-  logo: '',
-  facebook: 'https://facebook.com/techphone',
-  tiktok: 'https://tiktok.com/@techphone',
-  youtube: 'https://youtube.com/@techphone',
+  logo: '/brand/techphone-mark.svg',
+  facebook: 'https://www.facebook.com/trung.nguyen.592626',
+  tiktok: 'https://www.tiktok.com/@guppy.farm.tr.vin',
+  youtube: 'https://www.youtube.com/@nguyentrung8133',
   zaloUrl: '',
 };
 

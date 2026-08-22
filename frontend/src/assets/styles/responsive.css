@@ -534,8 +534,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .lookup-form {
-    grid-template-columns: minmax(0, 1fr);
+  .lookup-page .lookup-form {
     margin-top: -35px;
   }
 

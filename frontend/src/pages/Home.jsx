@@ -2,14 +2,15 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   FiArrowRight,
   FiAward,
+  FiBatteryCharging,
   FiHeadphones,
   FiPause,
   FiPlay,
   FiRefreshCcw,
   FiShield,
   FiSmartphone,
+  FiShoppingBag,
   FiTruck,
-  FiWatch,
   FiZap,
 } from 'react-icons/fi';
 import { Link } from 'react-router-dom';
@@ -23,12 +24,60 @@ import ProductGrid from '../components/product/ProductGrid';
 import PersonalizedRecommendations from '../components/product/PersonalizedRecommendations';
 import { bestDeals, bestSellers, featuredAccessories } from '../utils/merchandising';
 
+// Anh dai dien lay tu chinh catalog that (Cloudinary) thay cho icon minh hoa.
+// `icon` chi con la duong lui khi anh chua tai duoc.
+const CATEGORY_IMAGE_BASE = 'https://res.cloudinary.com/dxozklkr/image/upload';
+
 const categories = [
-  { name: 'iPhone', icon: FiSmartphone, query: 'Apple', color: 'blue' },
-  { name: 'Samsung', icon: FiSmartphone, query: 'Samsung', color: 'violet' },
-  { name: 'Xiaomi', icon: FiZap, query: 'Xiaomi', color: 'orange' },
-  { name: 'Tai nghe', icon: FiHeadphones, path: '/accessories?category=Tai%20nghe', color: 'cyan' },
-  { name: 'Đồng hồ', icon: FiWatch, path: '/accessories?category=Dong%20ho', color: 'green' },
+  {
+    name: 'iPhone',
+    icon: FiSmartphone,
+    image: `${CATEGORY_IMAGE_BASE}/v1787296703/pf9jkfyo16bfffmaxxmj.png`,
+    query: 'Apple',
+    color: 'blue',
+  },
+  {
+    name: 'Samsung',
+    icon: FiSmartphone,
+    image: `${CATEGORY_IMAGE_BASE}/v1787296614/vmsutyst26rqjlx3mkam.png`,
+    query: 'Samsung',
+    color: 'violet',
+  },
+  {
+    name: 'Xiaomi',
+    icon: FiZap,
+    image: `${CATEGORY_IMAGE_BASE}/v1787296800/w8fgstlntihdvxnqbdkm.png`,
+    query: 'Xiaomi',
+    color: 'orange',
+  },
+  {
+    name: 'OPPO',
+    icon: FiSmartphone,
+    image: `${CATEGORY_IMAGE_BASE}/v1787296717/jelzackxraqkji1xywzx.png`,
+    query: 'OPPO',
+    color: 'green',
+  },
+  {
+    name: 'Tai nghe',
+    icon: FiHeadphones,
+    image: `${CATEGORY_IMAGE_BASE}/v1787296537/kbdgijflk6n1bmutt1hu.jpg`,
+    path: '/accessories?category=Tai%20nghe',
+    color: 'cyan',
+  },
+  {
+    name: 'Sạc & cáp',
+    icon: FiBatteryCharging,
+    image: `${CATEGORY_IMAGE_BASE}/v1787296545/ty1tbdzv1qojek7mza7x.jpg`,
+    path: '/accessories?category=Sac',
+    color: 'pink',
+  },
+  {
+    name: 'Ốp lưng',
+    icon: FiShoppingBag,
+    image: `${CATEGORY_IMAGE_BASE}/v1787296566/nqsuyoia82i5vrqlbpuv.png`,
+    path: '/accessories?category=Phu%20kien',
+    color: 'violet',
+  },
 ];
 
 export default function Home() {

@@ -1,4 +1,5 @@
-import { FiFacebook, FiMail, FiMapPin, FiMusic, FiPhone, FiYoutube } from 'react-icons/fi';
+import { FiFacebook, FiMail, FiMapPin, FiPhone, FiYoutube } from 'react-icons/fi';
+import { SiTiktok } from 'react-icons/si';
 import { Link } from 'react-router-dom';
 import { useStoreSettings } from '../../hooks/useStoreSettings';
 import StoreBrand from './StoreBrand';
@@ -13,7 +14,7 @@ export default function Footer() {
           <p>Hệ thống bán lẻ điện thoại và phụ kiện chính hãng, tận tâm từ tư vấn đến hậu mãi.</p>
           <div className="social-links">
             <a href={settings.facebook} target="_blank" rel="noreferrer" aria-label="Facebook"><FiFacebook /></a>
-            <a href={settings.tiktok} target="_blank" rel="noreferrer" aria-label="TikTok"><FiMusic /></a>
+            <a href={settings.tiktok} target="_blank" rel="noreferrer" aria-label="TikTok"><SiTiktok /></a>
             <a href={settings.youtube} target="_blank" rel="noreferrer" aria-label="Youtube"><FiYoutube /></a>
           </div>
         </div>

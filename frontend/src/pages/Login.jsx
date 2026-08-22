@@ -55,7 +55,7 @@ export default function Login() {
           {USE_MOCK && <div className="mock-accounts">
             <strong>Tài khoản dùng thử</strong>
             <button type="button" onClick={() => setForm({ identifier: '0911111111', password: '123456' })}>Khách hàng: 0911111111</button>
-            <button type="button" onClick={() => setForm({ identifier: '0900000000', password: '123456' })}>Quản trị: 0900000000</button>
+            <button type="button" onClick={() => setForm({ identifier: '0918550811', password: 'TechPhone2026' })}>Quản trị: 0918550811</button>
           </div>}
           <p className="auth-switch">Chưa có tài khoản? <Link to="/register">Đăng ký ngay</Link></p>
         </form>

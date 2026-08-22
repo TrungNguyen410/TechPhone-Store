@@ -53,7 +53,6 @@ export default function OrderLookup() {
             />
           </div>
           <button className="btn btn-primary" disabled={loading}><FiSearch /> {loading ? 'Đang tìm...' : 'Tra cứu đơn hàng'}</button>
-          <small>Dùng thử: TP260601 · 0911111111</small>
         </form>
         {order && (
           <section className="lookup-result panel">
