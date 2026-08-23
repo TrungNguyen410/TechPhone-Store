@@ -325,10 +325,10 @@ const run = async () => {
   // trinh duyet tu ghep vao origin cua frontend, khong phu thuoc backend co
   // phuc vu `/uploads` hay khong (serverless thi khong) — xem env.localUploadsEnabled.
   await Banner.insertMany([
-    { _id: 'banner-1', title: 'Thu cu doi moi - tro gia den 4.000.000d', description: 'Dinh gia may cu tai cho, tru thang vao gia may moi', image: '/banners/thu-cu-doi-moi.svg', link: '/products', position: 1, active: true },
-    { _id: 'banner-2', title: 'Sale giua nam - giam den 30%', description: 'Uu dai cho dien thoai va phu kien chinh hang', image: '/banners/sale-giua-nam.svg', link: '/products', position: 2, active: true },
-    { _id: 'banner-3', title: 'Combo phu kien - tiet kiem them 15%', description: 'Mua tai nghe kem sac nhanh de nhan uu dai combo', image: '/banners/combo-phu-kien.svg', link: '/accessories', position: 3, active: true },
-    { _id: 'banner-hidden', title: 'Hidden campaign', description: 'Inactive banner for admin tests', image: imageFor('Hidden campaign', '475569'), link: '/', position: 99, active: false },
+    { _id: 'banner-1', title: 'Thu cũ đổi mới', description: 'Trợ giá đến 4.000.000₫ khi lên đời flagship', image: '/banners/thu-cu-doi-moi.svg', link: '/products', position: 1, active: true },
+    { _id: 'banner-2', title: 'Sale giữa năm', description: 'Giảm đến 30% điện thoại và phụ kiện chính hãng', image: '/banners/sale-giua-nam.svg', link: '/products', position: 2, active: true },
+    { _id: 'banner-3', title: 'Combo phụ kiện', description: 'Mua tai nghe kèm sạc nhanh, tiết kiệm thêm 15%', image: '/banners/combo-phu-kien.svg', link: '/accessories', position: 3, active: true },
+    { _id: 'banner-hidden', title: 'Chiến dịch tạm ẩn', description: 'Banner đang tắt, dùng để kiểm thử trang quản trị', image: imageFor('Hidden campaign', '475569'), link: '/', position: 99, active: false },
   ]);
 
   const customers = {
