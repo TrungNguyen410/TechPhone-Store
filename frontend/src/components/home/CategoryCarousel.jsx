@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { FiArrowRight, FiPause, FiPlay } from 'react-icons/fi';
+import { FiArrowRight } from 'react-icons/fi';
 import { Link } from 'react-router-dom';
 
 const RESUME_DELAY = 3000;
@@ -24,11 +24,9 @@ export default function CategoryCarousel({ categories }) {
   const resumeRef = useRef(null);
   // Tạm dừng tạm thời khi hover/focus, tự chạy lại sau RESUME_DELAY.
   const [hoverPaused, setHoverPaused] = useState(false);
-  // Tạm dừng có chủ đích qua nút bấm: giữ nguyên cho đến khi người dùng bấm lại.
-  const [manuallyPaused, setManuallyPaused] = useState(false);
   const reducedMotion = useReducedMotion();
   const looping = !reducedMotion && categories.length > 1;
-  const isPaused = hoverPaused || manuallyPaused || reducedMotion;
+  const isPaused = hoverPaused || reducedMotion;
 
   const pause = () => {
     clearTimeout(resumeRef.current);
@@ -38,14 +36,6 @@ export default function CategoryCarousel({ categories }) {
   const resume = () => {
     clearTimeout(resumeRef.current);
     resumeRef.current = setTimeout(() => setHoverPaused(false), RESUME_DELAY);
-  };
-
-  const toggle = () => {
-    clearTimeout(resumeRef.current);
-    const nextPaused = !manuallyPaused;
-    setManuallyPaused(nextPaused);
-    // Bam tiếp tục phải gỡ luôn hover-pause, vì chính nút này đang giữ focus.
-    if (!nextPaused) setHoverPaused(false);
   };
 
   useEffect(() => () => clearTimeout(resumeRef.current), []);
@@ -93,18 +83,6 @@ export default function CategoryCarousel({ categories }) {
           </div>
         )}
       </div>
-      {looping && (
-        <button
-          type="button"
-          className="category-marquee-toggle"
-          aria-pressed={manuallyPaused}
-          aria-label={manuallyPaused ? 'Tiếp tục danh mục tự trượt' : 'Tạm dừng danh mục tự trượt'}
-          onClick={toggle}
-        >
-          {manuallyPaused ? <FiPlay /> : <FiPause />}
-          <span>{manuallyPaused ? 'Tiếp tục' : 'Tạm dừng'}</span>
-        </button>
-      )}
     </div>
   );
 }

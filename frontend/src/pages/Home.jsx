@@ -4,8 +4,6 @@ import {
   FiAward,
   FiBatteryCharging,
   FiHeadphones,
-  FiPause,
-  FiPlay,
   FiRefreshCcw,
   FiShield,
   FiSmartphone,
@@ -86,7 +84,6 @@ export default function Home() {
   const [banners, setBanners] = useState([]);
   const [activeBanner, setActiveBanner] = useState(0);
   const [bannerInteractionPaused, setBannerInteractionPaused] = useState(false);
-  const [bannerUserPaused, setBannerUserPaused] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(
     () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,
   );
@@ -124,7 +121,7 @@ export default function Home() {
     return () => media.removeEventListener?.('change', change);
   }, []);
 
-  const bannerPaused = bannerInteractionPaused || bannerUserPaused || reducedMotion;
+  const bannerPaused = bannerInteractionPaused || reducedMotion;
   useEffect(() => {
     if (banners.length < 2 || bannerPaused) return undefined;
     const timer = setInterval(() => setActiveBanner((current) => (current + 1) % banners.length), 5000);
@@ -188,16 +185,6 @@ export default function Home() {
                 />
               ))}
             </div>
-            {banners.length > 1 && (
-              <button
-                type="button"
-                className="slider-pause-button"
-                aria-label={bannerUserPaused ? 'Tiếp tục banner' : 'Tạm dừng banner'}
-                onClick={() => setBannerUserPaused((current) => !current)}
-              >
-                {bannerUserPaused ? <FiPlay /> : <FiPause />}
-              </button>
-            )}
           </div>
         </div>
       </section>
@@ -246,7 +233,9 @@ export default function Home() {
               Mỗi thiết bị đều được kiểm định kỹ, công khai tình trạng và đi kèm chính sách bảo hành
               minh bạch. Đội ngũ của chúng tôi luôn sẵn sàng giúp bạn chọn đúng sản phẩm.
             </p>
-            <Link className="btn btn-light btn-lg" to="/contact">Tìm hiểu về chúng tôi</Link>
+            <Link className="btn store-story-cta" to="/contact">
+              Tìm hiểu về chúng tôi <FiArrowRight />
+            </Link>
           </div>
           <div className="story-stats">
             <div><strong>Kiểm định</strong><span>Tình trạng sản phẩm</span></div>

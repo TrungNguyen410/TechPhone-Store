@@ -40,7 +40,7 @@ describe('Home', () => {
     expect(productApi.getAll).toHaveBeenCalledTimes(2);
   });
 
-  it('removes inactive hero slides from focus and offers a persistent pause control', async () => {
+  it('removes inactive hero slides from focus and ships no pause control', async () => {
     productApi.getAll.mockResolvedValue([]);
     accessoryApi.getAll.mockResolvedValue([]);
     bannerApi.getAll.mockResolvedValue([
@@ -55,7 +55,7 @@ describe('Home', () => {
     expect(second).toHaveAttribute('aria-hidden', 'true');
     expect(second).toHaveAttribute('tabindex', '-1');
     expect(second).toHaveStyle({ visibility: 'hidden', pointerEvents: 'none' });
-    expect(screen.getByRole('button', { name: /tạm dừng banner/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /tạm dừng|tiếp tục/i })).not.toBeInTheDocument();
   });
 
   it('provides responsive text instead of relying on copy baked into a wide banner image', async () => {

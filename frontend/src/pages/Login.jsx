@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FiEye, FiEyeOff, FiLock, FiLogIn, FiPhone, FiShield } from 'react-icons/fi';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import StoreBrand from '../components/common/StoreBrand';
 import { toast } from 'react-toastify';
 import { useAuth } from '../hooks/useAuth';
 import { safeInternalRedirect } from '../utils/authSession';
@@ -43,7 +44,7 @@ export default function Login() {
         <div><FiShield /><h1>Mua sắm công nghệ<br />an tâm mỗi ngày</h1><p>Sản phẩm kiểm định, bảo hành rõ ràng và hỗ trợ tận tâm.</p></div>
       </div>
       <div className="auth-panel">
-        <Link className="brand" to="/"><span className="brand-mark">T</span><span>Tech<span>Phone</span></span></Link>
+        <StoreBrand />
         <form className="auth-form" onSubmit={submit}>
           <span className="eyebrow">Chào mừng trở lại</span>
           <h1>Đăng nhập tài khoản</h1>

@@ -7,16 +7,19 @@ function BrandName({ name }) {
   return <>{name.slice(0, matchIndex)}<span>{name.slice(matchIndex)}</span></>;
 }
 
-export default function StoreBrand({ className = '', onClick }) {
+export default function StoreBrand({ className = '', onClick, to = '/', subtitle }) {
   const settings = useStoreSettings();
   const initial = settings.storeName.trim().charAt(0).toUpperCase() || 'T';
 
   return (
-    <Link className={`brand ${className}`.trim()} to="/" onClick={onClick}>
+    <Link className={`brand ${className}`.trim()} to={to} onClick={onClick}>
       {settings.logo
         ? <img className="brand-logo" src={settings.logo} alt={settings.storeName} />
         : <span className="brand-mark">{initial}</span>}
-      <span><BrandName name={settings.storeName} /></span>
+      <span>
+        <BrandName name={settings.storeName} />
+        {subtitle && <small>{subtitle}</small>}
+      </span>
     </Link>
   );
 }

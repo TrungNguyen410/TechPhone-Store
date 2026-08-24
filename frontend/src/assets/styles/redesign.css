@@ -559,13 +559,102 @@ h4,
   margin-top: var(--space-3xl);
 }
 
+/* Panel "Tìm hiểu về chúng tôi": nen luon toi nen phai khoa mau chu theo on-dark,
+   khong duoc ke thua --color-ink (chu toi tren nen toi -> gan nhu vo hinh). */
+.store-story {
+  --story-fg: var(--color-on-dark);
+  --story-fg-soft: var(--color-on-dark-soft);
+  --story-line: var(--color-rule-on-dark);
+  position: relative;
+  overflow: hidden;
+  color: var(--story-fg);
+}
+
+.store-story::before {
+  content: '';
+  position: absolute;
+  inset: -40% 45% auto -10%;
+  height: 620px;
+  background: radial-gradient(circle, var(--color-accent) 0%, transparent 62%);
+  opacity: 0.22;
+  pointer-events: none;
+}
+
+.store-story .container {
+  position: relative;
+}
+
+.store-story .eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  color: var(--color-cobalt-focus);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.store-story .eyebrow::before {
+  content: '';
+  width: 28px;
+  height: 2px;
+  background: var(--color-cobalt-focus);
+}
+
+.store-story h2 {
+  color: var(--color-static-white);
+}
+
+.store-story p {
+  max-width: 56ch;
+  color: var(--story-fg-soft);
+  font-size: var(--text-md, 17px);
+  line-height: 1.7;
+}
+
+.store-story-cta {
+  min-height: 52px;
+  padding: 14px 26px;
+  color: var(--color-graphite);
+  border: 1px solid var(--color-static-white);
+  border-radius: var(--radius-control);
+  background: var(--color-static-white);
+  font-size: var(--text-md, 16px);
+}
+
+.store-story-cta svg {
+  transition: transform var(--dur-short, 0.2s) var(--ease-out, ease);
+}
+
+.store-story-cta:hover,
+.store-story-cta:focus-visible {
+  color: var(--color-static-white);
+  border-color: var(--color-cobalt-focus);
+  background: var(--color-accent);
+}
+
+.store-story-cta:hover svg,
+.store-story-cta:focus-visible svg {
+  transform: translateX(3px);
+}
+
 .story-stats div {
-  border-color: var(--color-rule-strong);
+  border-color: var(--story-line);
   border-radius: var(--radius-surface);
   background: var(--color-graphite-raised);
 }
 
-.story-stats strong,
+.story-stats strong {
+  color: var(--color-cobalt-focus);
+  font-size: var(--text-xl, 26px);
+  letter-spacing: -0.02em;
+}
+
+.story-stats span {
+  color: var(--story-fg-soft);
+}
+
 .section-heading > a,
 .price-row strong,
 .detail-price strong {

@@ -22,6 +22,8 @@
   --color-graphite: oklch(20% 0.018 255);
   --color-graphite-raised: oklch(27% 0.02 255);
   --color-on-dark: oklch(94% 0.008 255);
+  --color-on-dark-soft: oklch(84% 0.012 255);
+  --color-rule-on-dark: oklch(38% 0.02 255);
   --color-static-white: #fff;
   --color-ink-deep: #101828;
   --color-ink-blue: #263449;
@@ -179,5 +181,7 @@
     --color-graphite: oklch(13% 0.012 255);
     --color-graphite-raised: oklch(21% 0.017 255);
     --color-on-dark: oklch(94% 0.008 255);
+    --color-on-dark-soft: oklch(84% 0.012 255);
+    --color-rule-on-dark: oklch(34% 0.02 255);
   }
 }

@@ -18,7 +18,10 @@ vi.mock('../hooks/useAuth', () => ({
     ...authState,
   }),
 }));
-vi.mock('../utils/constants', () => ({ USE_MOCK: false }));
+vi.mock('../utils/constants', async (importActual) => ({
+  ...(await importActual()),
+  USE_MOCK: false,
+}));
 vi.mock('react-toastify', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 describe('Login', () => {

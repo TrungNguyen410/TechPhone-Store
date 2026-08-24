@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FiLock, FiPhone, FiUserPlus } from 'react-icons/fi';
 import { Link, useNavigate } from 'react-router-dom';
+import StoreBrand from '../components/common/StoreBrand';
 import { toast } from 'react-toastify';
 import { useAuth } from '../hooks/useAuth';
 import { describePhoneError, isStrongEnoughPassword, validateRequired } from '../utils/validators';
@@ -44,7 +45,7 @@ export default function Register() {
     <main className="auth-page register-page">
       <div className="auth-visual"><div><FiUserPlus /><h1>Gia nhập cộng đồng<br />TechPhone</h1><p>Theo dõi đơn hàng, nhận ưu đãi và chăm sóc cá nhân hóa.</p></div></div>
       <div className="auth-panel">
-        <Link className="brand" to="/"><span className="brand-mark">T</span><span>Tech<span>Phone</span></span></Link>
+        <StoreBrand />
         <form className="auth-form" onSubmit={submit}>
           <span className="eyebrow">Tạo tài khoản mới</span>
           <h1>Đăng ký thành viên</h1>

@@ -14,6 +14,7 @@ import {
   FiX,
 } from 'react-icons/fi';
 import { NavLink } from 'react-router-dom';
+import StoreBrand from '../common/StoreBrand';
 
 const links = [
   { to: '/admin/dashboard', label: 'Tổng quan', icon: FiGrid },
@@ -34,8 +35,7 @@ export default function AdminSidebar({ open, onClose }) {
   return (
     <aside className={`admin-sidebar ${open ? 'open' : ''}`}>
       <div className="admin-brand">
-        <span className="brand-mark">T</span>
-        <span>TechPhone<small>ADMIN CENTER</small></span>
+        <StoreBrand to="/admin/dashboard" subtitle="ADMIN CENTER" onClick={onClose} />
         <button onClick={onClose}><FiX /></button>
       </div>
       <nav>
